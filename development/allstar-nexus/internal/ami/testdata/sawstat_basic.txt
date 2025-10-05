@@ -1,0 +1,8 @@
+ActionID: sawstat123
+Response: Success
+Message: Command output follows
+
+Conn: 2000 0 90 1800
+Conn: 2001 1 0 600
+Conn: 2002 0 300 60
+--END COMMAND--

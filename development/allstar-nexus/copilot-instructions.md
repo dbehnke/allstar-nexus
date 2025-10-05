@@ -75,6 +75,15 @@ cd .. && go run .
 go test ./...
 ```
 
+### Embedding build metadata
+When building production binaries, inject version/build-time using ldflags. Example:
+
+```bash
+go build -ldflags "-X main.buildVersion=1.2.3 -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o allstar-nexus .
+```
+
+The dashboard will surface the injected `buildVersion` and `buildTime` in the STATUS_UPDATE snapshot when available.
+
 ## Minimal PR Checklist
 * [ ] Code builds (`go build ./...` & Vue build if frontend touched)
 * [ ] Tests updated / added & passing
