@@ -125,7 +125,7 @@ func main() {
 	}
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 
-	// AMI + WebSocket wiring (conditional)
+	// AMI + WebSocket wiring (conditional). Always provide a /ws endpoint so the UI never hard-fails.
 	var hub *web.Hub
 	if cfg.AMIEnabled {
 		hub = web.NewHub()
@@ -167,9 +167,16 @@ func main() {
 			log.Printf("AMI start error: %v", err)
 		}
 		go sm.Run(conn.Raw())
-		if !cfg.DisableLinkPoller {
+		if !cfg.DisableLinkPoller && cfg.AMINodeID > 0 {
+			// Use EnhancedPoller for XStat/SawStat polling (5 second intervals)
+			enhancedPoller := core.NewEnhancedPoller(conn, sm, cfg.AMINodeID, 5*time.Second, logger)
+			enhancedPoller.Start(ctxAMI)
+			logger.Info("enhanced AMI poller started", zap.Int("node_id", cfg.AMINodeID), zap.Duration("interval", 5*time.Second))
+		} else if !cfg.DisableLinkPoller {
+			// Fallback to legacy LinkPoller if AMI_NODE_ID not configured
 			poller := core.NewLinkPoller(conn, sm, 30*time.Second)
 			poller.Start(ctxAMI)
+			logger.Warn("using legacy link poller - set AMI_NODE_ID for enhanced features")
 		}
 		// Persist per-link TX stats on edges
 		sm.SetPersistHook(func(list []core.LinkInfo) {
@@ -194,6 +201,31 @@ func main() {
 		}
 		mux.HandleFunc("/ws", hub.HandleWS(sm, validator))
 		defer cancelAMI()
+	} else {
+		// Fallback: serve a static heartbeat-only websocket with empty state (allows anonymous dashboard to load).
+		hub = web.NewHub()
+		sm := core.NewStateManager()
+		if buildVersion != "" {
+			sm.SetVersion(buildVersion)
+		}
+		if buildTime != "" {
+			sm.SetBuildTime(buildTime)
+			cfg.BuildTime = buildTime
+		}
+		validator := func(r *http.Request) bool {
+			token := r.URL.Query().Get("token")
+			if token == "" {
+				return cfg.AllowAnonDashboard
+			}
+			_, _, exp, err := auth.ParseJWT(token, cfg.JWTSecret)
+			if err != nil || time.Now().After(exp) {
+				return false
+			}
+			return true
+		}
+		mux.HandleFunc("/ws", hub.HandleWS(sm, validator))
+		// Heartbeat provides periodic STATUS_UPDATE so client replaces 'Waiting for data'.
+		go hub.HeartbeatLoop(sm, 5*time.Second)
 	}
 
 	addr := ":" + cfg.Port

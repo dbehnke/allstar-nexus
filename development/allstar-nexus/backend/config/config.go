@@ -29,6 +29,7 @@ type Config struct {
 	AMIEvents               string
 	AMIRetryInterval        time.Duration
 	AMIRetryMax             time.Duration
+	AMINodeID               int
 	DisableLinkPoller       bool
 	AllowAnonDashboard      bool
 }
@@ -48,16 +49,18 @@ func Load() Config {
 		TokenTTL:                parseDurationSeconds(getEnv("TOKEN_TTL_SECONDS", "86400")),
 		AuthRateLimitRPM:        parseInt(getEnv("AUTH_RPM", "60"), 60),
 		PublicStatsRateLimitRPM: parseInt(getEnv("PUBLIC_STATS_RPM", "120"), 120),
-		AMIEnabled:              getEnv("AMI_ENABLED", "false") == "true",
-		AMIHost:                 getEnv("AMI_HOST", "127.0.0.1"),
-		AMIPort:                 parseInt(getEnv("AMI_PORT", "5038"), 5038),
-		AMIUser:                 getEnv("AMI_USERNAME", "admin"),
-		AMIPassword:             getEnv("AMI_PASSWORD", "change-me"),
-		AMIEvents:               getEnv("AMI_EVENTS", "on"),
-		AMIRetryInterval:        parseGoDuration(getEnv("AMI_RETRY_INTERVAL", "15s"), 15*time.Second),
-		AMIRetryMax:             parseGoDuration(getEnv("AMI_RETRY_MAX", "60s"), 60*time.Second),
-		DisableLinkPoller:       getEnv("DISABLE_LINK_POLLER", "false") == "true",
-		AllowAnonDashboard:      getEnv("ALLOW_ANON_DASHBOARD", "true") == "true",
+		// Enable AMI by default so users get real-time data without needing to set AMI_ENABLED explicitly.
+		AMIEnabled:         getEnv("AMI_ENABLED", "true") == "true",
+		AMIHost:            getEnv("AMI_HOST", "127.0.0.1"),
+		AMIPort:            parseInt(getEnv("AMI_PORT", "5038"), 5038),
+		AMIUser:            getEnv("AMI_USERNAME", "admin"),
+		AMIPassword:        getEnv("AMI_PASSWORD", "change-me"),
+		AMIEvents:          getEnv("AMI_EVENTS", "on"),
+		AMIRetryInterval:   parseGoDuration(getEnv("AMI_RETRY_INTERVAL", "15s"), 15*time.Second),
+		AMIRetryMax:        parseGoDuration(getEnv("AMI_RETRY_MAX", "60s"), 60*time.Second),
+		AMINodeID:          parseInt(getEnv("AMI_NODE_ID", "0"), 0),
+		DisableLinkPoller:  getEnv("DISABLE_LINK_POLLER", "false") == "true",
+		AllowAnonDashboard: getEnv("ALLOW_ANON_DASHBOARD", "true") == "true",
 	}
 	// Ensure data directory exists
 	if err := os.MkdirAll(dirOf(cfg.DBPath), 0o755); err != nil {
