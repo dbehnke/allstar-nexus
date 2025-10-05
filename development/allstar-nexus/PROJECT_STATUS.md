@@ -199,26 +199,27 @@ Parse various output formats from different app_voter versions.
 4. ✅ Store last-heard timestamps
 5. ✅ Create EnhancedPoller for XStat/SawStat polling
 
-### Phase 3: WebSocket Events (1 day)
-1. Add new message types for RX/TX
-2. Include link mode in events
-3. Send connection details
-4. Update event batching
+### ✅ Phase 3: WebSocket Events - COMPLETED
+1. ✅ WebSocket already broadcasts full NodeState with enhanced LinkInfo
+2. ✅ RX/TX keyed state included in STATUS_UPDATE events
+3. ✅ Link mode, IP, direction, last heard all included
+4. ✅ Event batching already implemented for TX events
 
-### Phase 4: Frontend Updates (1-2 days)
-1. Add COS/PTT indicators to StatusCard
-2. Show link modes in LinksCard
-3. Implement last-heard sorting
-4. Add node type badges
-5. Enhanced voter visualization
+### ✅ Phase 4: Frontend Updates - COMPLETED
+1. ✅ Add COS/PTT indicators to StatusCard (green RX, red TX with pulse animation)
+2. ✅ Show link modes in LinksCard (T/R/C/M badges with colors)
+3. ✅ Implement last-heard sorting (currently keying first, then by last heard)
+4. ✅ Add IP address, direction (IN/OUT), connection elapsed display
+5. ✅ Enhanced link table with mode badges and keying indicators
 
-### Phase 5: Testing & Refinement (1-2 days)
-1. Test with real AllStar node
-2. Validate voter commands
-3. Performance testing
-4. Bug fixes
+### Phase 5: Testing & Refinement (Pending real hardware)
+1. ⏳ Test with real AllStar node
+2. ⏳ Validate voter commands
+3. ⏳ Performance testing
+4. ⏳ Bug fixes
 
 **Total Estimated Time:** 6-10 days
+**Actual Time (Phases 1-4):** ~4 hours (ahead of schedule!)
 
 ---
 

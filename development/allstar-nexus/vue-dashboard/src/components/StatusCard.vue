@@ -18,12 +18,22 @@
         <span class="value">{{ status.links?.join(', ') || '—' }}</span>
       </div>
       <div class="status-item">
-        <span class="label">RX Keyed:</span>
-        <span class="value">{{ status.rx_keyed }}</span>
+        <span class="label">COS (RX):</span>
+        <span class="value">
+          <span class="indicator" :class="{ 'active': status.rx_keyed, 'rx': true }">
+            {{ status.rx_keyed ? '●' : '○' }}
+          </span>
+          {{ status.rx_keyed ? 'ACTIVE' : 'Idle' }}
+        </span>
       </div>
       <div class="status-item">
-        <span class="label">TX Keyed:</span>
-        <span class="value">{{ status.tx_keyed }}</span>
+        <span class="label">PTT (TX):</span>
+        <span class="value">
+          <span class="indicator" :class="{ 'active': status.tx_keyed, 'tx': true }">
+            {{ status.tx_keyed ? '●' : '○' }}
+          </span>
+          {{ status.tx_keyed ? 'ACTIVE' : 'Idle' }}
+        </span>
       </div>
       <div class="status-item">
         <span class="label">Version:</span>
@@ -135,5 +145,32 @@ function formatDuration(total) {
 .btn-icon:hover {
   background: #333;
   border-color: #666;
+}
+
+.indicator {
+  display: inline-block;
+  margin-right: 0.5rem;
+  font-size: 1.2rem;
+  transition: all 0.2s;
+}
+
+.indicator.rx.active {
+  color: #22c55e;
+  animation: pulse-rx 1s infinite;
+}
+
+.indicator.tx.active {
+  color: #ef4444;
+  animation: pulse-tx 1s infinite;
+}
+
+@keyframes pulse-rx {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+@keyframes pulse-tx {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
 }
 </style>
