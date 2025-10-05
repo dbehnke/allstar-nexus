@@ -46,7 +46,10 @@ export ASTDB_URL="http://allmondb.allstarlink.org/"
 # Optional: Change update frequency (default: 24 hours)
 export ASTDB_UPDATE_HOURS=24
 
-# Optional: Enable AMI for RPT Stats and Voter features
+# 🔥 IMPORTANT: Enable enhanced AMI features (COS/PTT, link modes, last heard)
+export AMI_NODE_ID=43732  # YOUR AllStar node number - REQUIRED for enhanced features!
+
+# AMI connection settings
 export AMI_ENABLED=true
 export AMI_HOST="localhost"
 export AMI_PORT=5038
@@ -225,7 +228,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 | `TOKEN_TTL` | `24h` | JWT expiration time |
 | `ASTDB_PATH` | `/var/lib/asterisk/astdb.txt` | AllStar database path |
 | `ALLOW_ANON_DASHBOARD` | `true` | Allow public dashboard access |
-| `AMI_ENABLED` | `false` | Enable AMI connectivity |
+| `AMI_ENABLED` | `true` | Enable AMI connectivity (set to false to run without AMI) |
 | `AMI_HOST` | `localhost` | AMI host address |
 | `AMI_PORT` | `5038` | AMI port |
 | `AMI_USER` | `admin` | AMI username |
