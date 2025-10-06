@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"flag"
 	"io/fs"
 	"log"
 	"net/http"
@@ -30,7 +31,12 @@ var buildVersion = ""
 var buildTime = ""
 
 func main() {
-	cfg := config.Load()
+	// Command-line flags
+	configFile := flag.String("config", "", "Path to config file (default: search ./config.yaml, data/config.yaml, etc.)")
+	flag.Parse()
+
+	// Load configuration
+	cfg := config.Load(*configFile)
 
 	// Initialize logger (simple for now)
 	logger, _ := zap.NewProduction()

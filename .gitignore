@@ -30,3 +30,13 @@ tmp/
 external
 main
 config.yaml
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Data directory (mounted as volume)
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/astdb.txt

@@ -45,7 +45,8 @@ type Config struct {
 }
 
 // Load loads configuration from config file and environment variables using Viper
-func Load() Config {
+// Optionally accepts a config file path as first argument
+func Load(configPath ...string) Config {
 	// Set default values
 	viper.SetDefault("port", "8080")
 	viper.SetDefault("db_path", "data/allstar.db")
@@ -72,11 +73,18 @@ func Load() Config {
 	viper.SetDefault("subtitle", "")
 
 	// Config file search paths
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
-	viper.AddConfigPath("$HOME/.allstar-nexus")
-	viper.AddConfigPath("/etc/allstar-nexus")
+	if len(configPath) > 0 && configPath[0] != "" {
+		// Use specified config file
+		viper.SetConfigFile(configPath[0])
+	} else {
+		// Search for config in standard locations
+		viper.SetConfigName("config")
+		viper.SetConfigType("yaml")
+		viper.AddConfigPath(".")
+		viper.AddConfigPath("data")
+		viper.AddConfigPath("$HOME/.allstar-nexus")
+		viper.AddConfigPath("/etc/allstar-nexus")
+	}
 
 	// Read config file if it exists (optional)
 	if err := viper.ReadInConfig(); err != nil {

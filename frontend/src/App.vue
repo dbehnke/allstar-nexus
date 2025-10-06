@@ -65,7 +65,7 @@
 
     <footer class="footer">
       <div class="footer-content">
-        <p>&copy; 2025 {{ status?.title || 'Allstar Nexus' }}<span v-if="status && status.version"> {{ status.version }}</span>. Built with ❤️ in Macomb, MI</p>
+  <p>&copy; 2025 Allstar Nexus<span v-if="status && status.version">&nbsp;{{ status.version }}</span>. Built with ❤️ in Macomb, MI</p>
         <p v-if="status && status.build_time">
           Build: {{ new Date(status.build_time).toLocaleString() }}
         </p>
