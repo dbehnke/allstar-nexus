@@ -1,0 +1,32 @@
+# Build artifacts
+allstar-nexus
+dist/
+
+# Node modules
+**/node_modules/
+
+# Local environment & secrets (do NOT commit)
+*.local.sh
+.env
+.env.*
+
+# SQLite databases
+data/*.db
+
+# Frontend build outputs (already embedded at build time)
+frontend/out
+*/dist
+
+# Logs
+*.log
+
+# Temporary
+tmp/
+
+# Packet captures
+*.pcap
+
+# misc
+external
+main
+config.yaml

@@ -1,0 +1,54 @@
+# Allstar Nexus Configuration File
+# Copy this file to config.yaml and customize for your setup
+# Environment variables will override these values
+
+# Server Configuration
+port: 8080
+app_env: production
+
+# Branding
+title: "Allstar Nexus"
+subtitle: ""  # Optional subtitle shown in header and page title
+
+# Database
+db_path: data/allstar.db
+astdb_path: data/astdb.txt
+astdb_url: http://allmondb.allstarlink.org/
+astdb_update_hours: 24
+
+# Security
+jwt_secret: change-me-in-production  # CHANGE THIS!
+token_ttl_seconds: 86400  # 24 hours
+
+# Rate Limiting
+auth_rpm: 60
+public_stats_rpm: 120
+
+# AMI Configuration
+ami_enabled: true
+ami_host: 127.0.0.1
+ami_port: 5038
+ami_username: admin
+ami_password: change-me  # CHANGE THIS!
+
+# Node Configuration - MULTIPLE NODES SUPPORTED!
+# Simple format: just list your node numbers (names auto-lookup from astdb)
+nodes: [43732, 48412]
+
+# Advanced format: specify custom names (optional)
+# nodes:
+#   - node_id: 43732
+#     name: "K8FBI Flying Beers International Hub"
+#   - node_id: 48412
+#     name: "FBI HQ"
+
+# Legacy single node support (for backwards compatibility)
+# ami_node_id: 43732
+
+ami_events: "on"
+ami_retry_interval: 15s
+ami_retry_max: 60s
+
+# Feature Toggles
+disable_link_poller: false
+allow_anon_dashboard: true
