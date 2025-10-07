@@ -581,19 +581,14 @@ func parseLinkIDs(payload string) []int {
 		}
 
 		// No numeric match - must be a text node ID (callsign, etc.)
-		// Strip only mode/status flags from the END (TU, TK, TR, TC, TM, etc.)
+		// Strip mode prefix and status suffixes
 		cleaned := tk
-		// Remove leading T prefix if followed by uppercase letter (mode prefix)
-		if len(cleaned) > 1 && cleaned[0] == 'T' && cleaned[1] >= 'A' && cleaned[1] <= 'Z' {
-			// Check if this looks like a mode prefix (T followed by callsign)
-			// Only strip if it's NOT a callsign starting with T
-			if strings.HasSuffix(cleaned, "TU") || strings.HasSuffix(cleaned, "TK") ||
-			   strings.HasSuffix(cleaned, "TR") || strings.HasSuffix(cleaned, "TC") ||
-			   strings.HasSuffix(cleaned, "TM") {
-				// Has status suffix, so leading T is a prefix
-				cleaned = cleaned[1:]
-			}
+
+		// Always remove leading T if present (mode prefix)
+		if len(cleaned) > 0 && cleaned[0] == 'T' {
+			cleaned = cleaned[1:]
 		}
+
 		// Strip status suffixes (TU, TK, TR, TC, TM, U, K, R, C, M)
 		cleaned = strings.TrimSuffix(cleaned, "TU")
 		cleaned = strings.TrimSuffix(cleaned, "TK")
@@ -695,16 +690,14 @@ func parseALinks(payload string) (ids []int, keyed map[int]bool) {
 		}
 
 		// No numeric match - must be text node (callsign, etc.)
-		// Strip only mode/status flags from the END
+		// Strip mode prefix and status suffixes
 		cleaned := p
-		// Remove leading T prefix if it has status suffix
-		if len(cleaned) > 1 && cleaned[0] == 'T' && cleaned[1] >= 'A' && cleaned[1] <= 'Z' {
-			if strings.HasSuffix(cleaned, "TU") || strings.HasSuffix(cleaned, "TK") ||
-			   strings.HasSuffix(cleaned, "TR") || strings.HasSuffix(cleaned, "TC") ||
-			   strings.HasSuffix(cleaned, "TM") {
-				cleaned = cleaned[1:]
-			}
+
+		// Always remove leading T if present (mode prefix)
+		if len(cleaned) > 0 && cleaned[0] == 'T' {
+			cleaned = cleaned[1:]
 		}
+
 		// Strip status suffixes
 		cleaned = strings.TrimSuffix(cleaned, "TU")
 		cleaned = strings.TrimSuffix(cleaned, "TK")
