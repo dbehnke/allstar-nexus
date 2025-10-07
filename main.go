@@ -176,22 +176,9 @@ func main() {
 			log.Printf("AMI start error: %v", err)
 		}
 		go sm.Run(conn.Raw())
-		if !cfg.DisableLinkPoller && len(cfg.Nodes) > 0 {
-			// Use EnhancedPoller for XStat/SawStat polling (5 second intervals) for each configured node
-			for _, node := range cfg.Nodes {
-				enhancedPoller := core.NewEnhancedPoller(conn, sm, node.NodeID, 5*time.Second, logger)
-				enhancedPoller.Start(ctxAMI)
-				logger.Info("enhanced AMI poller started",
-					zap.Int("node_id", node.NodeID),
-					zap.String("node_name", node.Name),
-					zap.Duration("interval", 5*time.Second))
-			}
-		} else if !cfg.DisableLinkPoller {
-			// Fallback to legacy LinkPoller if no nodes configured
-			poller := core.NewLinkPoller(conn, sm, 30*time.Second)
-			poller.Start(ctxAMI)
-			logger.Warn("using legacy link poller - configure nodes for enhanced features")
-		}
+		logger.Info("using event-driven AMI processing only (no polling)")
+		// Note: All state updates are driven by AMI events (RPT_LINKS, RPT_ALINKS, RPT_TXKEYED, RPT_RXKEYED, etc.)
+		// No periodic polling needed - this matches the event-driven philosophy
 		// Persist per-link TX stats on edges
 		sm.SetPersistHook(func(list []core.LinkInfo) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
