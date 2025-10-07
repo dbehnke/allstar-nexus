@@ -128,6 +128,10 @@ func main() {
 	if cfg.AMIEnabled {
 		hub = web.NewHub()
 		sm := core.NewStateManager()
+		// Configure node lookup service for server-side enrichment
+		nodeLookup := core.NewNodeLookupService(cfg.AstDBPath)
+		sm.SetNodeLookup(nodeLookup)
+		logger.Info("node lookup service configured", zap.String("astdb_path", cfg.AstDBPath))
 		// Propagate build metadata into StateManager so UI can display it
 		if buildVersion != "" {
 			sm.SetVersion(buildVersion)
@@ -156,7 +160,10 @@ func main() {
 				if s.ConnectedSince != nil {
 					cs = *s.ConnectedSince
 				}
-				li = append(li, core.LinkInfo{Node: s.Node, ConnectedSince: cs, LastTxStart: s.LastTxStart, LastTxEnd: s.LastTxEnd, TotalTxSeconds: s.TotalTxSeconds})
+				linkInfo := core.LinkInfo{Node: s.Node, ConnectedSince: cs, LastTxStart: s.LastTxStart, LastTxEnd: s.LastTxEnd, TotalTxSeconds: s.TotalTxSeconds}
+				// Enrich seeded links with node lookup data
+				nodeLookup.EnrichLinkInfo(&linkInfo)
+				li = append(li, linkInfo)
 			}
 			sm.SeedLinkStats(li)
 		}

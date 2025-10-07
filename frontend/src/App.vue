@@ -20,6 +20,7 @@
         <router-link to="/" class="nav-link" @click="mobileMenuOpen = false">Dashboard</router-link>
         <router-link to="/status" class="nav-link" @click="mobileMenuOpen = false">Node Status</router-link>
         <router-link to="/lookup" class="nav-link" @click="mobileMenuOpen = false">Node Lookup</router-link>
+        <router-link to="/network-map" class="nav-link" @click="mobileMenuOpen = false">Network Map</router-link>
         <router-link to="/rpt-stats" class="nav-link" v-if="authStore.isAuthenticated" @click="mobileMenuOpen = false">RPT Stats</router-link>
         <router-link to="/voter" class="nav-link" v-if="authStore.isAuthenticated" @click="mobileMenuOpen = false">Voter</router-link>
       </div>
@@ -71,7 +72,8 @@
 
     <footer class="footer">
       <div class="footer-content">
-  <p>&copy; 2025 Allstar Nexus<span v-if="status && status.version">&nbsp;{{ status.version }}</span>. Built with ❤️ in Macomb, MI</p>
+  <p>&copy; 2025 Allstar Nexus<span v-if="status && status.version">&nbsp;{{ status.version }}</span>.</p>
+  <p>Made with ❤️ in Macomb, MI</p>
         <p v-if="status && status.build_time">
           Build: {{ new Date(status.build_time).toLocaleString() }}
         </p>

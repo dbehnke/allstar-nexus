@@ -31,17 +31,18 @@ type NodeState struct {
 
 // StateManager updates and publishes state snapshots.
 type StateManager struct {
-	mu               sync.RWMutex
-	state            NodeState
-	out              chan NodeState
-	lastTx           bool
-	talkerOut        chan TalkerEvent
-	log              *TalkerLog
-	linkDiffOut      chan []LinkInfo
-	linkRemOut       chan []int
-	linkTxOut        chan LinkTxEvent
-	persistFn        func(ls []LinkInfo)
-	lastTalkerState  map[int]bool // Track last TX state per node to prevent duplicate talker events
+	mu              sync.RWMutex
+	state           NodeState
+	out             chan NodeState
+	lastTx          bool
+	talkerOut       chan TalkerEvent
+	log             *TalkerLog
+	linkDiffOut     chan []LinkInfo
+	linkRemOut      chan []int
+	linkTxOut       chan LinkTxEvent
+	persistFn       func(ls []LinkInfo)
+	lastTalkerState map[int]string // Track last TX event kind per node to prevent duplicate talker events
+	nodeLookup      *NodeLookupService
 }
 
 func NewStateManager() *StateManager {
@@ -53,16 +54,68 @@ func NewStateManager() *StateManager {
 		linkDiffOut:     make(chan []LinkInfo, 8),
 		linkRemOut:      make(chan []int, 8),
 		linkTxOut:       make(chan LinkTxEvent, 16),
-		lastTalkerState: make(map[int]bool),
+		lastTalkerState: make(map[int]string),
 	}
+}
+
+// SetNodeLookup configures the node lookup service for enriching link info
+func (sm *StateManager) SetNodeLookup(nls *NodeLookupService) {
+	sm.nodeLookup = nls
 }
 
 func (sm *StateManager) Updates() <-chan NodeState        { return sm.out }
 func (sm *StateManager) TalkerEvents() <-chan TalkerEvent { return sm.talkerOut }
-func (sm *StateManager) TalkerLogSnapshot() any           { return sm.log.Snapshot() }
+func (sm *StateManager) TalkerLogSnapshot() any           { return sm.enrichTalkerSnapshot(sm.log.Snapshot()) }
 func (sm *StateManager) LinkUpdates() <-chan []LinkInfo   { return sm.linkDiffOut }
 func (sm *StateManager) LinkRemovals() <-chan []int       { return sm.linkRemOut }
 func (sm *StateManager) LinkTxEvents() <-chan LinkTxEvent { return sm.linkTxOut }
+
+// enrichTalkerSnapshot enriches talker events with current node lookup data
+func (sm *StateManager) enrichTalkerSnapshot(events []TalkerEvent) []TalkerEvent {
+	if sm.nodeLookup == nil {
+		return events
+	}
+
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	enriched := make([]TalkerEvent, len(events))
+	for i, evt := range events {
+		enriched[i] = evt
+
+		// Skip if already enriched or node is 0
+		if evt.Node == 0 || evt.Callsign != "" {
+			continue
+		}
+
+		// Try to enrich from current LinksDetailed
+		found := false
+		for j := range sm.state.LinksDetailed {
+			if sm.state.LinksDetailed[j].Node == evt.Node {
+				enriched[i].Callsign = sm.state.LinksDetailed[j].NodeCallsign
+				enriched[i].Description = sm.state.LinksDetailed[j].NodeDescription
+				found = true
+				break
+			}
+		}
+
+		// If not found in links, try node lookup service directly
+		if !found && evt.Node > 0 {
+			if info := sm.nodeLookup.LookupNode(evt.Node); info != nil {
+				enriched[i].Callsign = info.Callsign
+				enriched[i].Description = info.Description
+			}
+		} else if !found && evt.Node < 0 {
+			// Handle text nodes
+			if name, ok := getTextNodeName(evt.Node); ok {
+				enriched[i].Callsign = name
+				enriched[i].Description = "VOIP Node"
+			}
+		}
+	}
+
+	return enriched
+}
 
 // SetPersistHook installs a callback invoked with full LinksDetailed slice after each apply where TX edges occurred.
 func (sm *StateManager) SetPersistHook(fn func([]LinkInfo)) { sm.persistFn = fn }
@@ -171,6 +224,10 @@ func (sm *StateManager) apply(m ami.Message) {
 				newDetails = append(newDetails, *li)
 			} else {
 				ni := LinkInfo{Node: id, ConnectedSince: now}
+				// Enrich with node lookup data
+				if sm.nodeLookup != nil {
+					sm.nodeLookup.EnrichLinkInfo(&ni)
+				}
 				newDetails = append(newDetails, ni)
 				added = append(added, ni)
 			}
@@ -209,12 +266,22 @@ func (sm *StateManager) apply(m ami.Message) {
 			// Emit per-link TX start/stop events by comparing existing vs newDetails.
 			var emitted bool
 			for i := range newDetails {
-				oldActive := false
-				if old, ok := existing[newDetails[i].Node]; ok && old.CurrentTx {
-					oldActive = true
-				}
+				nodeID := newDetails[i].Node
 				newActive := newDetails[i].CurrentTx
-				if oldActive != newActive { // edge
+
+				// Determine the new event kind
+				newKind := "TX_STOP"
+				if newActive {
+					newKind = "TX_START"
+				}
+
+				// Check against last known talker state to prevent duplicate events
+				lastKind, seen := sm.lastTalkerState[nodeID]
+
+				if !seen || lastKind != newKind {
+					// State changed or first time seeing this node
+					sm.lastTalkerState[nodeID] = newKind
+
 					kind := "STOP"
 					if newActive {
 						kind = "START"
@@ -224,6 +291,8 @@ func (sm *StateManager) apply(m ami.Message) {
 					case sm.linkTxOut <- evt:
 					default:
 					}
+					// Emit talker event with node info, passing the LinkInfo for accurate duration
+					sm.emitTalkerFromLink("TX_"+kind, &newDetails[i])
 					emitted = true
 				}
 			}
@@ -303,6 +372,60 @@ func (sm *StateManager) emitTalker(kind string, node int) {
 		}
 	}
 
+	// Check for duplicate: skip if last state for this node matches current kind
+	// This prevents duplicate events from being stored in the ring buffer
+	if lastState, exists := sm.lastTalkerState[node]; exists && lastState == kind {
+		// log.Printf("DEBUG: Skipping duplicate talker event: node=%d kind=%s", node, kind)
+		return // Already in this state, skip duplicate
+	}
+	sm.lastTalkerState[node] = kind
+
+	// log.Printf("DEBUG: Adding talker event to buffer: node=%d kind=%s callsign=%s", node, kind, evt.Callsign)
+	sm.log.Add(evt)
+	select {
+	case sm.talkerOut <- evt:
+	default:
+	}
+}
+
+// emitTalkerFromLink emits a talker event with data from a LinkInfo struct
+// This is used when we have the LinkInfo with accurate timestamps
+func (sm *StateManager) emitTalkerFromLink(kind string, link *LinkInfo) {
+	if link == nil {
+		return
+	}
+
+	now := time.Now()
+	evt := TalkerEvent{
+		At:          now,
+		Kind:        kind,
+		Node:        link.Node,
+		Callsign:    link.NodeCallsign,
+		Description: link.NodeDescription,
+	}
+
+	// For STOP events, calculate duration from the LinkInfo's timestamps
+	if kind == "TX_STOP" && link.LastTxStart != nil && link.LastTxEnd != nil {
+		evt.Duration = int(link.LastTxEnd.Sub(*link.LastTxStart).Seconds())
+	}
+
+	// If no callsign, check if it's a text node
+	if evt.Callsign == "" && link.Node < 0 {
+		if name, found := getTextNodeName(link.Node); found {
+			evt.Callsign = name
+			evt.Description = "VOIP Node"
+		}
+	}
+
+	// Check for duplicate: skip if last state for this node matches current kind
+	// This prevents duplicate events from being stored in the ring buffer
+	if lastState, exists := sm.lastTalkerState[link.Node]; exists && lastState == kind {
+		// log.Printf("DEBUG: Skipping duplicate talker event (from link): node=%d kind=%s", link.Node, kind)
+		return // Already in this state, skip duplicate
+	}
+	sm.lastTalkerState[link.Node] = kind
+
+	// log.Printf("DEBUG: Adding talker event to buffer (from link): node=%d kind=%s callsign=%s", link.Node, kind, evt.Callsign)
 	sm.log.Add(evt)
 	select {
 	case sm.talkerOut <- evt:
@@ -491,13 +614,19 @@ func (sm *StateManager) ApplyCombinedStatus(combined *ami.CombinedNodeStatus) {
 		nodeID := newDetails[i].Node
 		newActive := newDetails[i].CurrentTx
 
+		// Determine the new event kind
+		newKind := "TX_STOP"
+		if newActive {
+			newKind = "TX_START"
+		}
+
 		// Check against last known talker state (not just existing link state)
 		// This prevents duplicate events when multiple pollers see the same link
-		lastActive, seen := sm.lastTalkerState[nodeID]
+		lastKind, seen := sm.lastTalkerState[nodeID]
 
-		if !seen || lastActive != newActive {
+		if !seen || lastKind != newKind {
 			// State changed or first time seeing this node
-			sm.lastTalkerState[nodeID] = newActive
+			sm.lastTalkerState[nodeID] = newKind
 
 			kind := "STOP"
 			if newActive {
@@ -588,7 +717,7 @@ func parseLinkIDs(payload string) []int {
 		}
 	}
 	seen := map[int]struct{}{}
-	digitRe := regexp.MustCompile(`(\d{3,})`)  // Changed from {3,7} to {3,} for longer node numbers
+	digitRe := regexp.MustCompile(`(\d{3,})`) // Changed from {3,7} to {3,} for longer node numbers
 	for i := start; i < len(tokens); i++ {
 		tk := strings.TrimSpace(tokens[i])
 		if tk == "" {
@@ -690,7 +819,7 @@ func parseALinks(payload string) (ids []int, keyed map[int]bool) {
 			start = 1
 		}
 	}
-	digitRe := regexp.MustCompile(`(\d{3,})`)  // Changed from {3,7} to {3,} for longer node numbers
+	digitRe := regexp.MustCompile(`(\d{3,})`) // Changed from {3,7} to {3,} for longer node numbers
 	seen := map[int]struct{}{}
 	for i := start; i < len(parts); i++ {
 		p := strings.TrimSpace(parts[i])

@@ -4,6 +4,7 @@ import NodeStatus from '../views/NodeStatus.vue'
 import NodeLookup from '../views/NodeLookup.vue'
 import RptStats from '../views/RptStats.vue'
 import VoterDisplay from '../views/VoterDisplay.vue'
+import NetworkMap from '../views/NetworkMap.vue'
 
 const routes = [
   {
@@ -20,6 +21,11 @@ const routes = [
     path: '/lookup',
     name: 'NodeLookup',
     component: NodeLookup
+  },
+  {
+    path: '/network-map',
+    name: 'NetworkMap',
+    component: NetworkMap
   },
   {
     path: '/rpt-stats',

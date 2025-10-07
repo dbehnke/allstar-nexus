@@ -27,18 +27,29 @@ export const useNodeStore = defineStore('node', () => {
     } else if (msg.messageType === 'TALKER_LOG_SNAPSHOT') {
       // Full talker log snapshot from server (on connect or periodic refresh)
       // Replace entire talker log with enriched server data
+      // Note: events may not have a node field at all (omitempty), so keep all events
       talker.value = Array.isArray(msg.data) ? msg.data : []
       console.log('Received talker log snapshot:', talker.value.length, 'events')
     } else if (msg.messageType === 'TALKER_EVENT') {
       try {
         const incoming = msg.data
+        
+        // Skip events without a valid node number (node 0 or missing)
+        if (!incoming.node || incoming.node === 0) {
+          return
+        }
+        
         const now = new Date(incoming.at).getTime()
-        const last = talker.value.length ? talker.value[talker.value.length - 1] : null
-        // Debounce near-duplicate events (same node+kind within 1s)
-        if (last && last.kind === incoming.kind && (last.node || 0) === (incoming.node || 0)) {
-          const lastTs = new Date(last.at).getTime()
-          if (Math.abs(now - lastTs) < 1000) {
-            return
+        
+        // Check last 5 events for duplicates (same node+kind within 2s)
+        const recentEvents = talker.value.slice(-5)
+        for (const recent of recentEvents) {
+          if (recent.kind === incoming.kind && recent.node === incoming.node) {
+            const recentTs = new Date(recent.at).getTime()
+            if (Math.abs(now - recentTs) < 2000) {
+              console.log('Skipping duplicate talker event:', incoming.kind, incoming.node)
+              return
+            }
           }
         }
 
@@ -120,6 +131,7 @@ export const useNodeStore = defineStore('node', () => {
 
   function loadTalkerHistory(events) {
     // Load historical talker events (from API on page load)
+    // Keep all events - node field may be omitted entirely due to omitempty
     talker.value = events || []
   }
 

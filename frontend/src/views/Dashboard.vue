@@ -16,19 +16,22 @@
       </div>
 
       <!-- Talker Log -->
+      <!-- DISABLED: Talker log feature temporarily disabled - to be revisited later -->
+      <!--
       <div class="grid-item">
         <Card title="Talker Log">
           <div class="talker-log">
                 <div v-if="talkerDisplay.length" class="log-entries">
                   <div v-for="(e, i) in talkerDisplay.slice(0, 20)" :key="i" class="log-entry">
                     <span class="time" :title="new Date(e.at).toLocaleString()">{{ formatRelative(e.at) }}</span>
-                    <span class="kind">{{ e.displayLabel }}</span>
+                    <span class="kind" v-html="e.displayLabel"></span>
                   </div>
                 </div>
                 <div v-else class="no-data">No talker events yet</div>
               </div>
         </Card>
       </div>
+      -->
     </div>
   </div>
 </template>
@@ -183,6 +186,7 @@ const talkerDisplay = computed(() => {
 
   for (const ev of events) {
     const node = ev.node || 0
+    
     // Resolve node==0 by checking current keyed link or lastTxNode
     let resolvedNode = node
     let resolvedLink = null
@@ -190,6 +194,8 @@ const talkerDisplay = computed(() => {
       resolvedLink = linkSource.find(l => l.current_tx)
       if (resolvedLink) resolvedNode = resolvedLink.node
       else if (lastTxNode.value) resolvedNode = lastTxNode.value
+      // If still 0, skip this event
+      if (resolvedNode === 0) continue
     } else {
       resolvedLink = linkSource.find(l => l.node === resolvedNode) || null
     }
@@ -204,7 +210,11 @@ const talkerDisplay = computed(() => {
     if (resolvedNode < 0 && callsign) {
       displayNode = callsign  // For text nodes, just show callsign
     }
-    const displayName = callsign ? `${callsign} (${displayNode})` : `${displayNode}`
+
+    // Build clickable HTML links
+    const callsignLink = callsign ? `<a href="https://www.qrz.com/db/${callsign.toUpperCase()}" target="_blank" rel="noopener noreferrer" class="callsign-link">${callsign}</a>` : ''
+    const nodeLink = resolvedNode > 0 ? `<a href="https://stats.allstarlink.org/stats/${resolvedNode}" target="_blank" rel="noopener noreferrer" class="node-link">${displayNode}</a>` : `${displayNode}`
+    const displayName = callsign ? `${callsignLink} (${nodeLink})` : nodeLink
 
     if (ev.kind === 'TX_START') {
       lastStartByNode.set(resolvedNode, at)
@@ -276,6 +286,21 @@ const talkerDisplay = computed(() => {
 
 .log-entry .kind {
   color: var(--text-secondary);
+}
+
+/* Clickable links in talker log */
+.log-entry :deep(.callsign-link),
+.log-entry :deep(.node-link) {
+  color: var(--accent-primary);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.log-entry :deep(.callsign-link:hover),
+.log-entry :deep(.node-link:hover) {
+  color: var(--accent-hover);
+  text-decoration: underline;
 }
 
 .no-data {
