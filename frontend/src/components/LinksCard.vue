@@ -21,7 +21,6 @@
             <td class="node-info">
               <div v-if="l.node_callsign" class="callsign">
                 <span class="callsign-text">{{ l.node_callsign }}</span>
-                <small v-if="(l.current_tx || l.is_keyed)" class="node-id">{{ l.node }}</small>
               </div>
               <div v-if="l.node_description || l.node_location" class="node-details">
                 <span v-if="l.node_description">{{ l.node_description }}</span>

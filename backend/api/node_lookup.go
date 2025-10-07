@@ -46,6 +46,7 @@ func (a *API) NodeLookup(w http.ResponseWriter, r *http.Request) {
 
 // searchAstDB reads the astdb.txt file and returns matching nodes.
 // The astdb.txt file format is typically: node|callsign|description|location
+// If query is not numeric and not found in database, returns the query as a callsign
 func (a *API) searchAstDB(query string) ([]NodeRecord, error) {
 	file, err := os.Open(a.AstDBPath)
 	if err != nil {
@@ -108,6 +109,20 @@ func (a *API) searchAstDB(query string) ([]NodeRecord, error) {
 
 	if err := scanner.Err(); err != nil {
 		return nil, err
+	}
+
+	// If no results found and query is not numeric, assume it's a callsign/text node ID
+	// Return a synthetic record using the query as the callsign
+	if len(results) == 0 {
+		if _, err := strconv.Atoi(query); err != nil {
+			// Not a numeric node - treat as callsign
+			results = append(results, NodeRecord{
+				Node:        0, // Use 0 for non-numeric nodes
+				Callsign:    strings.ToUpper(query),
+				Description: "Non-numeric node",
+				Location:    "",
+			})
+		}
 	}
 
 	return results, nil
