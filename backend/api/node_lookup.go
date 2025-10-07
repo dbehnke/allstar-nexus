@@ -125,11 +125,11 @@ func (a *API) searchAstDB(query string) ([]NodeRecord, error) {
 				// This is a hashed text node ID - look up original name
 				if name, found := core.GetTextNodeName(nodeID); found {
 					callsign = name
-					desc = "Text node"
+					desc = "VOIP Node"
 				} else {
 					// Fallback if not in map
 					callsign = strings.ToUpper(query)
-					desc = "Text node (hash)"
+					desc = "VOIP Node (hash)"
 				}
 				results = append(results, NodeRecord{
 					Node:        nodeID,
@@ -142,7 +142,7 @@ func (a *API) searchAstDB(query string) ([]NodeRecord, error) {
 				results = append(results, NodeRecord{
 					Node:        0,
 					Callsign:    strings.ToUpper(query),
-					Description: "Non-numeric node",
+					Description: "VOIP Node",
 					Location:    "",
 				})
 			}

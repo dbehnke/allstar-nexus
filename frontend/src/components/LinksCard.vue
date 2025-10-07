@@ -17,7 +17,7 @@
         </thead>
         <tbody>
           <tr v-for="l in sortedLinks" :key="l.node" :class="{ txing: l.current_tx || l.is_keyed }">
-            <td class="node-num">{{ l.node }}</td>
+            <td class="node-num">{{ formatNodeNumber(l.node, l.node_callsign) }}</td>
             <td class="node-info">
               <div v-if="l.node_callsign" class="callsign">
                 <span class="callsign-text">{{ l.node_callsign }}</span>
@@ -105,6 +105,51 @@ const sortedLinks = computed(() => {
     return new Date(bTime) - new Date(aTime)
   })
 })
+
+// Format node number - for negative numbers (text nodes), show callsign instead
+// Handle duplicates by adding -1, -2, -3 suffix
+const callsignCounts = computed(() => {
+  const counts = {}
+  const seen = {}
+
+  sortedLinks.value.forEach(link => {
+    if (link.node < 0 && link.node_callsign) {
+      const callsign = link.node_callsign
+      if (!counts[callsign]) {
+        counts[callsign] = 0
+        seen[callsign] = []
+      }
+      counts[callsign]++
+      seen[callsign].push(link.node)
+    }
+  })
+
+  return { counts, seen }
+})
+
+function formatNodeNumber(nodeNum, callsign) {
+  // Positive numbers are regular AllStar nodes - show as-is
+  if (nodeNum >= 0) {
+    return nodeNum
+  }
+
+  // Negative numbers are hashed text nodes - show callsign
+  if (callsign) {
+    const { counts, seen } = callsignCounts.value
+
+    // If only one instance, just show callsign
+    if (counts[callsign] === 1) {
+      return callsign
+    }
+
+    // Multiple instances - add suffix -1, -2, -3, etc.
+    const index = seen[callsign].indexOf(nodeNum)
+    return `${callsign}-${index + 1}`
+  }
+
+  // Fallback - shouldn't happen
+  return nodeNum
+}
 
 function formatSince(ts) {
   if (!ts) return '—'

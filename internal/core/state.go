@@ -568,15 +568,8 @@ func parseLinkIDs(payload string) []int {
 			continue
 		}
 
-		// Strip common prefix/suffix characters (T, U, K, R, C, M)
-		cleaned := strings.TrimLeft(tk, "TURCKM")
-		cleaned = strings.TrimRight(cleaned, "TURCKM")
-		if cleaned == "" {
-			continue
-		}
-
 		// Try to find embedded digits first (handles T588841, 588841TU, etc.)
-		m := digitRe.FindStringSubmatch(cleaned)
+		m := digitRe.FindStringSubmatch(tk)
 		if len(m) > 1 {
 			if n, err := strconv.Atoi(m[1]); err == nil {
 				if _, dup := seen[n]; !dup {
@@ -588,6 +581,31 @@ func parseLinkIDs(payload string) []int {
 		}
 
 		// No numeric match - must be a text node ID (callsign, etc.)
+		// Strip only mode/status flags from the END (TU, TK, TR, TC, TM, etc.)
+		cleaned := tk
+		// Remove leading T prefix if followed by uppercase letter (mode prefix)
+		if len(cleaned) > 1 && cleaned[0] == 'T' && cleaned[1] >= 'A' && cleaned[1] <= 'Z' {
+			// Check if this looks like a mode prefix (T followed by callsign)
+			// Only strip if it's NOT a callsign starting with T
+			if strings.HasSuffix(cleaned, "TU") || strings.HasSuffix(cleaned, "TK") ||
+			   strings.HasSuffix(cleaned, "TR") || strings.HasSuffix(cleaned, "TC") ||
+			   strings.HasSuffix(cleaned, "TM") {
+				// Has status suffix, so leading T is a prefix
+				cleaned = cleaned[1:]
+			}
+		}
+		// Strip status suffixes (TU, TK, TR, TC, TM, U, K, R, C, M)
+		cleaned = strings.TrimSuffix(cleaned, "TU")
+		cleaned = strings.TrimSuffix(cleaned, "TK")
+		cleaned = strings.TrimSuffix(cleaned, "TR")
+		cleaned = strings.TrimSuffix(cleaned, "TC")
+		cleaned = strings.TrimSuffix(cleaned, "TM")
+		cleaned = strings.TrimRight(cleaned, "URKRCM")
+
+		if cleaned == "" {
+			continue
+		}
+
 		// Convert to stable integer using hash function
 		nodeID := textNodeToInt(cleaned)
 		if _, dup := seen[nodeID]; !dup {
@@ -661,15 +679,8 @@ func parseALinks(payload string) (ids []int, keyed map[int]bool) {
 		// Check for keying flag before stripping
 		isKeyed := strings.Contains(p, "TK") || strings.HasSuffix(p, "K")
 
-		// Strip keying flags to get clean node identifier
-		cleaned := strings.TrimRight(p, "TURCKM")
-		cleaned = strings.TrimLeft(cleaned, "T")  // Remove leading T prefix
-		if cleaned == "" {
-			continue
-		}
-
 		// Try to extract numeric node ID first
-		m := digitRe.FindStringSubmatch(cleaned)
+		m := digitRe.FindStringSubmatch(p)
 		if len(m) > 1 {
 			if n, err := strconv.Atoi(m[1]); err == nil {
 				if _, dup := seen[n]; !dup {
@@ -684,6 +695,28 @@ func parseALinks(payload string) (ids []int, keyed map[int]bool) {
 		}
 
 		// No numeric match - must be text node (callsign, etc.)
+		// Strip only mode/status flags from the END
+		cleaned := p
+		// Remove leading T prefix if it has status suffix
+		if len(cleaned) > 1 && cleaned[0] == 'T' && cleaned[1] >= 'A' && cleaned[1] <= 'Z' {
+			if strings.HasSuffix(cleaned, "TU") || strings.HasSuffix(cleaned, "TK") ||
+			   strings.HasSuffix(cleaned, "TR") || strings.HasSuffix(cleaned, "TC") ||
+			   strings.HasSuffix(cleaned, "TM") {
+				cleaned = cleaned[1:]
+			}
+		}
+		// Strip status suffixes
+		cleaned = strings.TrimSuffix(cleaned, "TU")
+		cleaned = strings.TrimSuffix(cleaned, "TK")
+		cleaned = strings.TrimSuffix(cleaned, "TR")
+		cleaned = strings.TrimSuffix(cleaned, "TC")
+		cleaned = strings.TrimSuffix(cleaned, "TM")
+		cleaned = strings.TrimRight(cleaned, "URKRCM")
+
+		if cleaned == "" {
+			continue
+		}
+
 		nodeID := textNodeToInt(cleaned)
 		if _, dup := seen[nodeID]; !dup {
 			ids = append(ids, nodeID)
