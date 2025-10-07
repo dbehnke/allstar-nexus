@@ -5,11 +5,14 @@ import (
 	"time"
 )
 
-// TalkerEvent describes a transmit related event.
+// TalkerEvent describes a transmit related event with node/callsign info.
 type TalkerEvent struct {
-	At   time.Time `json:"at"`
-	Kind string    `json:"kind"` // TX_START / TX_STOP
-	Node int       `json:"node,omitempty"`
+	At          time.Time `json:"at"`
+	Kind        string    `json:"kind"`     // TX_START / TX_STOP
+	Node        int       `json:"node,omitempty"`
+	Callsign    string    `json:"callsign,omitempty"`
+	Description string    `json:"description,omitempty"`
+	Duration    int       `json:"duration,omitempty"` // Duration in seconds (for STOP events)
 }
 
 // TalkerLog is a size & time bounded ring buffer.

@@ -24,6 +24,11 @@ export const useNodeStore = defineStore('node', () => {
 
       status.value = msg.data
       if (msg.data.links_detailed) links.value = msg.data.links_detailed
+    } else if (msg.messageType === 'TALKER_LOG_SNAPSHOT') {
+      // Full talker log snapshot from server (on connect or periodic refresh)
+      // Replace entire talker log with enriched server data
+      talker.value = Array.isArray(msg.data) ? msg.data : []
+      console.log('Received talker log snapshot:', talker.value.length, 'events')
     } else if (msg.messageType === 'TALKER_EVENT') {
       try {
         const incoming = msg.data

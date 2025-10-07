@@ -195,9 +195,16 @@ const talkerDisplay = computed(() => {
     }
 
     const at = new Date(ev.at)
-    let callsign = (resolvedLink && resolvedLink.node_callsign) || ''
+    // Prefer enriched server-side callsign, fallback to client-side lookups
+    let callsign = ev.callsign || (resolvedLink && resolvedLink.node_callsign) || ''
     if (!callsign) callsign = nodeInfo.get(resolvedNode) || ''
-    const displayName = callsign ? `${callsign} (${resolvedNode})` : `${resolvedNode}`
+
+    // Format node number (show callsign for negative/text nodes)
+    let displayNode = resolvedNode
+    if (resolvedNode < 0 && callsign) {
+      displayNode = callsign  // For text nodes, just show callsign
+    }
+    const displayName = callsign ? `${callsign} (${displayNode})` : `${displayNode}`
 
     if (ev.kind === 'TX_START') {
       lastStartByNode.set(resolvedNode, at)
@@ -205,12 +212,11 @@ const talkerDisplay = computed(() => {
       if (resolvedNode && resolvedNode !== 0) lastTxNode.value = resolvedNode
     } else if (ev.kind === 'TX_STOP') {
       const startAt = lastStartByNode.get(resolvedNode)
-      if (startAt) {
-        const durMs = at - startAt
-        const seconds = Math.floor(durMs / 1000)
+      // Prefer server-calculated duration if available
+      const seconds = ev.duration || (startAt ? Math.floor((at - startAt) / 1000) : null)
+      if (seconds !== null) {
         out.push({ at, node: resolvedNode, displayLabel: `${displayName} — STOP — ${formatDurationSecs(seconds)}` })
-        // remove start so subsequent STOPs won't reuse the same START
-        lastStartByNode.delete(resolvedNode)
+        if (startAt) lastStartByNode.delete(resolvedNode)
       } else {
         out.push({ at, node: resolvedNode, displayLabel: `${displayName} — STOP` })
       }

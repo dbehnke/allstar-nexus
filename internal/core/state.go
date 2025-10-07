@@ -275,7 +275,34 @@ func (sm *StateManager) apply(m ami.Message) {
 }
 
 func (sm *StateManager) emitTalker(kind string, node int) {
-	evt := TalkerEvent{At: time.Now(), Kind: kind, Node: node}
+	now := time.Now()
+	evt := TalkerEvent{At: now, Kind: kind, Node: node}
+
+	// Enrich with node information if available
+	if node != 0 {
+		// Look up node in LinksDetailed to get callsign info
+		for i := range sm.state.LinksDetailed {
+			if sm.state.LinksDetailed[i].Node == node {
+				evt.Callsign = sm.state.LinksDetailed[i].NodeCallsign
+				evt.Description = sm.state.LinksDetailed[i].NodeDescription
+
+				// For STOP events, calculate duration if we have start time
+				if kind == "TX_STOP" && sm.state.LinksDetailed[i].LastTxStart != nil {
+					evt.Duration = int(now.Sub(*sm.state.LinksDetailed[i].LastTxStart).Seconds())
+				}
+				break
+			}
+		}
+
+		// If no callsign found in LinksDetailed, check if it's a text node
+		if evt.Callsign == "" && node < 0 {
+			if name, found := getTextNodeName(node); found {
+				evt.Callsign = name
+				evt.Description = "VOIP Node"
+			}
+		}
+	}
+
 	sm.log.Add(evt)
 	select {
 	case sm.talkerOut <- evt:

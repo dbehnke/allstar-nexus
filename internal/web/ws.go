@@ -62,6 +62,12 @@ func (h *Hub) HandleWS(sm *core.StateManager, authValidator func(r *http.Request
 		env := messageEnvelope{MessageType: "STATUS_UPDATE", Data: snap, Timestamp: time.Now().UnixMilli()}
 		b, _ := json.Marshal(env)
 		c.Write(context.Background(), websocket.MessageText, b)
+
+		// Send initial talker log snapshot
+		talkerLog := sm.TalkerLogSnapshot()
+		talkerEnv := messageEnvelope{MessageType: "TALKER_LOG_SNAPSHOT", Data: talkerLog, Timestamp: time.Now().UnixMilli()}
+		talkerB, _ := json.Marshal(talkerEnv)
+		c.Write(context.Background(), websocket.MessageText, talkerB)
 	}
 }
 
@@ -185,6 +191,26 @@ func (h *Hub) HeartbeatLoop(sm *core.StateManager, interval time.Duration) {
 	for range ticker.C {
 		snap := sm.Snapshot()
 		env := messageEnvelope{MessageType: "STATUS_UPDATE", Data: snap, Timestamp: time.Now().UnixMilli()}
+		payload, _ := json.Marshal(env)
+		h.mu.RLock()
+		for c := range h.clients {
+			go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, payload)
+		}
+		h.mu.RUnlock()
+	}
+}
+
+// TalkerLogRefreshLoop periodically sends full talker log snapshot (every 2 minutes)
+// This ensures clients stay in sync even if they miss incremental TALKER_EVENT messages
+func (h *Hub) TalkerLogRefreshLoop(sm *core.StateManager, interval time.Duration) {
+	if interval <= 0 {
+		interval = 2 * time.Minute
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		talkerLog := sm.TalkerLogSnapshot()
+		env := messageEnvelope{MessageType: "TALKER_LOG_SNAPSHOT", Data: talkerLog, Timestamp: time.Now().UnixMilli()}
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
 		for c := range h.clients {

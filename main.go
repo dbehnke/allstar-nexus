@@ -167,6 +167,7 @@ func main() {
 		go hub.LinkRemovalLoop(sm.LinkRemovals())
 		go hub.LinkTxBatchLoop(sm.LinkTxEvents(), 100*time.Millisecond)
 		go hub.HeartbeatLoop(sm, 5*time.Second)
+		go hub.TalkerLogRefreshLoop(sm, 2*time.Minute) // Periodic talker log refresh
 		conn := ami.NewConnector(cfg.AMIHost, cfg.AMIPort, cfg.AMIUser, cfg.AMIPassword, cfg.AMIEvents, cfg.AMIRetryInterval, cfg.AMIRetryMax)
 		// Pass AMI connector and StateManager to API layer
 		apiLayer.SetAMIConnector(conn)
