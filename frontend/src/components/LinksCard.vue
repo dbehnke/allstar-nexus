@@ -6,13 +6,13 @@
           <tr>
             <th>Node</th>
             <th>Node Information</th>
-            <th>Status</th>
-            <th>Direction</th>
-            <th>Connected</th>
-            <th>Mode</th>
-            <th v-if="showIP">IP Address</th>
-            <th>Last Heard</th>
-            <th>Total TX</th>
+            <th class="hide-mobile">Status</th>
+            <th class="hide-portrait">Direction</th>
+            <th class="hide-portrait">Connected</th>
+            <th class="hide-portrait">Mode</th>
+            <th v-if="showIP" class="hide-portrait">IP Address</th>
+            <th class="hide-portrait">Last Heard</th>
+            <th class="hide-portrait">Total TX</th>
           </tr>
         </thead>
         <tbody>
@@ -29,25 +29,25 @@
               </div>
               <div v-if="!l.node_callsign" class="loading">Loading...</div>
             </td>
-            <td>
+            <td class="hide-mobile">
               <span class="status-badge" :class="{ active: l.current_tx || l.is_keyed }">
                 {{ (l.current_tx || l.is_keyed) ? '● TX' : 'IDLE' }}
               </span>
             </td>
-            <td>
+            <td class="hide-portrait">
               <span class="direction-badge" :class="l.direction?.toLowerCase()">
                 {{ l.direction || '—' }}
               </span>
             </td>
-            <td>{{ l.elapsed || formatSince(l.connected_since) }}</td>
-            <td>
+            <td class="hide-portrait">{{ l.elapsed || formatSince(l.connected_since) }}</td>
+            <td class="hide-portrait">
               <span class="mode-badge" :class="modeClass(l.mode)">
                 {{ formatMode(l.mode) }}
               </span>
             </td>
-            <td v-if="showIP" class="ip-addr">{{ l.ip || '—' }}</td>
-            <td class="last-heard">{{ l.last_heard || (l.last_heard_at ? formatSince(l.last_heard_at) : 'Never') }}</td>
-            <td>{{ formatDuration(l.total_tx_seconds) }}</td>
+            <td v-if="showIP" class="hide-portrait ip-addr">{{ l.ip || '—' }}</td>
+            <td class="hide-portrait last-heard">{{ l.last_heard || (l.last_heard_at ? formatSince(l.last_heard_at) : 'Never') }}</td>
+            <td class="hide-portrait">{{ formatDuration(l.total_tx_seconds) }}</td>
           </tr>
         </tbody>
       </table>
@@ -308,5 +308,30 @@ function modeClass(mode) {
   color: #6b7280;
   font-size: 0.75rem;
   font-style: italic;
+}
+
+/* Responsive: Hide columns on mobile portrait */
+@media (max-width: 767px) {
+  .hide-mobile {
+    display: none;
+  }
+}
+
+/* Show all columns on landscape or larger screens */
+@media (max-width: 767px) and (orientation: portrait) {
+  .hide-portrait {
+    display: none;
+  }
+}
+
+/* Ensure columns are visible on landscape mobile or tablets+ */
+@media (min-width: 768px), (orientation: landscape) {
+  .hide-portrait {
+    display: table-cell;
+  }
+
+  .hide-mobile {
+    display: table-cell;
+  }
 }
 </style>

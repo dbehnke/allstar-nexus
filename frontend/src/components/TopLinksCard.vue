@@ -174,4 +174,30 @@ function formatDuration(secs) {
   background: var(--bg-hover);
   border-color: var(--border-hover);
 }
+
+/* Mobile responsive */
+@media (max-width: 767px) {
+  .top-link-item {
+    grid-template-columns: 32px 1fr;
+    gap: 0.75rem;
+  }
+
+  .rank {
+    width: 32px;
+    height: 32px;
+    font-size: 0.875rem;
+  }
+
+  .bar-container {
+    grid-column: 1 / -1;
+  }
+
+  .callsign {
+    font-size: 0.875rem;
+  }
+
+  .node-num {
+    font-size: 0.75rem;
+  }
+}
 </style>

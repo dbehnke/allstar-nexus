@@ -1,24 +1,30 @@
 <template>
   <div class="app">
     <nav class="navbar">
-      <div class="navbar-brand">
-        <router-link to="/" class="brand-link">
-          <div class="brand-text">
-            <h1>{{ status?.title || 'Allstar Nexus' }}</h1>
-            <span class="subtitle" v-if="status?.subtitle">{{ status.subtitle }}</span>
-          </div>
-        </router-link>
+      <div class="navbar-header">
+        <div class="navbar-brand">
+          <router-link to="/" class="brand-link">
+            <div class="brand-text">
+              <h1>{{ status?.title || 'Allstar Nexus' }}</h1>
+              <span class="subtitle" v-if="status?.subtitle">{{ status.subtitle }}</span>
+            </div>
+          </router-link>
+        </div>
+
+        <button @click="mobileMenuOpen = !mobileMenuOpen" class="mobile-menu-toggle" aria-label="Toggle menu">
+          <span class="hamburger">☰</span>
+        </button>
       </div>
 
-      <div class="navbar-menu">
-        <router-link to="/" class="nav-link">Dashboard</router-link>
-        <router-link to="/status" class="nav-link">Node Status</router-link>
-        <router-link to="/lookup" class="nav-link">Node Lookup</router-link>
-        <router-link to="/rpt-stats" class="nav-link" v-if="authStore.isAuthenticated">RPT Stats</router-link>
-        <router-link to="/voter" class="nav-link" v-if="authStore.isAuthenticated">Voter</router-link>
+      <div class="navbar-menu" :class="{ 'mobile-open': mobileMenuOpen }">
+        <router-link to="/" class="nav-link" @click="mobileMenuOpen = false">Dashboard</router-link>
+        <router-link to="/status" class="nav-link" @click="mobileMenuOpen = false">Node Status</router-link>
+        <router-link to="/lookup" class="nav-link" @click="mobileMenuOpen = false">Node Lookup</router-link>
+        <router-link to="/rpt-stats" class="nav-link" v-if="authStore.isAuthenticated" @click="mobileMenuOpen = false">RPT Stats</router-link>
+        <router-link to="/voter" class="nav-link" v-if="authStore.isAuthenticated" @click="mobileMenuOpen = false">Voter</router-link>
       </div>
 
-      <div class="navbar-user">
+      <div class="navbar-user" :class="{ 'mobile-open': mobileMenuOpen }">
         <button @click="cycleTheme" class="btn-icon theme-toggle" :title="themeTooltip">
           <span v-if="theme === 'light'">☀️</span>
           <span v-else-if="theme === 'dark'">🌙</span>
@@ -26,13 +32,13 @@
         </button>
 
         <div v-if="!authStore.authed" class="login-toggle">
-          <button @click="showLogin = !showLogin" class="btn-secondary">
+          <button @click="showLogin = !showLogin; mobileMenuOpen = false" class="btn-secondary">
             {{ showLogin ? 'Hide Login' : 'Admin Login' }}
           </button>
         </div>
         <div v-else class="user-info">
           <span class="user-role">{{ authStore.userRole }}</span>
-          <button @click="logout" class="btn-secondary">Logout</button>
+          <button @click="logout; mobileMenuOpen = false" class="btn-secondary">Logout</button>
         </div>
       </div>
     </nav>
@@ -86,6 +92,7 @@ const authStore = useAuthStore()
 const nodeStore = useNodeStore()
 const { theme, setTheme } = useTheme()
 
+const mobileMenuOpen = ref(false)
 const showLogin = ref(false)
 const email = ref('')
 const password = ref('')
@@ -477,21 +484,100 @@ body {
   margin: 0.25rem 0;
 }
 
+/* Mobile Menu */
+.navbar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.mobile-menu-toggle {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border-hover);
+  color: var(--text-primary);
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.mobile-menu-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.hamburger {
+  display: block;
+  line-height: 1;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .navbar {
     flex-direction: column;
-    gap: 1rem;
+    gap: 0;
+    padding: 1rem;
+  }
+
+  .navbar-header {
+    width: 100%;
+  }
+
+  .mobile-menu-toggle {
+    display: flex;
   }
 
   .navbar-menu {
-    flex-wrap: wrap;
-    justify-content: center;
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem 0 0.5rem 0;
+  }
+
+  .navbar-menu.mobile-open {
+    display: flex;
   }
 
   .navbar-user {
+    display: none;
     width: 100%;
     justify-content: center;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--border-color);
+    margin-top: 0.5rem;
+  }
+
+  .navbar-user.mobile-open {
+    display: flex;
+  }
+
+  .nav-link {
+    padding: 0.75rem 1rem;
+    text-align: center;
+  }
+}
+
+@media (min-width: 769px) {
+  .navbar {
+    flex-direction: row;
+  }
+
+  .navbar-header {
+    width: auto;
+  }
+
+  .navbar-menu {
+    display: flex;
+  }
+
+  .navbar-user {
+    display: flex;
   }
 }
 </style>
