@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/dbehnke/allstar-nexus/internal/core"
 )
 
 // NodeRecord represents a single AllStar node entry from astdb.txt
@@ -114,14 +116,36 @@ func (a *API) searchAstDB(query string) ([]NodeRecord, error) {
 	// If no results found and query is not numeric, assume it's a callsign/text node ID
 	// Return a synthetic record using the query as the callsign
 	if len(results) == 0 {
-		if _, err := strconv.Atoi(query); err != nil {
-			// Not a numeric node - treat as callsign
-			results = append(results, NodeRecord{
-				Node:        0, // Use 0 for non-numeric nodes
-				Callsign:    strings.ToUpper(query),
-				Description: "Non-numeric node",
-				Location:    "",
-			})
+		// Check if it's a negative number (hashed text node ID)
+		if nodeID, err := strconv.Atoi(query); err != nil || nodeID < 0 {
+			var callsign string
+			var desc string
+
+			if err == nil && nodeID < 0 {
+				// This is a hashed text node ID - look up original name
+				if name, found := core.GetTextNodeName(nodeID); found {
+					callsign = name
+					desc = "Text node"
+				} else {
+					// Fallback if not in map
+					callsign = strings.ToUpper(query)
+					desc = "Text node (hash)"
+				}
+				results = append(results, NodeRecord{
+					Node:        nodeID,
+					Callsign:    callsign,
+					Description: desc,
+					Location:    "",
+				})
+			} else {
+				// Plain text query - return as callsign
+				results = append(results, NodeRecord{
+					Node:        0,
+					Callsign:    strings.ToUpper(query),
+					Description: "Non-numeric node",
+					Location:    "",
+				})
+			}
 		}
 	}
 

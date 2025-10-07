@@ -544,9 +544,10 @@ func (sm *StateManager) ApplyCombinedStatus(combined *ami.CombinedNodeStatus) {
 //	"6,T588841,T590110,T586671,T58840,T550465,T586081" (leading count then tokens)
 //	"6,588841TU,590110TU,..." (ALINKS variant with suffix flags)
 //	Previously polled plain CSV "2000,3000".
+//	Non-numeric: "KF8S", "W1ABC", etc.
 //
 // Strategy: split by comma, drop leading token if it contains only a count, then
-// strip non-digit prefix/suffix from each token and parse digits.
+// try to extract digits. If no digits found, convert text identifier to stable int ID.
 func parseLinkIDs(payload string) []int {
 	if payload == "" {
 		return nil
@@ -560,28 +561,81 @@ func parseLinkIDs(payload string) []int {
 		}
 	}
 	seen := map[int]struct{}{}
-	digitRe := regexp.MustCompile(`(\d{3,7})`)
+	digitRe := regexp.MustCompile(`(\d{3,})`)  // Changed from {3,7} to {3,} for longer node numbers
 	for i := start; i < len(tokens); i++ {
 		tk := strings.TrimSpace(tokens[i])
 		if tk == "" {
 			continue
 		}
-		// Find first 3-7 digit run.
-		m := digitRe.FindStringSubmatch(tk)
+
+		// Strip common prefix/suffix characters (T, U, K, R, C, M)
+		cleaned := strings.TrimLeft(tk, "TURCKM")
+		cleaned = strings.TrimRight(cleaned, "TURCKM")
+		if cleaned == "" {
+			continue
+		}
+
+		// Try to find embedded digits first (handles T588841, 588841TU, etc.)
+		m := digitRe.FindStringSubmatch(cleaned)
 		if len(m) > 1 {
 			if n, err := strconv.Atoi(m[1]); err == nil {
 				if _, dup := seen[n]; !dup {
 					out = append(out, n)
 					seen[n] = struct{}{}
 				}
+				continue
 			}
+		}
+
+		// No numeric match - must be a text node ID (callsign, etc.)
+		// Convert to stable integer using hash function
+		nodeID := textNodeToInt(cleaned)
+		if _, dup := seen[nodeID]; !dup {
+			out = append(out, nodeID)
+			seen[nodeID] = struct{}{}
+			// Store mapping for later lookup
+			registerTextNode(nodeID, cleaned)
 		}
 	}
 	return out
 }
 
+// textNodeToInt converts a text node identifier to a stable integer ID
+// Uses FNV-1a hash mapped to negative range to avoid collision with numeric nodes
+func textNodeToInt(s string) int {
+	s = strings.ToUpper(s) // Normalize to uppercase
+	hash := uint32(2166136261)
+	for i := 0; i < len(s); i++ {
+		hash ^= uint32(s[i])
+		hash *= 16777619
+	}
+	// Convert to negative number to distinguish from numeric AllStar nodes
+	// Use lower 30 bits to keep values reasonable
+	return -int(hash & 0x3FFFFFFF)
+}
+
+// Global map to store text node ID to original string mapping
+var textNodeMap = sync.Map{} // map[int]string
+
+func registerTextNode(nodeID int, text string) {
+	textNodeMap.Store(nodeID, strings.ToUpper(text))
+}
+
+func getTextNodeName(nodeID int) (string, bool) {
+	if val, ok := textNodeMap.Load(nodeID); ok {
+		return val.(string), true
+	}
+	return "", false
+}
+
+// GetTextNodeName returns the original text name for a hashed node ID (public API)
+func GetTextNodeName(nodeID int) (string, bool) {
+	return getTextNodeName(nodeID)
+}
+
 // parseALinks parses RPT_ALINKS payload which includes flags appended to node IDs.
 // Example: 6,588841TU,590110TU,586671TU,58840TU,550465TK,586081TU
+// Also supports: KF8STK, W1ABCTU, etc (text nodes with keying flags)
 // Flags: T indicates currently transmitting? U/K seen in samples (TK vs TU) - we treat presence of trailing 'K' as keyed, 'TU' as idle or unknown.
 // We conservatively mark nodes with trailing 'K' OR payload containing 'TK' as active.
 func parseALinks(payload string) (ids []int, keyed map[int]bool) {
@@ -596,25 +650,48 @@ func parseALinks(payload string) (ids []int, keyed map[int]bool) {
 			start = 1
 		}
 	}
-	digitRe := regexp.MustCompile(`(\d{3,7})`)
+	digitRe := regexp.MustCompile(`(\d{3,})`)  // Changed from {3,7} to {3,} for longer node numbers
 	seen := map[int]struct{}{}
 	for i := start; i < len(parts); i++ {
 		p := strings.TrimSpace(parts[i])
 		if p == "" {
 			continue
 		}
-		m := digitRe.FindStringSubmatch(p)
+
+		// Check for keying flag before stripping
+		isKeyed := strings.Contains(p, "TK") || strings.HasSuffix(p, "K")
+
+		// Strip keying flags to get clean node identifier
+		cleaned := strings.TrimRight(p, "TURCKM")
+		cleaned = strings.TrimLeft(cleaned, "T")  // Remove leading T prefix
+		if cleaned == "" {
+			continue
+		}
+
+		// Try to extract numeric node ID first
+		m := digitRe.FindStringSubmatch(cleaned)
 		if len(m) > 1 {
 			if n, err := strconv.Atoi(m[1]); err == nil {
 				if _, dup := seen[n]; !dup {
 					ids = append(ids, n)
 					seen[n] = struct{}{}
 				}
-				// Mark keyed if token contains 'TK' (observed sample) or ends with 'K'.
-				if strings.Contains(p, "TK") || strings.HasSuffix(p, "K") {
+				if isKeyed {
 					keyed[n] = true
 				}
+				continue
 			}
+		}
+
+		// No numeric match - must be text node (callsign, etc.)
+		nodeID := textNodeToInt(cleaned)
+		if _, dup := seen[nodeID]; !dup {
+			ids = append(ids, nodeID)
+			seen[nodeID] = struct{}{}
+			registerTextNode(nodeID, cleaned)
+		}
+		if isKeyed {
+			keyed[nodeID] = true
 		}
 	}
 	return ids, keyed
