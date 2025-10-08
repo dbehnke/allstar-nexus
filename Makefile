@@ -6,7 +6,7 @@ VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS=-X 'main.buildVersion=$(VERSION)' -X 'main.buildTime=$(BUILD_TIME)'
 
-.PHONY: frontend backend build frontend-install backend-install build-dashboard build run test clean lint
+.PHONY: frontend backend build frontend-install backend-install build-dashboard build run test clean lint ami-events-logger
 
 # Build the legacy Next.js exported frontend (if used)
 frontend:
@@ -43,3 +43,7 @@ clean:
 	rm -f $(APP_NAME)
 	rm -rf $(FRONTEND_DIR)/out
 	rm -rf $(VUE_DASHBOARD_DIR)/dist
+
+# Build AMI events logger CLI tool
+ami-events-logger:
+	go build -o ami-events-logger cmd/ami-events-logger/main.go

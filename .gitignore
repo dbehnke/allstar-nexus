@@ -1,6 +1,9 @@
 # Build artifacts
 allstar-nexus
 dist/
+/ami-events-logger
+ami-events.jsonl
+*.jsonl
 
 # Node modules
 **/node_modules/
