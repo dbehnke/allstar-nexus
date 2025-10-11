@@ -16,7 +16,7 @@
           </thead>
           <tbody>
             <tr v-for="(t, idx) in pagedTransmissions" :key="idx">
-              <td :title="new Date(t.timestamp || t.at).toLocaleString()">{{ formatRelative(t.timestamp || t.at) }}</td>
+              <td :title="formatTitle(getTimestamp(t))">{{ formatRelative(getTimestamp(t)) }}</td>
               <td>
                 <a v-if="t.callsign" class="callsign" :href="`https://www.qrz.com/db/${(t.callsign||'').toUpperCase()}`" target="_blank" rel="noopener noreferrer">{{ t.callsign }}</a>
                 <span v-else class="muted">—</span>
@@ -25,7 +25,7 @@
                 <a v-if="t.node" :href="`https://stats.allstarlink.org/stats/${t.node}`" target="_blank" rel="noopener noreferrer">{{ t.node }}</a>
                 <span v-else class="muted">—</span>
               </td>
-              <td>{{ formatDuration(t.duration || t.seconds || 0) }}</td>
+              <td>{{ formatDuration(getDuration(t)) }}</td>
             </tr>
           </tbody>
         </table>
@@ -63,16 +63,35 @@ const pagedTransmissions = computed(() => {
   return (props.transmissions || []).slice(start, start + perPage)
 })
 
+function getTimestamp(t) {
+  // Accept a variety of possible keys from API/backend/test fixtures
+  return t?.timestamp || t?.at || t?.timestamp_start || t?.startedAt || t?.startAt || t?.start_time || t?.time || null
+}
+
+function formatTitle(at) {
+  if (!at) return '—'
+  const d = typeof at === 'number' ? new Date(at) : new Date(at)
+  return isNaN(d.getTime()) ? '—' : d.toLocaleString()
+}
+
 function formatRelative(at) {
   try {
-    const t = typeof at === 'number' ? at : new Date(at).getTime()
-    const diff = Math.floor((Date.now() - t) / 1000)
+    if (!at) return '—'
+    const ms = typeof at === 'number' ? at : new Date(at).getTime()
+    if (!Number.isFinite(ms)) return '—'
+    const diff = Math.floor((Date.now() - ms) / 1000)
+    if (!Number.isFinite(diff) || diff < 0) return '—'
     if (diff < 5) return 'just now'
     if (diff < 60) return `${diff}s ago`
     if (diff < 3600) return `${Math.floor(diff/60)}m ${diff%60}s ago`
     const h = Math.floor(diff/3600)
     return `${h}h ${Math.floor((diff%3600)/60)}m ago`
   } catch { return '' }
+}
+
+function getDuration(t) {
+  // Accept possible keys
+  return t?.duration ?? t?.seconds ?? t?.duration_seconds ?? 0
 }
 
 function formatDuration(secs) {
