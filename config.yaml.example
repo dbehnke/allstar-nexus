@@ -52,3 +52,46 @@ ami_retry_max: 60s
 # Feature Toggles
 disable_link_poller: false
 allow_anon_dashboard: true
+
+# Gamification System Configuration (Disabled by default)
+gamification:
+	enabled: false
+	tally_interval_minutes: 30
+
+	rested_bonus:
+		enabled: true
+		accumulation_rate: 1.5
+		max_hours: 336
+		multiplier: 2.0
+
+	diminishing_returns:
+		enabled: true
+		tiers:
+			- { max_seconds: 1200, multiplier: 1.0 }
+			- { max_seconds: 2400, multiplier: 0.75 }
+			- { max_seconds: 3600, multiplier: 0.5 }
+			- { max_seconds: 999999, multiplier: 0.25 }
+
+	kerchunk_detection:
+		enabled: true
+		threshold_seconds: 3
+		consecutive_window: 30
+		single: 0.5
+		two_to_three: 0.25
+		four_to_five: 0.1
+		six_plus: 0.0
+
+	xp_caps:
+		enabled: true
+		daily_cap_seconds: 1200
+		weekly_cap_seconds: 7200
+		reset_hour: 0
+		week_starts: sunday
+
+	# Optional custom level scaling (otherwise defaults are used)
+	# level_scale:
+	#   - levels: "1-10"
+	#     xp_per_level: 360
+	#   - levels: "11-60"
+	#     scaling: logarithmic
+	#     target_total_seconds: 255600

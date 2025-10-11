@@ -165,8 +165,13 @@ func main() {
 		levelConfigRepo := repository.NewLevelConfigRepo(gormDB)
 		activityRepo := repository.NewXPActivityRepo(gormDB)
 
-		// Calculate and seed level requirements
-		levelRequirements := gamification.CalculateLevelRequirements()
+		// Calculate and seed level requirements (configurable)
+		var levelRequirements map[int]int
+		if len(cfg.Gamification.LevelScale) > 0 {
+			levelRequirements = gamification.CalculateLevelRequirementsWithScale(cfg.Gamification.LevelScale)
+		} else {
+			levelRequirements = gamification.CalculateLevelRequirements()
+		}
 		if err := levelConfigRepo.SeedDefaults(context.Background(), levelRequirements); err != nil {
 			logger.Warn("failed to seed level config", zap.Error(err))
 		} else {

@@ -23,6 +23,7 @@ type GamificationConfig struct {
 	DiminishingReturns   DiminishingReturnsConfig `mapstructure:"diminishing_returns" yaml:"diminishing_returns"`
 	KerchunkDetection    KerchunkConfig         `mapstructure:"kerchunk_detection" yaml:"kerchunk_detection"`
 	XPCaps               XPCapsConfig           `mapstructure:"xp_caps" yaml:"xp_caps"`
+	LevelScale           []LevelScaleConfig     `mapstructure:"level_scale" yaml:"level_scale"`
 }
 
 type RestedBonusConfig struct {
@@ -58,6 +59,16 @@ type XPCapsConfig struct {
 	WeeklyCap   int    `mapstructure:"weekly_cap_seconds" yaml:"weekly_cap_seconds"`
 	ResetHour   int    `mapstructure:"reset_hour" yaml:"reset_hour"`
 	WeekStarts  string `mapstructure:"week_starts" yaml:"week_starts"`
+}
+
+// LevelScaleConfig defines scaling for level XP requirements
+// Example linear: { levels: "1-10", xp_per_level: 360 }
+// Example logarithmic: { levels: "11-60", scaling: "logarithmic", target_total_seconds: 255600 }
+type LevelScaleConfig struct {
+	Levels             string `mapstructure:"levels" yaml:"levels"`
+	XPPerLevel         int    `mapstructure:"xp_per_level" yaml:"xp_per_level"`
+	Scaling            string `mapstructure:"scaling" yaml:"scaling"`
+	TargetTotalSeconds int    `mapstructure:"target_total_seconds" yaml:"target_total_seconds"`
 }
 
 // Config holds runtime configuration values.
@@ -311,6 +322,53 @@ ami_retry_max: 60s
 # Feature Toggles
 disable_link_poller: false  # false = hybrid polling enabled (polls XStat/SawStat every 60s for enriched data)
 allow_anon_dashboard: true
+
+# Gamification System (Low-Activity defaults shown)
+gamification:
+	enabled: false            # Set to true to enable the gamification system
+	tally_interval_minutes: 30
+
+	# Rested XP Bonus
+	rested_bonus:
+		enabled: true
+		accumulation_rate: 1.5   # hours of rested per day offline (example)
+		max_hours: 336           # 14 days
+		multiplier: 2.0          # 2x XP while rested
+
+	# Diminishing Returns (tiers in seconds with multipliers)
+	diminishing_returns:
+		enabled: true
+		tiers:
+			- { max_seconds: 1200, multiplier: 1.0 }
+			- { max_seconds: 2400, multiplier: 0.75 }
+			- { max_seconds: 3600, multiplier: 0.5 }
+			- { max_seconds: 999999, multiplier: 0.25 }
+
+	# Kerchunk / spam detection
+	kerchunk_detection:
+		enabled: true
+		threshold_seconds: 3
+		consecutive_window: 30
+		single: 0.5
+		two_to_three: 0.25
+		four_to_five: 0.1
+		six_plus: 0.0
+
+	# Daily/weekly XP caps (seconds of talk time credited)
+	xp_caps:
+		enabled: true
+		daily_cap_seconds: 1200   # 20 minutes/day
+		weekly_cap_seconds: 7200  # 2 hours/week
+		reset_hour: 0
+		week_starts: sunday
+
+	# Optional: Custom level scaling. If omitted, uses low-activity defaults (6 min levels 1-10, logarithmic 11-60 to 255,600s).
+	# level_scale:
+	#   - levels: "1-10"
+	#     xp_per_level: 360
+	#   - levels: "11-60"
+	#     scaling: "logarithmic"
+	#     target_total_seconds: 255600
 `
 	return os.WriteFile(path, []byte(exampleConfig), 0644)
 }

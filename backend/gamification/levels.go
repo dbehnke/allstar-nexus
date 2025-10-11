@@ -1,6 +1,12 @@
 package gamification
 
-import "math"
+import (
+	"math"
+	"strconv"
+	"strings"
+
+	cfgpkg "github.com/dbehnke/allstar-nexus/backend/config"
+)
 
 // CalculateLevelRequirements generates XP requirements for all 60 levels
 // This is the LOW-ACTIVITY HUB version with 10x reduction
@@ -31,6 +37,84 @@ func CalculateLevelRequirements() map[int]int {
 	}
 
 	return requirements
+}
+
+// CalculateLevelRequirementsWithScale builds the level requirements using provided scale config.
+// If scale is empty or invalid, falls back to low-activity defaults (CalculateLevelRequirements).
+func CalculateLevelRequirementsWithScale(scale []cfgpkg.LevelScaleConfig) map[int]int {
+	if len(scale) == 0 {
+		return CalculateLevelRequirements()
+	}
+
+	// Start with empty map; fill based on entries in order. Later entries override earlier ones.
+	req := make(map[int]int)
+
+	for _, s := range scale {
+		start, end := parseLevelRange(s.Levels)
+		if start < 1 { start = 1 }
+		if end > 60 { end = 60 }
+		if start > end { continue }
+
+		// Linear: explicit xp_per_level
+		if s.XPPerLevel > 0 || strings.EqualFold(s.Scaling, "linear") {
+			xp := s.XPPerLevel
+			if xp <= 0 {
+				// sensible default if scaling=linear but xp not provided
+				xp = 360
+			}
+			for lvl := start; lvl <= end; lvl++ {
+				req[lvl] = xp
+			}
+			continue
+		}
+
+		// Logarithmic: distribute TargetTotalSeconds across range using (i^1.8)
+		if strings.EqualFold(s.Scaling, "logarithmic") && s.TargetTotalSeconds > 0 {
+			totalRemaining := float64(s.TargetTotalSeconds)
+			sum := 0.0
+			for lvl := start; lvl <= end; lvl++ {
+				sum += math.Pow(float64(lvl-start+1), 1.8)
+			}
+			if sum <= 0 {
+				continue
+			}
+			scaleFactor := totalRemaining / sum
+			for lvl := start; lvl <= end; lvl++ {
+				xp := int(math.Pow(float64(lvl-start+1), 1.8) * scaleFactor)
+				if xp < 1 { xp = 1 }
+				req[lvl] = xp
+			}
+			continue
+		}
+	}
+
+	// Ensure we have all levels; if any missing, backfill with default plan for those.
+	if len(req) < 60 {
+		def := CalculateLevelRequirements()
+		for lvl := 1; lvl <= 60; lvl++ {
+			if _, ok := req[lvl]; !ok {
+				req[lvl] = def[lvl]
+			}
+		}
+	}
+
+	return req
+}
+
+func parseLevelRange(r string) (int, int) {
+	r = strings.TrimSpace(r)
+	if r == "" {
+		return 1, 60
+	}
+	parts := strings.Split(r, "-")
+	if len(parts) == 1 {
+		v, _ := strconv.Atoi(strings.TrimSpace(parts[0]))
+		return v, v
+	}
+	a, _ := strconv.Atoi(strings.TrimSpace(parts[0]))
+	b, _ := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if a > b { a, b = b, a }
+	return a, b
 }
 
 // GetTotalXPForLevel returns cumulative XP needed to reach a given level

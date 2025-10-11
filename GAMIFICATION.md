@@ -858,14 +858,30 @@ if cfg.Gamification.Enabled {
 - ✅ API endpoints: scoreboard, profile, recent transmissions, level config
 - ✅ Integrated into main.go with graceful shutdown
 
-### 🚧 Frontend Changes (TODO - Phase 4)
-- ⬜ Remove NodeStatus route, add TalkerLog route
-- ⬜ Create TalkerLog.vue view with grid layout
-- ⬜ Create TransmissionHistoryCard component (paginated)
-- ⬜ Create ScoreboardCard component (ranked leaderboard)
-- ⬜ Create LevelProgressBar component
-- ⬜ Update Dashboard.vue: remove talker log, keep TopLinksCard
-- ⬜ Update stores/node.js with gamification state/methods
+### ✅ Frontend Changes (COMPLETED) — updated 2025-10-11
+- ✅ Remove NodeStatus route, add TalkerLog route
+  - Route added: `/talker` in `frontend/src/router/index.js`
+  - Nav updated in `frontend/src/App.vue` ("Node Status" → "Talker Log")
+- ✅ Create TalkerLog.vue view with grid layout
+  - File: `frontend/src/views/TalkerLog.vue`
+  - Loads scoreboard, recent transmissions, and level config
+- ✅ Create TransmissionHistoryCard component (paginated)
+  - File: `frontend/src/components/TransmissionHistoryCard.vue`
+  - 10 items/page, 5 pages (50 recent)
+- ✅ Create ScoreboardCard component (ranked leaderboard)
+  - File: `frontend/src/components/ScoreboardCard.vue`
+  - Rank badges (gold/silver/bronze), callsign links, level/renown
+- ✅ Create LevelProgressBar component
+  - File: `frontend/src/components/LevelProgressBar.vue`
+  - Animated fill, color thresholds, overlay text
+- ✅ Update Dashboard.vue: remove talker log, keep TopLinksCard
+  - File: `frontend/src/views/Dashboard.vue` (removed deprecated commented block)
+- ✅ Update store with gamification state/methods
+  - File: `frontend/src/stores/node.js`
+  - Added: `gamificationEnabled`, `scoreboard`, `recentTransmissions`, `levelConfig`
+  - Added methods: `fetchScoreboard`, `fetchRecentTransmissions`, `fetchLevelConfig`
+
+Build status: Frontend production build PASS (vite)
 
 ### ✅ Configuration (COMPLETED)
 - ✅ Add `gamification` section to config.yaml with full low-activity hub settings
