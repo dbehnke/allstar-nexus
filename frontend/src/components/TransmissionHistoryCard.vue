@@ -69,15 +69,15 @@ function getTimestamp(t) {
 }
 
 function formatTitle(at) {
-  if (!at) return '—'
-  const d = typeof at === 'number' ? new Date(at) : new Date(at)
-  return isNaN(d.getTime()) ? '—' : d.toLocaleString()
+  const ms = parseToMs(at)
+  if (!Number.isFinite(ms)) return '—'
+  const d = new Date(ms)
+  return d.toLocaleString()
 }
 
 function formatRelative(at) {
   try {
-    if (!at) return '—'
-    const ms = typeof at === 'number' ? at : new Date(at).getTime()
+    const ms = parseToMs(at)
     if (!Number.isFinite(ms)) return '—'
     const diff = Math.floor((Date.now() - ms) / 1000)
     if (!Number.isFinite(diff) || diff < 0) return '—'
@@ -92,6 +92,31 @@ function formatRelative(at) {
 function getDuration(t) {
   // Accept possible keys
   return t?.duration ?? t?.seconds ?? t?.duration_seconds ?? 0
+}
+
+// Parse various timestamp representations to milliseconds since epoch.
+// - Numbers: seconds or ms
+// - Strings: ISO8601, optionally without timezone (assume UTC)
+function parseToMs(at) {
+  if (at == null) return NaN
+  // numeric seconds vs ms
+  if (typeof at === 'number') {
+    return at < 1e12 ? at * 1000 : at
+  }
+  if (typeof at === 'string') {
+    const trimmed = at.trim()
+    // If purely digits, treat as seconds
+    if (/^\d+$/.test(trimmed)) {
+      const num = Number(trimmed)
+      return num < 1e12 ? num * 1000 : num
+    }
+    // If no timezone info, assume UTC by appending Z
+    const hasTZ = /Z|[+\-]\d{2}:?\d{2}/i.test(trimmed)
+    const iso = hasTZ ? trimmed : `${trimmed}Z`
+    const ms = Date.parse(iso)
+    return Number.isFinite(ms) ? ms : NaN
+  }
+  return NaN
 }
 
 function formatDuration(secs) {
