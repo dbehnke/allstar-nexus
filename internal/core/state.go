@@ -313,6 +313,17 @@ func (sm *StateManager) apply(m ami.Message) {
 		alinksKeyed = keyedMap
 		sm.numALinks = len(ids) // Track number of adjacent links
 
+		// Fabricate RPT_LINKS from parsed IDs so downstream link processing populates Links/LinksDetailed
+		if _, hasLinks := m.Headers["RPT_LINKS"]; !hasLinks {
+			if len(ids) > 0 {
+				parts := make([]string, len(ids))
+				for i, id := range ids {
+					parts[i] = strconv.Itoa(id)
+				}
+				m.Headers["RPT_LINKS"] = strings.Join(parts, ",")
+			}
+		}
+
 		// Always log parsed ALINKS for debugging
 		prev := make([]int, len(sm.state.Links))
 		copy(prev, sm.state.Links)
@@ -360,7 +371,7 @@ func (sm *StateManager) apply(m ami.Message) {
 			log.Printf("[KEYING] Source %d: %d adjacent nodes, %d keyed", sourceNodeID, len(ids), keyedCount)
 		}
 
-		// Mark that we just processed ALINKS so we can skip redundant RPT_LINKS processing
+		// Mark that we just processed ALINKS so we can skip redundant legacy-only RPT_LINKS processing for trackers
 		sm.lastALinksProcessedAt = now
 	} else if v, ok := m.Headers["RPT_LINKS"]; ok && len(sm.keyingTrackers) > 0 {
 		// FALLBACK: If RPT_ALINKS not available, use RPT_LINKS to at least populate the node list
