@@ -17,13 +17,13 @@ type NodeConfig struct {
 
 // GamificationConfig holds gamification system settings
 type GamificationConfig struct {
-	Enabled              bool                   `mapstructure:"enabled" yaml:"enabled"`
-	TallyIntervalMinutes int                    `mapstructure:"tally_interval_minutes" yaml:"tally_interval_minutes"`
-	RestedBonus          RestedBonusConfig      `mapstructure:"rested_bonus" yaml:"rested_bonus"`
+	Enabled              bool                     `mapstructure:"enabled" yaml:"enabled"`
+	TallyIntervalMinutes int                      `mapstructure:"tally_interval_minutes" yaml:"tally_interval_minutes"`
+	RestedBonus          RestedBonusConfig        `mapstructure:"rested_bonus" yaml:"rested_bonus"`
 	DiminishingReturns   DiminishingReturnsConfig `mapstructure:"diminishing_returns" yaml:"diminishing_returns"`
-	KerchunkDetection    KerchunkConfig         `mapstructure:"kerchunk_detection" yaml:"kerchunk_detection"`
-	XPCaps               XPCapsConfig           `mapstructure:"xp_caps" yaml:"xp_caps"`
-	LevelScale           []LevelScaleConfig     `mapstructure:"level_scale" yaml:"level_scale"`
+	KerchunkDetection    KerchunkConfig           `mapstructure:"kerchunk_detection" yaml:"kerchunk_detection"`
+	XPCaps               XPCapsConfig             `mapstructure:"xp_caps" yaml:"xp_caps"`
+	LevelScale           []LevelScaleConfig       `mapstructure:"level_scale" yaml:"level_scale"`
 }
 
 type RestedBonusConfig struct {
@@ -54,11 +54,11 @@ type KerchunkConfig struct {
 }
 
 type XPCapsConfig struct {
-	Enabled     bool   `mapstructure:"enabled" yaml:"enabled"`
-	DailyCap    int    `mapstructure:"daily_cap_seconds" yaml:"daily_cap_seconds"`
-	WeeklyCap   int    `mapstructure:"weekly_cap_seconds" yaml:"weekly_cap_seconds"`
-	ResetHour   int    `mapstructure:"reset_hour" yaml:"reset_hour"`
-	WeekStarts  string `mapstructure:"week_starts" yaml:"week_starts"`
+	Enabled    bool   `mapstructure:"enabled" yaml:"enabled"`
+	DailyCap   int    `mapstructure:"daily_cap_seconds" yaml:"daily_cap_seconds"`
+	WeeklyCap  int    `mapstructure:"weekly_cap_seconds" yaml:"weekly_cap_seconds"`
+	ResetHour  int    `mapstructure:"reset_hour" yaml:"reset_hour"`
+	WeekStarts string `mapstructure:"week_starts" yaml:"week_starts"`
 }
 
 // LevelScaleConfig defines scaling for level XP requirements

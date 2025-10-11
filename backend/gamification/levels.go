@@ -51,9 +51,15 @@ func CalculateLevelRequirementsWithScale(scale []cfgpkg.LevelScaleConfig) map[in
 
 	for _, s := range scale {
 		start, end := parseLevelRange(s.Levels)
-		if start < 1 { start = 1 }
-		if end > 60 { end = 60 }
-		if start > end { continue }
+		if start < 1 {
+			start = 1
+		}
+		if end > 60 {
+			end = 60
+		}
+		if start > end {
+			continue
+		}
 
 		// Linear: explicit xp_per_level
 		if s.XPPerLevel > 0 || strings.EqualFold(s.Scaling, "linear") {
@@ -81,7 +87,9 @@ func CalculateLevelRequirementsWithScale(scale []cfgpkg.LevelScaleConfig) map[in
 			scaleFactor := totalRemaining / sum
 			for lvl := start; lvl <= end; lvl++ {
 				xp := int(math.Pow(float64(lvl-start+1), 1.8) * scaleFactor)
-				if xp < 1 { xp = 1 }
+				if xp < 1 {
+					xp = 1
+				}
 				req[lvl] = xp
 			}
 			continue
@@ -113,7 +121,9 @@ func parseLevelRange(r string) (int, int) {
 	}
 	a, _ := strconv.Atoi(strings.TrimSpace(parts[0]))
 	b, _ := strconv.Atoi(strings.TrimSpace(parts[1]))
-	if a > b { a, b = b, a }
+	if a > b {
+		a, b = b, a
+	}
 	return a, b
 }
 

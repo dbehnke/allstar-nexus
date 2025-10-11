@@ -8,12 +8,14 @@ import (
 	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/api"
-	"github.com/dbehnke/allstar-nexus/backend/database"
+	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 // helper to seed link stats directly
-func seedLinkStats(t *testing.T, repo *repository.LinkStatsRepo, items []repository.LinkStat) {
+func seedLinkStats(t *testing.T, repo *repository.LinkStatsRepo, items []models.LinkStat) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -33,28 +35,28 @@ type linkStatsResp struct {
 func TestLinkStatsSinceFiltering(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	db, err := database.Open(dbPath)
+	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
-		t.Fatalf("open: %v", err)
+		t.Fatalf("open gorm sqlite: %v", err)
 	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
+	if err := gdb.AutoMigrate(&models.User{}, &models.LinkStat{}); err != nil {
+		t.Fatalf("automigrate: %v", err)
 	}
-	apiLayer := api.New(db.DB, "secret", time.Hour)
+	apiLayer := api.New(gdb, "secret", time.Hour)
 	mux := buildMux(apiLayer)
 	srv := httptest.NewServer(mux)
-	defer func() { srv.Close(); db.CloseSafe() }()
+	defer func() { srv.Close() }()
 
-	repo := repository.NewLinkStatsRepo(db.DB)
+	repo := repository.NewLinkStatsRepo(gdb)
 	now := time.Now().Add(-2 * time.Hour)
 	t1 := now.Add(30 * time.Minute)
 	t2 := now.Add(90 * time.Minute)
 	// We control UpdatedAt indirectly via Upsert CURRENT_TIMESTAMP; so space inserts to establish ordering.
-	seedLinkStats(t, repo, []repository.LinkStat{{Node: 1001, TotalTxSeconds: 10, ConnectedSince: &now}})
+	seedLinkStats(t, repo, []models.LinkStat{{Node: 1001, TotalTxSeconds: 10, ConnectedSince: &now}})
 	time.Sleep(20 * time.Millisecond)
-	seedLinkStats(t, repo, []repository.LinkStat{{Node: 1002, TotalTxSeconds: 20, ConnectedSince: &t1}})
+	seedLinkStats(t, repo, []models.LinkStat{{Node: 1002, TotalTxSeconds: 20, ConnectedSince: &t1}})
 	time.Sleep(20 * time.Millisecond)
-	seedLinkStats(t, repo, []repository.LinkStat{{Node: 1003, TotalTxSeconds: 30, ConnectedSince: &t2}})
+	seedLinkStats(t, repo, []models.LinkStat{{Node: 1003, TotalTxSeconds: 30, ConnectedSince: &t2}})
 
 	client := srv.Client()
 
