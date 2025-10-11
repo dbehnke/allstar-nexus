@@ -28,6 +28,7 @@ type API struct {
 	AMIConnector *ami.Connector
 	StateManager StateManagerInterface
 	AstDBPath    string
+	TriggerPoll  func(nodeID int)
 }
 
 func New(db *sql.DB, secret string, ttl time.Duration) *API {
@@ -54,6 +55,11 @@ func (a *API) SetAstDBPath(path string) {
 // SetStateManager sets the state manager for talker log access
 func (a *API) SetStateManager(sm StateManagerInterface) {
 	a.StateManager = sm
+}
+
+// SetTriggerPoll configures a function to trigger a server-side poll (optionally for a specific node)
+func (a *API) SetTriggerPoll(fn func(nodeID int)) {
+	a.TriggerPoll = fn
 }
 
 func (a *API) Register(w http.ResponseWriter, r *http.Request) {
@@ -351,6 +357,27 @@ func (a *API) currentUser(r *http.Request) (*repository.SafeUser, int) {
 
 func Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"status": "ok"})
+}
+
+// PollNow triggers an immediate poll. Optional query param node specifies a node to poll.
+// Endpoint: POST /api/poll-now?node=XXXX
+func (a *API) PollNow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, 405, "method_not_allowed", "only POST supported")
+		return
+	}
+	if a.TriggerPoll == nil {
+		writeError(w, 503, "poll_unavailable", "polling service not available")
+		return
+	}
+	nodeID := 0
+	if n := r.URL.Query().Get("node"); n != "" {
+		if v, err := strconv.Atoi(n); err == nil {
+			nodeID = v
+		}
+	}
+	a.TriggerPoll(nodeID)
+	writeJSON(w, 200, map[string]any{"ok": true, "node": nodeID})
 }
 
 // DashboardSummary public minimal placeholder.

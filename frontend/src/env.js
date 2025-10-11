@@ -2,6 +2,11 @@
 export const cfg = Object.assign({
   WS_PATH: '/ws',
   DEFAULT_TOKEN: 'MISSING_TOKEN'
+  ,
+  // How long (ms) to keep removed adjacent links visible in the UI before pruning
+  STALE_RETENTION_MS: 60 * 1000,
+  // How long (ms) to treat a freshly connected node as "new" (highlight)
+  NEW_NODE_HIGHLIGHT_MS: 60 * 1000
 }, window.__NEXUS_CONFIG__ || {});
 
 // Exponential backoff websocket connector with jitter.

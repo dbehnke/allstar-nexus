@@ -14,8 +14,8 @@
         <span class="value">{{ humanUptime(status) }}</span>
       </div>
       <div class="status-item">
-        <span class="label">Links:</span>
-        <span class="value">{{ status.links?.join(', ') || '—' }}</span>
+        <span class="label">Links (Adj/Total):</span>
+        <span class="value">{{ status.num_alinks || 0 }} / {{ status.num_links || 0 }}</span>
       </div>
       <div class="status-item">
         <span class="label">COS (RX):</span>

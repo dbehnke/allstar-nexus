@@ -1,17 +1,15 @@
 <template>
   <div class="dashboard">
+    <!-- Global gauges removed: counters are shown inside each SourceNodeCard -->
+
     <div class="dashboard-grid">
-      <!-- Active Links -->
-      <div class="grid-item full-width">
-        <LinksCard
-          :links="nodeStore.links"
-          :status="nodeStore.status"
-          :now-tick="nodeStore.nowTick"
-        />
+      <!-- Source Node Cards - Full Width -->
+      <div v-for="(data, sourceNodeID) in nodeStore.sourceNodes" :key="sourceNodeID" class="grid-item full-width">
+        <SourceNodeCard :source-node-id="parseInt(sourceNodeID)" :data="data" />
       </div>
 
       <!-- Top Links -->
-      <div class="grid-item">
+      <div class="grid-item full-width">
         <TopLinksCard :top-links="nodeStore.topLinks" @refresh="refreshStats" />
       </div>
 
@@ -43,8 +41,8 @@ import { useNodeLookup } from '../composables/useNodeLookup'
 import { useAuthStore } from '../stores/auth'
 import { connectWS } from '../env'
 import Card from '../components/Card.vue'
-import LinksCard from '../components/LinksCard.vue'
 import TopLinksCard from '../components/TopLinksCard.vue'
+import SourceNodeCard from '../components/SourceNodeCard.vue'
 
 const nodeStore = useNodeStore()
 const authStore = useAuthStore()
@@ -246,6 +244,44 @@ const talkerDisplay = computed(() => {
   padding: 1rem;
   max-width: 1600px;
   margin: 0 auto;
+}
+
+.link-gauges {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.gauge {
+  flex: 1;
+  padding: 1.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.gauge:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.gauge-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.gauge-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--accent-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .dashboard-grid {

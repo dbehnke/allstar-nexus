@@ -53,3 +53,42 @@ func (r *LinkStatsRepo) GetAll(ctx context.Context) ([]LinkStat, error) {
 	}
 	return out, rows.Err()
 }
+
+// DeleteNotIn deletes all link stats except those in the provided node list
+// This is used to clean up stale/disconnected nodes from the database
+func (r *LinkStatsRepo) DeleteNotIn(ctx context.Context, activeNodes []int) (int64, error) {
+	if len(activeNodes) == 0 {
+		// Delete all
+		result, err := r.db.ExecContext(ctx, `DELETE FROM link_stats`)
+		if err != nil {
+			return 0, err
+		}
+		return result.RowsAffected()
+	}
+
+	// Build placeholders for IN clause
+	placeholders := make([]string, len(activeNodes))
+	args := make([]interface{}, len(activeNodes))
+	for i, node := range activeNodes {
+		placeholders[i] = "?"
+		args[i] = node
+	}
+
+	query := `DELETE FROM link_stats WHERE node NOT IN (` + joinPlaceholders(placeholders) + `)`
+	result, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+func joinPlaceholders(placeholders []string) string {
+	result := ""
+	for i, p := range placeholders {
+		if i > 0 {
+			result += ","
+		}
+		result += p
+	}
+	return result
+}

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,38 +25,97 @@ type NodeState struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 	Version       string     `json:"version"`
 	Heartbeat     int64      `json:"heartbeat"`
+	StateVersion  int64      `json:"state_version"`
 	SessionStart  time.Time  `json:"session_start"`
 	Title         string     `json:"title,omitempty"`
 	Subtitle      string     `json:"subtitle,omitempty"`
+	NumLinks      int        `json:"num_links"`  // Total links (global)
+	NumALinks     int        `json:"num_alinks"` // Adjacent links (local)
+}
+
+// SourceNodeKeyingUpdate represents a keying state update for a source node's adjacent links
+type SourceNodeKeyingUpdate struct {
+	SourceNodeID  int                        `json:"source_node_id"`
+	AdjacentNodes map[int]AdjacentNodeStatus `json:"adjacent_nodes"`
+	TxKeyed       bool                       `json:"tx_keyed"` // Local TX state for this source node
+	RxKeyed       bool                       `json:"rx_keyed"` // Local RX state for this source node
+	NumLinks      int                        `json:"num_links,omitempty"`
+	NumALinks     int                        `json:"num_alinks,omitempty"`
+	Timestamp     time.Time                  `json:"timestamp"`
+}
+
+// SourceNodeKeyingEvent represents a TX session edge event (start or end)
+type SourceNodeKeyingEvent struct {
+	Type         string     `json:"type"` // "TX_START" or "TX_END"
+	SourceNodeID int        `json:"source_node_id"`
+	NodeID       int        `json:"node_id"` // Adjacent node that started/ended TX
+	StartTime    time.Time  `json:"start_time"`
+	EndTime      *time.Time `json:"end_time,omitempty"`     // Only set for TX_END
+	DurationSec  int        `json:"duration_sec,omitempty"` // Only set for TX_END
+	Timestamp    time.Time  `json:"timestamp"`
+}
+
+// TransmissionLogRepo defines the interface for transmission log persistence
+type TransmissionLogRepo interface {
+	LogTransmission(sourceID, adjacentLinkID int, callsign string, startTime, endTime time.Time, durationSeconds int) error
+}
+
+// transmissionLogEntry represents a single transmission log entry to be persisted asynchronously
+type transmissionLogEntry struct {
+	SourceID        int
+	AdjacentLinkID  int
+	Callsign        string
+	TimestampStart  time.Time
+	TimestampEnd    time.Time
+	DurationSeconds int
 }
 
 // StateManager updates and publishes state snapshots.
 type StateManager struct {
-	mu              sync.RWMutex
-	state           NodeState
-	out             chan NodeState
-	lastTx          bool
-	talkerOut       chan TalkerEvent
-	log             *TalkerLog
-	linkDiffOut     chan []LinkInfo
-	linkRemOut      chan []int
-	linkTxOut       chan LinkTxEvent
-	persistFn       func(ls []LinkInfo)
-	lastTalkerState map[int]string // Track last TX event kind per node to prevent duplicate talker events
-	nodeLookup      *NodeLookupService
+	mu                    sync.RWMutex
+	state                 NodeState
+	out                   chan NodeState
+	lastTx                bool
+	talkerOut             chan TalkerEvent
+	log                   *TalkerLog
+	linkDiffOut           chan []LinkInfo
+	linkRemOut            chan []int
+	linkTxOut             chan LinkTxEvent
+	persistFn             func(ls []LinkInfo)
+	lastTalkerState       map[int]string // Track last TX event kind per node to prevent duplicate talker events
+	nodeLookup            *NodeLookupService
+	keyingTrackers        map[int]*KeyingTracker      // Per-source-node keying trackers
+	keyingOut             chan SourceNodeKeyingUpdate // Channel for source node keying updates
+	keyingEventOut        chan SourceNodeKeyingEvent  // Channel for session edge events (TX_START/TX_END)
+	numLinks              int                         // Total number of links (global)
+	numALinks             int                         // Number of adjacent links (local)
+	perSourceNumLinks     map[int]int                 // Per-source total links (server-provided or derived)
+	perSourceNumALinks    map[int]int                 // Per-source adjacent links (server-provided or derived)
+	lastALinksProcessedAt time.Time                   // Track when we last processed ALINKS to avoid duplicate LINKS processing
+	txLogRepo             TransmissionLogRepo         // Repository for logging transmissions
+	txLogChan             chan transmissionLogEntry   // Async channel for transmission logging
 }
 
 func NewStateManager() *StateManager {
-	return &StateManager{
-		state:           NodeState{UpdatedAt: time.Now(), Version: "0.1.0", SessionStart: time.Now()},
-		out:             make(chan NodeState, 8),
-		talkerOut:       make(chan TalkerEvent, 16),
-		log:             NewTalkerLog(200, 10*time.Minute),
-		linkDiffOut:     make(chan []LinkInfo, 8),
-		linkRemOut:      make(chan []int, 8),
-		linkTxOut:       make(chan LinkTxEvent, 16),
-		lastTalkerState: make(map[int]string),
+	sm := &StateManager{
+		state:              NodeState{UpdatedAt: time.Now(), Version: "0.1.0", SessionStart: time.Now()},
+		out:                make(chan NodeState, 8),
+		talkerOut:          make(chan TalkerEvent, 16),
+		log:                NewTalkerLog(200, 10*time.Minute),
+		linkDiffOut:        make(chan []LinkInfo, 8),
+		linkRemOut:         make(chan []int, 8),
+		linkTxOut:          make(chan LinkTxEvent, 16),
+		lastTalkerState:    make(map[int]string),
+		keyingTrackers:     make(map[int]*KeyingTracker),
+		keyingOut:          make(chan SourceNodeKeyingUpdate, 16),
+		keyingEventOut:     make(chan SourceNodeKeyingEvent, 16),
+		txLogChan:          make(chan transmissionLogEntry, 32),
+		perSourceNumLinks:  make(map[int]int),
+		perSourceNumALinks: make(map[int]int),
 	}
+	// Start async transmission logger
+	go sm.transmissionLogWorker()
+	return sm
 }
 
 // SetNodeLookup configures the node lookup service for enriching link info
@@ -63,12 +123,75 @@ func (sm *StateManager) SetNodeLookup(nls *NodeLookupService) {
 	sm.nodeLookup = nls
 }
 
-func (sm *StateManager) Updates() <-chan NodeState        { return sm.out }
-func (sm *StateManager) TalkerEvents() <-chan TalkerEvent { return sm.talkerOut }
-func (sm *StateManager) TalkerLogSnapshot() any           { return sm.enrichTalkerSnapshot(sm.log.Snapshot()) }
-func (sm *StateManager) LinkUpdates() <-chan []LinkInfo   { return sm.linkDiffOut }
-func (sm *StateManager) LinkRemovals() <-chan []int       { return sm.linkRemOut }
-func (sm *StateManager) LinkTxEvents() <-chan LinkTxEvent { return sm.linkTxOut }
+// SetTransmissionLogRepo configures the transmission log repository
+func (sm *StateManager) SetTransmissionLogRepo(repo TransmissionLogRepo) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.txLogRepo = repo
+}
+
+// transmissionLogWorker processes transmission log entries asynchronously
+func (sm *StateManager) transmissionLogWorker() {
+	for entry := range sm.txLogChan {
+		if sm.txLogRepo != nil {
+			if err := sm.txLogRepo.LogTransmission(
+				entry.SourceID,
+				entry.AdjacentLinkID,
+				entry.Callsign,
+				entry.TimestampStart,
+				entry.TimestampEnd,
+				entry.DurationSeconds,
+			); err != nil {
+				log.Printf("[TX LOG ERROR] failed to persist transmission: %v", err)
+			}
+		}
+	}
+}
+
+// queueTransmissionLog queues a transmission log entry for async persistence
+// This method safely retrieves the callsign by querying the keying tracker
+func (sm *StateManager) queueTransmissionLog(sourceID, adjacentID int, startTime, endTime time.Time, durationSec int) {
+	// Retrieve callsign from keying tracker (requires lock)
+	sm.mu.RLock()
+	tracker, exists := sm.keyingTrackers[sourceID]
+	sm.mu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	// Get adjacent node info (GetAdjacentNode acquires its own lock)
+	adjacentNode, found := tracker.GetAdjacentNode(adjacentID)
+	callsign := "unknown"
+	if found {
+		callsign = adjacentNode.Callsign
+		if callsign == "" {
+			callsign = "unknown"
+		}
+	}
+
+	select {
+	case sm.txLogChan <- transmissionLogEntry{
+		SourceID:        sourceID,
+		AdjacentLinkID:  adjacentID,
+		Callsign:        callsign,
+		TimestampStart:  startTime,
+		TimestampEnd:    endTime,
+		DurationSeconds: durationSec,
+	}:
+	default:
+		log.Printf("[TX LOG WARN] transmission log channel full, dropping entry")
+	}
+}
+
+func (sm *StateManager) Updates() <-chan NodeState                    { return sm.out }
+func (sm *StateManager) TalkerEvents() <-chan TalkerEvent             { return sm.talkerOut }
+func (sm *StateManager) TalkerLogSnapshot() any                       { return sm.enrichTalkerSnapshot(sm.log.Snapshot()) }
+func (sm *StateManager) LinkUpdates() <-chan []LinkInfo               { return sm.linkDiffOut }
+func (sm *StateManager) LinkRemovals() <-chan []int                   { return sm.linkRemOut }
+func (sm *StateManager) LinkTxEvents() <-chan LinkTxEvent             { return sm.linkTxOut }
+func (sm *StateManager) KeyingUpdates() <-chan SourceNodeKeyingUpdate { return sm.keyingOut }
+func (sm *StateManager) KeyingEvents() <-chan SourceNodeKeyingEvent   { return sm.keyingEventOut }
 
 // enrichTalkerSnapshot enriches talker events with current node lookup data
 func (sm *StateManager) enrichTalkerSnapshot(events []TalkerEvent) []TalkerEvent {
@@ -123,6 +246,16 @@ func (sm *StateManager) SetPersistHook(fn func([]LinkInfo)) { sm.persistFn = fn 
 // Run consumes AMI messages and applies them to state.
 func (sm *StateManager) Run(msgs <-chan ami.Message) {
 	for m := range msgs {
+		// Minimal logging for observability: log message type and Event/ActionID headers only.
+		if m.Headers != nil {
+			if ev, ok := m.Headers["Event"]; ok {
+				log.Printf("[AMI EVENT] type=%s event=%s action_id=%s", string(m.Type), ev, m.Headers["ActionID"])
+			} else if _, ok := m.Headers["ActionID"]; ok {
+				log.Printf("[AMI EVENT] type=%s action_id=%s", string(m.Type), m.Headers["ActionID"])
+			} else {
+				log.Printf("[AMI EVENT] type=%s (no Event/ActionID)", string(m.Type))
+			}
+		}
 		sm.apply(m)
 	}
 }
@@ -178,15 +311,100 @@ func (sm *StateManager) apply(m ami.Message) {
 	if v, ok := m.Headers["RPT_ALINKS"]; ok {
 		ids, keyedMap := parseALinks(v)
 		alinksKeyed = keyedMap
-		if _, has := m.Headers["RPT_LINKS"]; !has && len(ids) > 0 {
-			b := strings.Builder{}
-			for i, id := range ids {
-				if i > 0 {
-					b.WriteByte(',')
+		sm.numALinks = len(ids) // Track number of adjacent links
+
+		// Always log parsed ALINKS for debugging
+		prev := make([]int, len(sm.state.Links))
+		copy(prev, sm.state.Links)
+		log.Printf("[ALINKS DEBUG] parsed ids=%v keyed=%v previous_links=%v", ids, keyedMap, prev)
+
+		// Process keying trackers for each configured source node
+		now := time.Now()
+		for sourceNodeID, tracker := range sm.keyingTrackers {
+			// Process ALINKS for this source node's tracker
+			tracker.ProcessALinks(ids, keyedMap, now)
+
+			// Enrich tracker nodes with lookup data
+			if sm.nodeLookup != nil {
+				for _, nodeID := range ids {
+					if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
+						tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+					}
 				}
-				b.WriteString(strconv.Itoa(id))
 			}
-			m.Headers["RPT_LINKS"] = b.String()
+
+			// Update per-source counters
+			sm.perSourceNumALinks[sourceNodeID] = len(ids)
+			// Derive per-source links count from LinksDetailed scoped to this local node if available
+			perLinks := 0
+			for i := range sm.state.LinksDetailed {
+				if sm.state.LinksDetailed[i].LocalNode == sourceNodeID {
+					perLinks++
+				}
+			}
+			if perLinks == 0 {
+				perLinks = sm.numLinks // fallback to global until LinksDetailed populated
+			}
+			sm.perSourceNumLinks[sourceNodeID] = perLinks
+
+			// Emit update for this source node (sm.mu is already locked in apply)
+			sm.emitKeyingUpdateLocked(sourceNodeID, now)
+
+			// Log keying summary
+			keyedCount := 0
+			for _, isKeyed := range keyedMap {
+				if isKeyed {
+					keyedCount++
+				}
+			}
+			log.Printf("[KEYING] Source %d: %d adjacent nodes, %d keyed", sourceNodeID, len(ids), keyedCount)
+		}
+
+		// Mark that we just processed ALINKS so we can skip redundant RPT_LINKS processing
+		sm.lastALinksProcessedAt = now
+	} else if v, ok := m.Headers["RPT_LINKS"]; ok && len(sm.keyingTrackers) > 0 {
+		// FALLBACK: If RPT_ALINKS not available, use RPT_LINKS to at least populate the node list
+		// (without keying status information)
+		// Skip if we just processed ALINKS within the last 500ms to avoid duplicate processing
+		now := time.Now()
+		shouldSkip := !sm.lastALinksProcessedAt.IsZero() && now.Sub(sm.lastALinksProcessedAt) < 500*time.Millisecond
+
+		if !shouldSkip {
+			ids := parseLinkIDs(v)
+			emptyKeyedMap := make(map[int]bool) // No keying info available
+
+			log.Printf("[STATE] Processing RPT_LINKS fallback: %d adjacent nodes", len(ids))
+
+			// Process keying trackers with empty keying map
+			for sourceNodeID, tracker := range sm.keyingTrackers {
+				tracker.ProcessALinks(ids, emptyKeyedMap, now)
+
+				// Enrich tracker nodes with lookup data
+				if sm.nodeLookup != nil {
+					for _, nodeID := range ids {
+						if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
+							tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+						}
+					}
+				}
+
+				// Update per-source counters
+				sm.perSourceNumALinks[sourceNodeID] = len(ids)
+				// Derive per-source links count from LinksDetailed scoped to this local node if available
+				perLinks := 0
+				for i := range sm.state.LinksDetailed {
+					if sm.state.LinksDetailed[i].LocalNode == sourceNodeID {
+						perLinks++
+					}
+				}
+				if perLinks == 0 {
+					perLinks = sm.numLinks // fallback to global until LinksDetailed populated
+				}
+				sm.perSourceNumLinks[sourceNodeID] = perLinks
+
+				// Emit update for this source node (sm.mu is already locked in apply)
+				sm.emitKeyingUpdateLocked(sourceNodeID, now)
+			}
 		}
 	}
 	// Detect reconnect via banner (Asterisk Call Manager) to reset uptime-related fields.
@@ -201,6 +419,19 @@ func (sm *StateManager) apply(m ami.Message) {
 	}
 	if v, ok := m.Headers["RPT_RXKEYED"]; ok {
 		sm.state.RxKeyed = v == "1"
+	}
+	// Track number of links (RPT_NUMLINKS = global, RPT_NUMALINKS = adjacent)
+	if v, ok := m.Headers["RPT_NUMLINKS"]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			sm.numLinks = n
+			sm.state.NumLinks = n
+		}
+	}
+	if v, ok := m.Headers["RPT_NUMALINKS"]; ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			sm.numALinks = n
+			sm.state.NumALinks = n
+		}
 	}
 	if v, ok := m.Headers["RPT_LINKS"]; ok {
 		links := parseLinkIDs(v)
@@ -221,9 +452,18 @@ func (sm *StateManager) apply(m ami.Message) {
 		for _, id := range links {
 			currentSet[id] = struct{}{}
 			if li, ok := existing[id]; ok {
+				// Preserve existing link but ensure LocalNode is set for multi-node setups
+				if li.LocalNode == 0 && sm.state.NodeID != 0 {
+					li.LocalNode = sm.state.NodeID
+				}
 				newDetails = append(newDetails, *li)
 			} else {
-				ni := LinkInfo{Node: id, ConnectedSince: now}
+				// New link - set LocalNode from primary node ID
+				ni := LinkInfo{
+					Node:           id,
+					LocalNode:      sm.state.NodeID, // Set LocalNode for multi-node compatibility
+					ConnectedSince: now,
+				}
 				// Enrich with node lookup data
 				if sm.nodeLookup != nil {
 					sm.nodeLookup.EnrichLinkInfo(&ni)
@@ -240,12 +480,14 @@ func (sm *StateManager) apply(m ami.Message) {
 			}
 		}
 		if len(added) > 0 {
+			log.Printf("[STATE] link additions: %v", added)
 			select {
 			case sm.linkDiffOut <- added:
 			default:
 			}
 		}
 		if len(removed) > 0 {
+			log.Printf("[STATE] link removals: %v", removed)
 			select {
 			case sm.linkRemOut <- removed:
 			default:
@@ -279,6 +521,7 @@ func (sm *StateManager) apply(m ami.Message) {
 				lastKind, seen := sm.lastTalkerState[nodeID]
 
 				if !seen || lastKind != newKind {
+					// Minimal logging only: indicate node transition without dumping old state
 					// State changed or first time seeing this node
 					sm.lastTalkerState[nodeID] = newKind
 
@@ -287,6 +530,7 @@ func (sm *StateManager) apply(m ami.Message) {
 						kind = "START"
 					}
 					evt := LinkTxEvent{Node: newDetails[i].Node, Kind: kind, At: now, TotalTxSeconds: newDetails[i].TotalTxSeconds, LastTxStart: newDetails[i].LastTxStart, LastTxEnd: newDetails[i].LastTxEnd}
+					log.Printf("[STATE] link tx event: node=%d kind=%s", evt.Node, evt.Kind)
 					select {
 					case sm.linkTxOut <- evt:
 					default:
@@ -322,6 +566,18 @@ func (sm *StateManager) apply(m ami.Message) {
 	}
 	sm.state.UpdatedAt = time.Now()
 	sm.state.Heartbeat = time.Now().UnixMilli()
+
+	// Process keying tracker timers on every event to ensure unkey timers expire properly
+	// This is critical because timers need to be checked even when no ALINKS events arrive
+	now := time.Now()
+	for sourceNodeID, tracker := range sm.keyingTrackers {
+		// Process the tracker's timer queue
+		if tracker.ProcessTimers(now) {
+			// Timers were processed, emit update
+			sm.emitKeyingUpdateLocked(sourceNodeID, now)
+		}
+	}
+
 	// Talker edge detection (TX start/stop)
 	// Only emit global (node==0) talker events if no per-link TX events were emitted in this apply cycle.
 	if !sm.lastTx && sm.state.TxKeyed {
@@ -435,6 +691,15 @@ func (sm *StateManager) emitTalkerFromLink(kind string, link *LinkInfo) {
 
 func (sm *StateManager) Snapshot() NodeState { sm.mu.RLock(); defer sm.mu.RUnlock(); return sm.state }
 
+// BumpStateVersion increments the opaque state version counter. This can be used by
+// external loops (e.g., heartbeat) to force clients to re-evaluate state when they
+// reconnect after a long disconnect. It is safe to call concurrently.
+func (sm *StateManager) BumpStateVersion() {
+	sm.mu.Lock()
+	sm.state.StateVersion++
+	sm.mu.Unlock()
+}
+
 // SeedLinkStats seeds LinksDetailed (used on startup from persisted stats) without emitting diff events.
 func (sm *StateManager) SeedLinkStats(list []LinkInfo) {
 	sm.mu.Lock()
@@ -481,6 +746,184 @@ func (sm *StateManager) SetNodeID(nodeID int) {
 	sm.mu.Lock()
 	sm.state.NodeID = nodeID
 	sm.mu.Unlock()
+}
+
+// SeedKeyingTrackerFromLinks populates the keying tracker with existing link data
+// This is useful on startup when links are loaded from persistence before AMI events arrive
+func (sm *StateManager) SeedKeyingTrackerFromLinks(sourceNodeID int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	tracker, exists := sm.keyingTrackers[sourceNodeID]
+	if !exists {
+		return
+	}
+
+	// Get link IDs from current state
+	linkIDs := make([]int, len(sm.state.Links))
+	copy(linkIDs, sm.state.Links)
+
+	if len(linkIDs) == 0 {
+		return
+	}
+
+	// Process with empty keying map (no keying status available yet)
+	emptyKeyedMap := make(map[int]bool)
+	now := time.Now()
+	tracker.ProcessALinks(linkIDs, emptyKeyedMap, now)
+
+	// Enrich with node lookup data and link details
+	if sm.nodeLookup != nil {
+		for _, nodeID := range linkIDs {
+			if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
+				tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+			}
+		}
+	}
+
+	// Update with detailed link info (ConnectedSince, Mode, Direction, IP)
+	for _, linkInfo := range sm.state.LinksDetailed {
+		tracker.UpdateConnectedSince(linkInfo.Node, linkInfo.ConnectedSince)
+		tracker.UpdateLinkInfo(linkInfo.Node, linkInfo.Mode, linkInfo.Direction, linkInfo.IP)
+	}
+
+	log.Printf("[KEYING] Seeded tracker for source %d with %d links", sourceNodeID, len(linkIDs))
+}
+
+// AddSourceNode adds a source node and creates a keying tracker for it
+func (sm *StateManager) AddSourceNode(nodeID int, delayMS int) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	if _, exists := sm.keyingTrackers[nodeID]; exists {
+		return // Already exists
+	}
+
+	tracker := NewKeyingTracker(nodeID, delayMS)
+
+	// Set up callbacks for TX events
+	// IMPORTANT: These callbacks are invoked from ProcessALinks which holds BOTH sm.mu and kt.mu locks
+	// Therefore callbacks must NOT call any methods that acquire locks
+	tracker.SetCallbacks(
+		func(sourceNode, adjacentNode int, timestamp time.Time) {
+			// TX START callback - called with locks already held
+			// Just emit the event; the keying update will be sent after ProcessALinks completes
+			sm.emitKeyingEventLocked(SourceNodeKeyingEvent{
+				Type:         "TX_START",
+				SourceNodeID: sourceNode,
+				NodeID:       adjacentNode,
+				StartTime:    timestamp,
+				Timestamp:    timestamp,
+			})
+		},
+		func(sourceNode, adjacentNode int, timestamp time.Time, duration int) {
+			// TX END callback - called with locks already held
+			// We can't call GetAdjacentNode here because it would try to acquire kt.mu again
+			// So we pass minimal info and rely on the keying update for full state
+			endTime := timestamp
+			startTime := timestamp.Add(-time.Duration(duration) * time.Second)
+			sm.emitKeyingEventLocked(SourceNodeKeyingEvent{
+				Type:         "TX_END",
+				SourceNodeID: sourceNode,
+				NodeID:       adjacentNode,
+				StartTime:    startTime,
+				EndTime:      &endTime,
+				DurationSec:  duration,
+				Timestamp:    timestamp,
+			})
+
+			// Queue transmission log entry for async persistence
+			// This is safe to call here as queueTransmissionLog doesn't block
+			go sm.queueTransmissionLog(sourceNode, adjacentNode, startTime, endTime, duration)
+		},
+	)
+
+	sm.keyingTrackers[nodeID] = tracker
+}
+
+// emitKeyingEventLocked emits a session edge event (must be called with sm.mu already locked)
+func (sm *StateManager) emitKeyingEventLocked(event SourceNodeKeyingEvent) {
+	log.Printf("[KEYING EVENT] type=%s source=%d node=%d duration=%ds", event.Type, event.SourceNodeID, event.NodeID, event.DurationSec)
+	select {
+	case sm.keyingEventOut <- event:
+	default:
+	}
+}
+
+// emitKeyingUpdateLocked emits a keying update for a source node (must be called with sm.mu already locked)
+func (sm *StateManager) emitKeyingUpdateLocked(sourceNodeID int, timestamp time.Time) {
+	tracker, exists := sm.keyingTrackers[sourceNodeID]
+	if !exists {
+		return
+	}
+
+	// Derive per-source counters (fallback to global if missing)
+	perLinks := sm.perSourceNumLinks[sourceNodeID]
+	perALinks := sm.perSourceNumALinks[sourceNodeID]
+	if perLinks == 0 {
+		perLinks = sm.numLinks
+	}
+	if perALinks == 0 {
+		perALinks = sm.numALinks
+	}
+	update := SourceNodeKeyingUpdate{
+		SourceNodeID:  sourceNodeID,
+		AdjacentNodes: tracker.GetAdjacentNodes(),
+		TxKeyed:       sm.state.TxKeyed,
+		RxKeyed:       sm.state.RxKeyed,
+		NumLinks:      perLinks,
+		NumALinks:     perALinks,
+		Timestamp:     timestamp,
+	}
+
+	// Log the keying update emission for observability (low-noise single-line)
+	log.Printf("[KEYING UPDATE] source=%d adjacent_count=%d tx=%t rx=%t timestamp=%s", update.SourceNodeID, len(update.AdjacentNodes), update.TxKeyed, update.RxKeyed, update.Timestamp.Format(time.RFC3339))
+
+	select {
+	case sm.keyingOut <- update:
+	default:
+	}
+}
+
+// GetSourceNodes returns a list of configured source node IDs
+func (sm *StateManager) GetSourceNodes() []int {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	nodes := make([]int, 0, len(sm.keyingTrackers))
+	for nodeID := range sm.keyingTrackers {
+		nodes = append(nodes, nodeID)
+	}
+	return nodes
+}
+
+// GetSourceNodeSnapshot returns a snapshot of a source node's keying state
+func (sm *StateManager) GetSourceNodeSnapshot(nodeID int) (SourceNodeKeyingUpdate, bool) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	tracker, exists := sm.keyingTrackers[nodeID]
+	if !exists {
+		return SourceNodeKeyingUpdate{}, false
+	}
+
+	perLinks := sm.perSourceNumLinks[nodeID]
+	perALinks := sm.perSourceNumALinks[nodeID]
+	if perLinks == 0 {
+		perLinks = sm.numLinks
+	}
+	if perALinks == 0 {
+		perALinks = sm.numALinks
+	}
+	return SourceNodeKeyingUpdate{
+		SourceNodeID:  nodeID,
+		AdjacentNodes: tracker.GetAdjacentNodes(),
+		TxKeyed:       sm.state.TxKeyed,
+		RxKeyed:       sm.state.RxKeyed,
+		NumLinks:      perLinks,
+		NumALinks:     perALinks,
+		Timestamp:     time.Now(),
+	}, true
 }
 
 // ApplyCombinedStatus updates state from XStat+SawStat combined data

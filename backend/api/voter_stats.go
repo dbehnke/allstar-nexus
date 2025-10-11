@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dbehnke/allstar-nexus/backend/models"
 )
 
 // VoterReceiver represents a single receiver in the RTCM voter system
@@ -29,6 +31,14 @@ func (a *API) VoterStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Determine if caller is admin to decide masking behavior
+	isAdmin := false
+	if u, status := a.currentUser(r); status == 200 {
+		if u.Role == models.RoleAdmin || u.Role == models.RoleSuperAdmin {
+			isAdmin = true
+		}
+	}
+
 	nodeStr := strings.TrimSpace(r.URL.Query().Get("node"))
 	if nodeStr == "" {
 		writeError(w, 400, "bad_request", "query parameter 'node' is required")
@@ -48,9 +58,9 @@ func (a *API) VoterStats(w http.ResponseWriter, r *http.Request) {
 
 	// Try multiple command formats as different systems may use different commands
 	commands := []string{
-		fmt.Sprintf("rpt fun %s *980", nodeStr),       // AllStar voter display command
-		fmt.Sprintf("voter show %s", nodeStr),         // Direct voter command
-		fmt.Sprintf("rtcm show clients %s", nodeStr),  // RTCM clients
+		fmt.Sprintf("rpt fun %s *980", nodeStr),      // AllStar voter display command
+		fmt.Sprintf("voter show %s", nodeStr),        // Direct voter command
+		fmt.Sprintf("rtcm show clients %s", nodeStr), // RTCM clients
 	}
 
 	var output string
@@ -82,6 +92,14 @@ func (a *API) VoterStats(w http.ResponseWriter, r *http.Request) {
 
 	// Parse the voter stats
 	receivers := parseVoterStats(output)
+	if !isAdmin {
+		// Mask receiver addresses for non-admins
+		for i := range receivers {
+			if receivers[i].Address != "" {
+				receivers[i].Address = maskIPv4(receivers[i].Address)
+			}
+		}
+	}
 
 	writeJSON(w, 200, map[string]any{
 		"node":       nodeStr,
@@ -224,6 +242,18 @@ func extractIPAddress(line string) string {
 		}
 	}
 	return ""
+}
+
+// maskIPv4 masks last two octets of IPv4 address, leaves others unchanged
+func maskIPv4(ip string) string {
+	if ip == "" {
+		return ip
+	}
+	parts := strings.Split(ip, ".")
+	if len(parts) == 4 {
+		return parts[0] + "." + parts[1] + ".*.*"
+	}
+	return ip
 }
 
 // hasLetters checks if a string contains any letters.

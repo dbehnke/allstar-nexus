@@ -241,7 +241,7 @@ ami_retry_interval: 15s
 ami_retry_max: 60s
 
 # Feature Toggles
-disable_link_poller: false
+disable_link_poller: false  # false = hybrid polling enabled (polls XStat/SawStat every 60s for enriched data)
 allow_anon_dashboard: true
 `
 	return os.WriteFile(path, []byte(exampleConfig), 0644)
