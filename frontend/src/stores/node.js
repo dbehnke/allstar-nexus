@@ -9,6 +9,11 @@ export const useNodeStore = defineStore('node', () => {
   const talker = ref([])
   const topLinks = ref([])
   const nowTick = ref(Date.now())
+  // Gamification state
+  const gamificationEnabled = ref(false)
+  const scoreboard = ref([])
+  const recentTransmissions = ref([])
+  const levelConfig = ref({})
   // Persistent per-node first-seen timestamps so components can show steadily-increasing connected timers
   const connectionSeenAt = ref({})
   // Persistent map of disconnect timestamps: key `${sourceID}:${adjacentID}` -> ms epoch
@@ -364,6 +369,34 @@ export const useNodeStore = defineStore('node', () => {
     talker.value = events || []
   }
 
+  // Gamification API methods
+  async function fetchScoreboard(limit = 50) {
+    try {
+      const auth = useAuthStore()
+      const res = await fetch(`/api/gamification/scoreboard?limit=${limit}`, { headers: auth.getAuthHeaders() })
+      const data = await res.json().catch(() => ({}))
+      scoreboard.value = (data && (data.scoreboard || data.data || data.results)) || []
+      gamificationEnabled.value = !!(data && (data.enabled || data.ok))
+    } catch (e) { logger.debug('fetchScoreboard failed', e) }
+  }
+
+  async function fetchRecentTransmissions(limit = 50, offset = 0) {
+    try {
+      const auth = useAuthStore()
+      const res = await fetch(`/api/gamification/recent-transmissions?limit=${limit}&offset=${offset}`, { headers: auth.getAuthHeaders() })
+      const data = await res.json().catch(() => ({}))
+      recentTransmissions.value = (data && (data.transmissions || data.data || data.results)) || []
+    } catch (e) { logger.debug('fetchRecentTransmissions failed', e) }
+  }
+
+  async function fetchLevelConfig() {
+    try {
+      const res = await fetch('/api/gamification/level-config')
+      const data = await res.json().catch(() => ({}))
+      levelConfig.value = (data && (data.config || data.data || {})) || {}
+    } catch (e) { logger.debug('fetchLevelConfig failed', e) }
+  }
+
   function setRemovedAt(sourceId, nodeId, ts) {
     try {
       if (!sourceId || !nodeId) return
@@ -431,6 +464,10 @@ export const useNodeStore = defineStore('node', () => {
     talker,
     topLinks,
     nowTick,
+    gamificationEnabled,
+    scoreboard,
+    recentTransmissions,
+    levelConfig,
     connectionSeenAt,
     removedAt,
     sourceNodes,
@@ -438,6 +475,9 @@ export const useNodeStore = defineStore('node', () => {
     setTopLinks,
     startTickTimer,
     loadTalkerHistory,
+    fetchScoreboard,
+    fetchRecentTransmissions,
+    fetchLevelConfig,
     // expose helpers
     setRemovedAt,
     clearRemovedAt,

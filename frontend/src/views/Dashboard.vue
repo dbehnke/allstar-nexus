@@ -13,23 +13,7 @@
         <TopLinksCard :top-links="nodeStore.topLinks" @refresh="refreshStats" />
       </div>
 
-      <!-- Talker Log -->
-      <!-- DISABLED: Talker log feature temporarily disabled - to be revisited later -->
-      <!--
-      <div class="grid-item">
-        <Card title="Talker Log">
-          <div class="talker-log">
-                <div v-if="talkerDisplay.length" class="log-entries">
-                  <div v-for="(e, i) in talkerDisplay.slice(0, 20)" :key="i" class="log-entry">
-                    <span class="time" :title="new Date(e.at).toLocaleString()">{{ formatRelative(e.at) }}</span>
-                    <span class="kind" v-html="e.displayLabel"></span>
-                  </div>
-                </div>
-                <div v-else class="no-data">No talker events yet</div>
-              </div>
-        </Card>
-      </div>
-      -->
+      <!-- Talker Log moved to dedicated /talker route -->
     </div>
   </div>
 </template>

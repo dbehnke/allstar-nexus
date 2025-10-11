@@ -1,10 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
-import NodeStatus from '../views/NodeStatus.vue'
+// Removed NodeStatus route; replaced with Talker Log
 import NodeLookup from '../views/NodeLookup.vue'
 import RptStats from '../views/RptStats.vue'
 import VoterDisplay from '../views/VoterDisplay.vue'
 import NetworkMap from '../views/NetworkMap.vue'
+import TalkerLog from '../views/TalkerLog.vue'
 
 const routes = [
   {
@@ -13,9 +14,9 @@ const routes = [
     component: Dashboard
   },
   {
-    path: '/status',
-    name: 'NodeStatus',
-    component: NodeStatus
+    path: '/talker',
+    name: 'TalkerLog',
+    component: TalkerLog
   },
   {
     path: '/lookup',

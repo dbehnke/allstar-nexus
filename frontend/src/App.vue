@@ -18,7 +18,7 @@
 
       <div class="navbar-menu" :class="{ 'mobile-open': mobileMenuOpen }">
         <router-link to="/" class="nav-link" @click="mobileMenuOpen = false">Dashboard</router-link>
-        <router-link to="/status" class="nav-link" @click="mobileMenuOpen = false">Node Status</router-link>
+  <router-link to="/talker" class="nav-link" @click="mobileMenuOpen = false">Talker Log</router-link>
         <router-link to="/lookup" class="nav-link" @click="mobileMenuOpen = false">Node Lookup</router-link>
         <router-link to="/network-map" class="nav-link" @click="mobileMenuOpen = false">Network Map</router-link>
         <router-link to="/rpt-stats" class="nav-link" v-if="authStore.isAuthenticated" @click="mobileMenuOpen = false">RPT Stats</router-link>
