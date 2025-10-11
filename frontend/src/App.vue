@@ -88,6 +88,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useNodeStore } from './stores/node'
 import { useTheme } from './composables/useTheme'
+import { logger } from './utils/logger'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -154,7 +155,7 @@ async function login() {
     password.value = ''
   } catch (e) {
     loginError.value = 'Network error'
-    console.error('Login error:', e)
+  logger.error('Login error:', e)
   } finally {
     loggingIn.value = false
   }

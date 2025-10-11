@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useAuthStore } from './auth'
+import { logger } from '../utils/logger'
 
 export const useNodeStore = defineStore('node', () => {
   const status = ref(null)
@@ -26,13 +27,9 @@ export const useNodeStore = defineStore('node', () => {
 
   function handleWSMessage(msg) {
     // Temporary instrumentation: log every incoming WS envelope for debugging
-    try {
-      console.debug('[WS RECV]', msg && msg.messageType, msg)
-    } catch (e) {
-      // ignore logging failures
-    }
+    try { logger.debug('[WS RECV]', msg && msg.messageType, msg) } catch {}
     if (msg.messageType === 'STATUS_UPDATE') {
-      console.debug('[WS] STATUS_UPDATE received, session_start=', msg.data && msg.data.session_start, 'state_version=', msg.data && msg.data.state_version)
+  logger.debug('[WS] STATUS_UPDATE received, session_start=', msg.data && msg.data.session_start, 'state_version=', msg.data && msg.data.state_version)
       // If we were disconnected for a while, and server state_version changed while we were away,
       // force a full reload to avoid subtle client-side drift.
       const nowMs = Date.now()
@@ -40,7 +37,7 @@ export const useNodeStore = defineStore('node', () => {
       const gapMs = nowMs - lastAt
       const newVersion = msg.data && msg.data.state_version
       if (lastAt > 0 && gapMs > 30000 && lastStateVersion.value != null && newVersion != null && newVersion !== lastStateVersion.value) {
-        console.warn('[WS] Detected long gap since last STATUS_UPDATE (', gapMs, 'ms) and state_version changed', lastStateVersion.value, '->', newVersion, 'performing soft resync')
+  logger.warn('[WS] Detected long gap since last STATUS_UPDATE', { gapMs, from: lastStateVersion.value, to: newVersion })
         // Perform in-place soft re-sync using the provided snapshot to avoid a full page reload.
         softResync(msg.data)
         // Update trackers and bail out of normal assignment since softResync applied the snapshot
@@ -54,12 +51,12 @@ export const useNodeStore = defineStore('node', () => {
       if (msg.data.session_start && lastSessionStart.value && msg.data.session_start !== lastSessionStart.value) {
         // Server restarted - clear talker log
         talker.value = []
-        console.log('Server restarted, cleared talker log')
+  logger.info('Server restarted, cleared talker log')
       }
       lastSessionStart.value = msg.data.session_start
 
       status.value = msg.data
-      console.debug('[WS] assigned status, links_detailed present=', !!(msg.data && msg.data.links_detailed))
+  logger.debug('[WS] assigned status, links_detailed present=', !!(msg.data && msg.data.links_detailed))
       if (msg.data.links_detailed) {
         links.value = msg.data.links_detailed
         // Rebuild per-source adjacency strictly from server snapshot to keep browser in sync
@@ -122,25 +119,20 @@ export const useNodeStore = defineStore('node', () => {
             }
             sourceNodes.value[key] = { ...prev, adjacentNodes: mergedAdj, timestamp: now }
           }
-        } catch (e) {
-          console.debug('[WS] STATUS_UPDATE rebuild sourceNodes failed', e)
-        }
+        } catch (e) { logger.debug('[WS] STATUS_UPDATE rebuild sourceNodes failed', e) }
       }
     } else if (msg.messageType === 'TALKER_LOG_SNAPSHOT') {
       // Full talker log snapshot from server (on connect or periodic refresh)
       // Replace entire talker log with enriched server data
       // Note: events may not have a node field at all (omitempty), so keep all events
       talker.value = Array.isArray(msg.data) ? msg.data : []
-      console.debug('[WS] Received TALKER_LOG_SNAPSHOT count=', talker.value.length)
+  logger.debug('[WS] Received TALKER_LOG_SNAPSHOT count=', talker.value.length)
     } else if (msg.messageType === 'TALKER_EVENT') {
       try {
         const incoming = msg.data
         
         // Skip events without a valid node number (node 0 or missing)
-        if (!incoming.node || incoming.node === 0) {
-          console.debug('[WS] TALKER_EVENT skipped missing node', incoming)
-          return
-        }
+        if (!incoming.node || incoming.node === 0) { logger.debug('[WS] TALKER_EVENT skipped missing node', incoming); return }
         
         const now = new Date(incoming.at).getTime()
         
@@ -150,7 +142,7 @@ export const useNodeStore = defineStore('node', () => {
           if (recent.kind === incoming.kind && recent.node === incoming.node) {
             const recentTs = new Date(recent.at).getTime()
             if (Math.abs(now - recentTs) < 2000) {
-              console.log('Skipping duplicate talker event:', incoming.kind, incoming.node)
+              logger.info('Skipping duplicate talker event:', incoming.kind, incoming.node)
               return
             }
           }
@@ -177,7 +169,7 @@ export const useNodeStore = defineStore('node', () => {
 
   // Normal push
         talker.value.push(incoming)
-  console.debug('[WS] TALKER_EVENT pushed', incoming.kind, incoming.node)
+  logger.debug('[WS] TALKER_EVENT pushed', incoming.kind, incoming.node)
         if (talker.value.length > 100) talker.value.shift()
         // If this is a START, cancel any pending STOP timers for the same node
         if (incoming.kind === 'TX_START') {
@@ -227,10 +219,8 @@ export const useNodeStore = defineStore('node', () => {
             // Clear any persisted removal timestamp for this pair (reconnected)
             clearRemovedAt(sid, nodeId)
           }
-        } catch (e) {
-          console.debug('[WS] LINK_ADDED merge failed', e)
-        }
-        console.debug('[WS] LINK_ADDED', add.node)
+        } catch (e) { logger.debug('[WS] LINK_ADDED merge failed', e) }
+        logger.debug('[WS] LINK_ADDED', add.node)
       }
     } else if (msg.messageType === 'LINK_REMOVED') {
       for (const id of msg.data) {
@@ -249,17 +239,15 @@ export const useNodeStore = defineStore('node', () => {
               sourceNodes.value[key] = { ...entry, adjacentNodes: adj }
             }
           }
-        } catch (e) {
-          console.debug('[WS] LINK_REMOVED merge failed', e)
-        }
-        console.debug('[WS] LINK_REMOVED', id)
+        } catch (e) { logger.debug('[WS] LINK_REMOVED merge failed', e) }
+        logger.debug('[WS] LINK_REMOVED', id)
       }
     } else if (msg.messageType === 'LINK_TX') {
-      updateLinkTX([msg.data])
-      console.debug('[WS] LINK_TX', msg.data && msg.data.node, msg.data && msg.data.kind)
+  updateLinkTX([msg.data])
+  logger.debug('[WS] LINK_TX', msg.data && msg.data.node, msg.data && msg.data.kind)
     } else if (msg.messageType === 'LINK_TX_BATCH') {
-      updateLinkTX(msg.data)
-      console.debug('[WS] LINK_TX_BATCH count=', Array.isArray(msg.data) ? msg.data.length : 0)
+  updateLinkTX(msg.data)
+  logger.debug('[WS] LINK_TX_BATCH count=', Array.isArray(msg.data) ? msg.data.length : 0)
     } else if (msg.messageType === 'SOURCE_NODE_KEYING') {
       // Update source node keying state (incremental merge)
       const data = msg.data
@@ -279,8 +267,8 @@ export const useNodeStore = defineStore('node', () => {
         delete sourceNodes.value[sid]._stale
       }
       sourceNodes.value[sid] = entry
-      if (_staleMarkers.has(sid)) _staleMarkers.delete(sid)
-      console.debug('[WS] SOURCE_NODE_KEYING', data.source_node_id, 'txKeyed=', data.tx_keyed, 'adjacent_count=', data.adjacent_nodes ? Object.keys(data.adjacent_nodes).length : 0)
+  if (_staleMarkers.has(sid)) _staleMarkers.delete(sid)
+  logger.debug('[WS] SOURCE_NODE_KEYING', data.source_node_id, 'txKeyed=', data.tx_keyed, 'adjacent_count=', data.adjacent_nodes ? Object.keys(data.adjacent_nodes).length : 0)
     }
   }
 
@@ -289,7 +277,7 @@ export const useNodeStore = defineStore('node', () => {
   async function softResync(snap) {
     try {
       if (!snap) return
-      console.debug('[WS] softResync applying snapshot state_version=', snap.state_version)
+  logger.debug('[WS] softResync applying snapshot state_version=', snap.state_version)
       // Replace status and links in-place
       status.value = snap
       if (snap.links_detailed) {
@@ -331,13 +319,11 @@ export const useNodeStore = defineStore('node', () => {
         if (talkerResp && talkerResp.ok && talkerResp.events) {
           talker.value = talkerResp.events
         }
-      } catch (e) {
-        console.debug('[WS] softResync additional fetches failed', e)
-      }
+      } catch (e) { logger.debug('[WS] softResync additional fetches failed', e) }
 
-      console.debug('[WS] softResync complete; updated talker and topLinks from API')
+  logger.debug('[WS] softResync complete; updated talker and topLinks from API')
     } catch (e) {
-      console.error('[WS] softResync failed, falling back to full reload', e)
+  logger.error('[WS] softResync failed, falling back to full reload', e)
       window.location.reload()
     }
   }

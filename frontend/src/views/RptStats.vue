@@ -34,6 +34,7 @@ import { ref, computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useNodeStore } from '../stores/node'
 import Card from '../components/Card.vue'
+import { logger } from '../utils/logger'
 
 const authStore = useAuthStore()
 const nodeStore = useNodeStore()
@@ -68,7 +69,7 @@ async function loadStats() {
     statsData.value = data.data.stats || 'No statistics available'
   } catch (e) {
     error.value = 'Network error occurred'
-    console.error('Stats error:', e)
+  logger.error('Stats error:', e)
   } finally {
     loading.value = false
   }

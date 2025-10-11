@@ -78,6 +78,7 @@
 import { ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import Card from '../components/Card.vue'
+import { logger } from '../utils/logger'
 
 const authStore = useAuthStore()
 
@@ -135,7 +136,7 @@ async function performSearch() {
     searched.value = true
   } catch (e) {
     error.value = 'Network error occurred'
-    console.error('Search error:', e)
+  logger.error('Search error:', e)
   } finally {
     loading.value = false
   }

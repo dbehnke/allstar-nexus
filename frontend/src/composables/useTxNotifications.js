@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger'
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 
 /**
@@ -43,7 +44,7 @@ try {
   if (typeof Notification !== 'undefined') {
     notificationPermission.value = Notification.permission
   }
-  console.debug('[TxNotif] init state:', {
+  logger.debug('[TxNotif] init state:', {
     sourceNodeID,
     notificationsEnabled: notificationsEnabled.value,
     notificationPermission: notificationPermission.value,
@@ -51,7 +52,7 @@ try {
     speechEnabled: speechEnabled.value
   })
 } catch (err) {
-  console.error('[TxNotif] Failed to read settings from localStorage during init:', err)
+  logger.error('[TxNotif] Failed to read settings from localStorage during init:', err)
 }
 
   // Load non-blocking runtime pieces on mount (timers, audio init when needed)
@@ -65,13 +66,13 @@ try {
     try {
       checkAudioSuspended()
     } catch (err) {
-      console.debug('[TxNotif] checkAudioSuspended failed on mount', err)
+  logger.debug('[TxNotif] checkAudioSuspended failed on mount', err)
     }
 
     // If there was a pending event captured before initialization, process it now
     if (pendingEvent) {
       try {
-        console.debug('[TxNotif] Replaying pending event on mount:', {
+  logger.debug('[TxNotif] Replaying pending event on mount:', {
           time: new Date().toISOString(),
           sourceNodeID,
           pendingEvent: {
@@ -81,7 +82,7 @@ try {
         })
         watchTxState(pendingEvent.isTransmitting, pendingEvent.txNode)
       } catch (err) {
-        console.error('[TxNotif] Failed to replay pending event:', err)
+  logger.error('[TxNotif] Failed to replay pending event:', err)
       }
       pendingEvent = null
     }
@@ -95,7 +96,7 @@ if (notificationsEnabled.value && typeof Notification !== 'undefined' && notific
     showSettings.value = true
   } catch (err) {
     // defensive: if called before Vue refs are ready, ignore
-    console.debug('[TxNotif] showSettings not ready yet')
+  logger.debug('[TxNotif] showSettings not ready yet')
   }
 
   // Keep audio suspended state updated when sound or speech preferences change
@@ -103,7 +104,7 @@ if (notificationsEnabled.value && typeof Notification !== 'undefined' && notific
     try {
       checkAudioSuspended()
     } catch (err) {
-      console.debug('[TxNotif] checkAudioSuspended failed on preference change', err)
+  logger.debug('[TxNotif] checkAudioSuspended failed on preference change', err)
     }
   })
 }
@@ -120,10 +121,10 @@ async function openSettings() {
     initAudio()
     if (audioContext && audioContext.state === 'suspended') {
       await audioContext.resume()
-      console.debug('[TxNotif] AudioContext resumed via openSettings user gesture')
+  logger.debug('[TxNotif] AudioContext resumed via openSettings user gesture')
     }
   } catch (err) {
-    console.debug('[TxNotif] openSettings: audio resume failed or not available', err)
+  logger.debug('[TxNotif] openSettings: audio resume failed or not available', err)
   }
 
   // If notifications are enabled in settings and browser permission is still default,
@@ -132,7 +133,7 @@ async function openSettings() {
     if (notificationsEnabled.value && typeof Notification !== 'undefined' && notificationPermission.value === 'default') {
       const permission = await Notification.requestPermission()
       notificationPermission.value = permission
-      console.debug('[TxNotif] openSettings: requested notification permission ->', permission)
+  logger.debug('[TxNotif] openSettings: requested notification permission ->', permission)
 
       if (permission === 'granted') {
         // persist enabled
@@ -140,10 +141,10 @@ async function openSettings() {
         showSettings.value = false
         // Send a one-off test notification so the user immediately sees it working
         try {
-          console.debug('[TxNotif] openSettings: sending immediate test notification')
+          logger.debug('[TxNotif] openSettings: sending immediate test notification')
           sendTestNotification()
         } catch (err) {
-          console.error('[TxNotif] openSettings: failed to send immediate test notification', err)
+          logger.error('[TxNotif] openSettings: failed to send immediate test notification', err)
         }
       } else if (permission === 'denied') {
         notificationsEnabled.value = false
@@ -152,7 +153,7 @@ async function openSettings() {
       }
     }
   } catch (err) {
-    console.error('[TxNotif] openSettings: permission request failed', err)
+  logger.error('[TxNotif] openSettings: permission request failed', err)
   }
 }
 
@@ -179,7 +180,7 @@ async function requestPermission() {
       alert('Notification permission was denied')
     }
   } catch (err) {
-    console.error('[TxNotif] requestPermission failed:', err)
+  logger.error('[TxNotif] requestPermission failed:', err)
     alert('Failed to request notification permission: ' + (err && err.message))
   }
 }
@@ -221,7 +222,7 @@ async function requestPermission() {
         audioSuspended.value = false
       }
     } catch (err) {
-      console.debug('[TxNotif] checkAudioSuspended error', err)
+  logger.debug('[TxNotif] checkAudioSuspended error', err)
       audioSuspended.value = false
     }
   }
@@ -232,7 +233,7 @@ async function requestPermission() {
       initAudio()
       if (audioContext && audioContext.state === 'suspended') {
         await audioContext.resume()
-        console.debug('[TxNotif] AudioContext resumed via openAudio user gesture')
+  logger.debug('[TxNotif] AudioContext resumed via openAudio user gesture')
       }
 
       // Play a short test sound and/or speech if enabled
@@ -250,7 +251,7 @@ async function requestPermission() {
       // update suspended flag
       checkAudioSuspended()
     } catch (err) {
-      console.error('[TxNotif] openAudio failed:', err)
+  logger.error('[TxNotif] openAudio failed:', err)
       alert('Failed to enable audio: ' + (err && err.message))
     }
   }
@@ -342,10 +343,10 @@ async function requestPermission() {
           duration = 0.35
       }
 
-      console.log('[TxNotif] Played sound:', soundType.value, 'volume:', soundVolume.value)
+  logger.info('[TxNotif] Played sound:', soundType.value, 'volume:', soundVolume.value)
       return Math.ceil(duration * 1000) + 100
     } catch (err) {
-      console.error('[TxNotif] Failed to play sound:', err)
+  logger.error('[TxNotif] Failed to play sound:', err)
       return 0
     }
   }
@@ -362,12 +363,12 @@ async function requestPermission() {
         utterance.volume = soundVolume.value / 100
 
         window.speechSynthesis.speak(utterance)
-        console.log('[TxNotif] Speaking:', text)
+  logger.info('[TxNotif] Speaking:', text)
       } else {
-        console.error('[TxNotif] Speech synthesis not supported')
+  logger.error('[TxNotif] Speech synthesis not supported')
       }
     } catch (err) {
-      console.error('[TxNotif] Failed to speak:', err)
+  logger.error('[TxNotif] Failed to speak:', err)
     }
   }
 
@@ -430,16 +431,16 @@ async function requestPermission() {
 
       setTimeout(() => notification.close(), 5000)
     } catch (err) {
-      console.error('[TxNotif] Failed to send test notification:', err)
+  logger.error('[TxNotif] Failed to send test notification:', err)
       alert('Failed to create notification: ' + err.message)
     }
   }
 
   // Send TX notification with node info
   function sendTxNotification(txNode) {
-    console.debug('[TxNotif] sendTxNotification: Notification.permission=', (typeof Notification !== 'undefined') ? Notification.permission : 'n/a')
+  logger.debug('[TxNotif] sendTxNotification: Notification.permission=', (typeof Notification !== 'undefined') ? Notification.permission : 'n/a')
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
-      console.debug('[TxNotif] sendTxNotification: notifications unsupported or not granted; skipping')
+  logger.debug('[TxNotif] sendTxNotification: notifications unsupported or not granted; skipping')
       return
     }
 
@@ -455,7 +456,7 @@ async function requestPermission() {
         requireInteraction: false
       })
 
-      console.log('[TxNotif] Sent notification:', title, body)
+  logger.info('[TxNotif] Sent notification:', title, body)
 
       // Play sound and/or speech
       if (soundEnabled.value) {
@@ -471,7 +472,7 @@ async function requestPermission() {
 
       setTimeout(() => notification.close(), 8000)
     } catch (err) {
-      console.error('[TxNotif] Failed to send TX notification:', err)
+  logger.error('[TxNotif] Failed to send TX notification:', err)
     }
   }
 
@@ -497,7 +498,7 @@ async function requestPermission() {
 
   // Monitor TX state changes
   function watchTxState(isTransmitting, txNode) {
-    console.debug('[TxNotif] watchTxState called:', {
+  logger.debug('[TxNotif] watchTxState called:', {
       time: new Date().toISOString(),
       sourceNodeID,
       isTransmitting,
@@ -509,7 +510,7 @@ async function requestPermission() {
     // If composable hasn't completed onMounted initialization yet, buffer the latest event
     if (!initialized.value) {
       pendingEvent = { isTransmitting, txNode }
-      console.debug('[TxNotif] Composable not initialized yet; buffering event:', {
+  logger.debug('[TxNotif] Composable not initialized yet; buffering event:', {
         time: new Date().toISOString(),
         sourceNodeID,
         bufferedEvent: {
@@ -523,7 +524,7 @@ async function requestPermission() {
     }
 
     if (!notificationsEnabled.value) {
-      console.debug('[TxNotif] Notifications disabled, ignoring')
+  logger.debug('[TxNotif] Notifications disabled, ignoring')
       wasTransmitting.value = isTransmitting
       return
     }
@@ -535,7 +536,7 @@ async function requestPermission() {
     if (isTransmitting && !wasTransmitting.value) {
       const timeSinceLastTxStop = now - lastNotificationTime.value
 
-      console.debug('[TxNotif] TX started!', {
+  logger.debug('[TxNotif] TX started!', {
         lastNotificationTime: lastNotificationTime.value,
         timeSinceLastTxStop,
         cooldownMs,
@@ -544,16 +545,16 @@ async function requestPermission() {
 
       // Send notification if system was idle long enough
       if (lastNotificationTime.value === 0 || timeSinceLastTxStop >= cooldownMs) {
-        console.debug('[TxNotif] Sending notification for:', txNode)
+  logger.debug('[TxNotif] Sending notification for:', txNode)
         sendTxNotification(txNode)
       } else {
-        console.debug('[TxNotif] Skipping notification - cooldown active')
+  logger.debug('[TxNotif] Skipping notification - cooldown active')
       }
     }
 
     // TX just stopped - record stop time
     if (!isTransmitting && wasTransmitting.value) {
-      console.debug('[TxNotif] TX stopped, recording stop time')
+  logger.debug('[TxNotif] TX stopped, recording stop time')
       lastNotificationTime.value = now
     }
 

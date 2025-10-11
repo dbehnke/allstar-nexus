@@ -9,6 +9,8 @@ export const cfg = Object.assign({
   NEW_NODE_HIGHLIGHT_MS: 60 * 1000
 }, window.__NEXUS_CONFIG__ || {});
 
+import { logger } from './utils/logger'
+
 // Exponential backoff websocket connector with jitter.
 export function connectWS({ onMessage, onStatus, tokenProvider, maxDelay = 15000 }) {
   let attempt = 0;
@@ -26,7 +28,7 @@ export function connectWS({ onMessage, onStatus, tokenProvider, maxDelay = 15000
       onStatus && onStatus('closed');
       if (!closedByApp) scheduleReconnect();
     };
-    ws.onerror = (e) => { onStatus && onStatus('error'); console.error('ws error', e); };
+    ws.onerror = (e) => { onStatus && onStatus('error'); logger.error('[WS] error', e); };
   }
 
   function scheduleReconnect() {
@@ -35,6 +37,7 @@ export function connectWS({ onMessage, onStatus, tokenProvider, maxDelay = 15000
     const jitter = Math.random() * 0.3 * base;
     const delay = base + jitter;
     onStatus && onStatus(`reconnect_in_${Math.round(delay)}ms`);
+    logger.info('[WS] reconnect scheduled', { delayMs: Math.round(delay), attempt });
     setTimeout(open, delay);
   }
 

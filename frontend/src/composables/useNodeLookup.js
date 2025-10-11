@@ -1,4 +1,5 @@
 import { ref, watch } from 'vue'
+import { logger } from '../utils/logger'
 
 // Global cache for node lookups
 const nodeCache = new Map()
@@ -46,7 +47,7 @@ export function useNodeLookup(links) {
         return null
       })
       .catch(err => {
-        console.error(`Node lookup failed for ${nodeID}:`, err)
+        logger.error(`Node lookup failed for ${nodeID}:`, err)
         pendingRequests.delete(nodeID)
         return null
       })

@@ -78,6 +78,7 @@
 import { ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import Card from '../components/Card.vue'
+import { logger } from '../utils/logger'
 
 const authStore = useAuthStore()
 
@@ -109,7 +110,7 @@ async function loadVoterData() {
     voterData.value = data.data
   } catch (e) {
     error.value = 'Network error occurred'
-    console.error('Voter data error:', e)
+  logger.error('Voter data error:', e)
   } finally {
     loading.value = false
   }

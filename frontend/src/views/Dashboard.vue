@@ -40,6 +40,7 @@ import { useNodeStore } from '../stores/node'
 import { useNodeLookup } from '../composables/useNodeLookup'
 import { useAuthStore } from '../stores/auth'
 import { connectWS } from '../env'
+import { logger } from '../utils/logger'
 import Card from '../components/Card.vue'
 import TopLinksCard from '../components/TopLinksCard.vue'
 import SourceNodeCard from '../components/SourceNodeCard.vue'
@@ -72,7 +73,7 @@ async function fetchNodeInfo(nodeID) {
     nodeInfo.set(nodeID, cs)
     return cs
   } catch (e) {
-    console.error('node lookup failed', e)
+    logger.error('node lookup failed', e)
     nodeInfo.set(nodeID, '')
     return ''
   }
@@ -105,9 +106,7 @@ function handleMessage(ev) {
   try {
     const msg = JSON.parse(ev.data)
     nodeStore.handleWSMessage(msg)
-  } catch (e) {
-    console.error('ws parse error:', e)
-  }
+  } catch (e) { logger.error('ws parse error:', e) }
 }
 
 function initWS() {
@@ -117,7 +116,7 @@ function initWS() {
   }
   wsCloser = connectWS({
     onMessage: handleMessage,
-    onStatus: (s) => console.log('[ws]', s),
+  onStatus: (s) => logger.info('[ws]', s),
     tokenProvider: () => authStore.token || ''
   })
 }

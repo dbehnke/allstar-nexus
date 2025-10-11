@@ -223,6 +223,7 @@ import { useNodeStore } from '../stores/node'
 import { useTxNotifications } from '../composables/useTxNotifications'
 import { cfg } from '../env'
 import { useAuthStore } from '../stores/auth'
+import { logger } from '../utils/logger'
 
 const props = defineProps({
   sourceNodeID: {
@@ -241,7 +242,7 @@ const props = defineProps({
   }
 })
 
-console.log('[SourceNodeCard] Component loaded, props:', {
+logger.debug('[SourceNodeCard] Component loaded, props:', {
   sourceNodeID: props.sourceNodeID,
   sourceNodeIDType: typeof props.sourceNodeID,
   hasData: !!props.data,
@@ -255,11 +256,11 @@ const actualSourceNodeID = computed(() => {
   return props.sourceNodeID || props.data?.source_node_id || props.data?.sourceNodeID
 })
 
-console.log('[SourceNodeCard] Actual source node ID:', actualSourceNodeID.value)
+logger.debug('[SourceNodeCard] Actual source node ID:', actualSourceNodeID.value)
 
 // Initialize TX notifications for this source node
 const txNotif = useTxNotifications(actualSourceNodeID.value)
-console.log('[SourceNodeCard] TX notifications initialized for node:', actualSourceNodeID.value)
+logger.info('[SourceNodeCard] TX notifications initialized for node:', actualSourceNodeID.value)
 
 // Get display node ID from either prop or data
 const displayNodeID = computed(() => {
@@ -280,7 +281,7 @@ async function fetchSourceNodeInfo(nodeId) {
     const results = (data && data.results) || (data && data.data && data.data.results) || []
     sourceNodeInfo.value = results && results.length > 0 ? results[0] : null
   } catch (e) {
-    console.error('[SourceNodeCard] Failed to fetch node info:', e)
+  logger.error('[SourceNodeCard] Failed to fetch node info:', e)
     sourceNodeInfo.value = null
   }
 }
@@ -392,7 +393,7 @@ const adjacentList = computed(() => {
         // record removal (respecting persisted timestamp)
         recentRemoved[id] = { raw: last, removedAt: ts }
         combined[id] = { raw: last, _stale: true, removedAt: ts }
-        try { console.debug('[SourceNodeCard] resilient mark removed', { id, removedAt: now }) } catch (e) {}
+  logger.debug('[SourceNodeCard] resilient mark removed', { id, removedAt: now })
       }
     }
   } catch (e) {
@@ -573,29 +574,29 @@ try {
               nodeStore.setRemovedAt(sid, nid, now)
             }
           } catch (e) {}
-          try { console.debug('[SourceNodeCard] recentRemoved set', { id, removedAt: now, last }) } catch (e) {}
+          logger.debug('[SourceNodeCard] recentRemoved set', { id, removedAt: now, last })
         }
       }
     }
   }, { immediate: false })
 } catch (e) {
-  console.debug('[SourceNodeCard] failed to install removed-node watcher', e)
+  logger.debug('[SourceNodeCard] failed to install removed-node watcher', e)
 }
 
 // Debug: log TX/RX state when it changes
 try {
-  console.log('[SourceNodeCard] Setting up TX/RX watch')
+  logger.info('[SourceNodeCard] Setting up TX/RX watch')
   watch(() => [props.data.txKeyed, props.data.rxKeyed], ([tx, rx]) => {
-    console.log('[SourceNodeCard] TX/RX state:', { tx, rx, sourceNodeID: actualSourceNodeID.value })
+  logger.debug('[SourceNodeCard] TX/RX state:', { tx, rx, sourceNodeID: actualSourceNodeID.value })
   }, { immediate: true })
-  console.log('[SourceNodeCard] TX/RX watch set up successfully')
+  logger.info('[SourceNodeCard] TX/RX watch set up successfully')
 } catch (err) {
-  console.error('[SourceNodeCard] Failed to set up TX/RX watch:', err)
+  logger.error('[SourceNodeCard] Failed to set up TX/RX watch:', err)
 }
 
 // Watch for any adjacent node transmitting and trigger notifications
 try {
-  console.log('[SourceNodeCard] Setting up TX notification watch')
+  logger.info('[SourceNodeCard] Setting up TX notification watch')
 
   // Watch adjacency/transmitting state but defer invoking the composable until it's initialized
   watch(
@@ -603,16 +604,16 @@ try {
       try {
         const list = adjacentList.value
         const result = list.some(n => n.IsTransmitting)
-        console.log('[TxWatch] Watch running, sourceNode:', actualSourceNodeID.value, 'adjacentList:', list.length, 'anyTx:', result)
+  logger.debug('[TxWatch] Watch running, sourceNode:', actualSourceNodeID.value, 'adjacentList:', list.length, 'anyTx:', result)
         return result
       } catch (err) {
-        console.error('[TxWatch] Error in watch source:', err)
+  logger.error('[TxWatch] Error in watch source:', err)
         return false
       }
     },
     (isAnyTransmitting, wasTransmitting) => {
       try {
-        console.log('[TxWatch] TX state changed:', {
+  logger.info('[TxWatch] TX state changed:', {
           sourceNodeID: actualSourceNodeID.value,
           isAnyTransmitting,
           wasTransmitting,
@@ -623,22 +624,22 @@ try {
         if (isAnyTransmitting) {
           const txNode = adjacentList.value.find(n => n.IsTransmitting)
           if (txNode) {
-            console.log('[TxWatch] Calling watchTxState(true) with node:', txNode.NodeID, txNode.Callsign)
+            logger.debug('[TxWatch] Calling watchTxState(true) with node:', txNode.NodeID, txNode.Callsign)
             txNotif.watchTxState(true, txNode)
           }
         } else {
-          console.log('[TxWatch] Calling watchTxState(false) - all nodes idle')
+          logger.debug('[TxWatch] Calling watchTxState(false) - all nodes idle')
           txNotif.watchTxState(false, {})
         }
       } catch (err) {
-        console.error('[TxWatch] Error in watch callback:', err)
+  logger.error('[TxWatch] Error in watch callback:', err)
       }
     }
   )
 
-  console.log('[SourceNodeCard] TX notification watch set up successfully')
+  logger.info('[SourceNodeCard] TX notification watch set up successfully')
 } catch (err) {
-  console.error('[SourceNodeCard] Failed to set up TX notification watch:', err)
+  logger.error('[SourceNodeCard] Failed to set up TX notification watch:', err)
 }
 
 // Incremental enrichment backoff for rows missing Mode/Direction/IP
@@ -765,7 +766,7 @@ function formatLostTime(removedAt) {
   // Debugging help: show shapes when Lost stays at 0s
   try {
     const diffCheck = removedTs ? Math.floor(((typeof now === 'number' ? now : (now && now.value) || Date.now()) - removedTs) / 1000) : null
-    console.debug('[SourceNodeCard] formatLostTime', { removedAt, removedTs, now: typeof now === 'number' ? now : (now && now.value), diffCheck })
+  logger.debug('[SourceNodeCard] formatLostTime', { removedAt, removedTs, now: typeof now === 'number' ? now : (now && now.value), diffCheck })
   } catch (e) {}
   if (!removedTs || removedTs === 0) return '-'
   const diffSec = Math.floor(( (typeof now === 'number' ? now : (now && now.value) || Date.now()) - removedTs) / 1000)

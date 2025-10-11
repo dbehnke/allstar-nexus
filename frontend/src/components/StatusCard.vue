@@ -53,6 +53,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import Card from './Card.vue'
+import { logger } from '../utils/logger'
 
 const props = defineProps({
   status: Object
@@ -88,7 +89,7 @@ watch(() => props.status?.node_id, async (nodeId) => {
       nodeInfo.value = data.results[0]
     }
   } catch (e) {
-    console.error('Failed to fetch node info:', e)
+  logger.error('Failed to fetch node info:', e)
   }
 }, { immediate: true })
 
