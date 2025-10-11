@@ -900,6 +900,41 @@ Files changed in Phase 5:
 
 ---
 
+### ✅ Testing & Validation (COMPLETED) — updated 2025-10-11
+
+Scope covered by automated tests and a light micro-benchmark:
+
+- API tests: scoreboard, level-config, recent-transmissions pagination
+  - File: `backend/tests/gamification_test.go`
+- Level scaling unit tests: default, linear override, logarithmic target sum
+  - File: `backend/tests/levels_calc_test.go`
+- Tally Service E2E: diminishing returns, caps, kerchunk penalty, rested bonus, idempotency
+  - File: `backend/tests/tally_service_test.go`
+- Profile API integration: aggregates, daily/weekly totals, daily_breakdown, next_level_xp
+  - File: `backend/tests/profile_api_test.go`
+- Leveling behavior: carryover XP across level-ups, renown reset at 60→1
+  - File: `backend/tests/levelup_renown_test.go`
+- Performance baseline: ProcessTally micro-benchmark (no assertions; for local tuning)
+  - File: `backend/tests/benchmark_tally_test.go`
+
+Status: Full test suite PASS.
+
+How to run locally:
+
+- Run all tests
+  - From repo root: `go test ./...`
+- Run only backend test package (verbose)
+  - `go test ./backend/tests -v`
+- Run the micro-benchmark (optional)
+  - `go test -bench=ProcessTally -run '^$' ./backend/tests`
+
+Notes:
+
+- Tests initialize GORM SQLite and call TallyService.Start() where required.
+- Time-based tests seed transmission logs before service start to ensure expected cutoffs.
+
+---
+
 ## Benefits
 
 1. **Modern ORM:** GORM provides cleaner, safer, more maintainable database code
