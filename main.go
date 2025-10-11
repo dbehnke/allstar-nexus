@@ -16,6 +16,7 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/auth"
 	"github.com/dbehnke/allstar-nexus/backend/config"
 	"github.com/dbehnke/allstar-nexus/backend/database"
+	"github.com/dbehnke/allstar-nexus/backend/gamification"
 	"github.com/dbehnke/allstar-nexus/backend/middleware"
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
@@ -55,12 +56,20 @@ func main() {
 		log.Fatalf("migrate error: %v", err)
 	}
 
-	// Initialize GORM database for transmission logs and node info
+	// Initialize GORM database for all models
 	gormDB, err := gorm.Open(sqlite.Open(cfg.DBPath), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("GORM database open error: %v", err)
 	}
-	if err := gormDB.AutoMigrate(&models.TransmissionLog{}, &models.NodeInfo{}); err != nil {
+	if err := gormDB.AutoMigrate(
+		&models.User{},
+		&models.TransmissionLog{},
+		&models.NodeInfo{},
+		&models.LinkStat{},
+		&models.CallsignProfile{},
+		&models.LevelConfig{},
+		&models.XPActivityLog{},
+	); err != nil {
 		log.Fatalf("GORM auto-migrate error: %v", err)
 	}
 	logger.Info("GORM database initialized successfully")
@@ -87,8 +96,8 @@ func main() {
 		cancel()
 	}
 
-	// API setup
-	apiLayer := api.New(db.DB, cfg.JWTSecret, cfg.TokenTTL)
+	// API setup (use GORM for all repos now)
+	apiLayer := api.New(gormDB, cfg.JWTSecret, cfg.TokenTTL)
 	apiLayer.SetAstDBPath(cfg.AstDBPath)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", api.Health)
@@ -98,7 +107,7 @@ func main() {
 	mux.Handle("/api/auth/login", limiter(http.HandlerFunc(apiLayer.Login)))
 
 	// Repositories for middleware loaders
-	userRepo := repository.NewUserRepo(db.DB)
+	userRepo := repository.NewUserRepo(gormDB)
 	userLoader := func(email string) (*repository.SafeUser, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -144,6 +153,105 @@ func main() {
 	} else {
 		mux.Handle("/api/link-stats", authMW(http.HandlerFunc(apiLayer.LinkStatsHandler)))
 		mux.Handle("/api/link-stats/top", authMW(http.HandlerFunc(apiLayer.TopLinkStatsHandler)))
+	}
+
+	// Gamification System Initialization
+	var tallyService *gamification.TallyService
+	if cfg.Gamification.Enabled {
+		logger.Info("initializing gamification system...")
+
+		// Initialize gamification repositories
+		profileRepo := repository.NewCallsignProfileRepo(gormDB)
+		levelConfigRepo := repository.NewLevelConfigRepo(gormDB)
+		activityRepo := repository.NewXPActivityRepo(gormDB)
+
+		// Calculate and seed level requirements
+		levelRequirements := gamification.CalculateLevelRequirements()
+		if err := levelConfigRepo.SeedDefaults(context.Background(), levelRequirements); err != nil {
+			logger.Warn("failed to seed level config", zap.Error(err))
+		} else {
+			logger.Info("level config seeded", zap.Int("levels", len(levelRequirements)))
+		}
+
+		// Build gamification config for TallyService
+		gameCfg := &gamification.Config{
+			RestedEnabled:          cfg.Gamification.RestedBonus.Enabled,
+			RestedAccumulationRate: cfg.Gamification.RestedBonus.AccumulationRate,
+			RestedMaxSeconds:       cfg.Gamification.RestedBonus.MaxHours * 3600,
+			RestedMultiplier:       cfg.Gamification.RestedBonus.Multiplier,
+			DREnabled:              cfg.Gamification.DiminishingReturns.Enabled,
+			KerchunkEnabled:        cfg.Gamification.KerchunkDetection.Enabled,
+			KerchunkThreshold:      cfg.Gamification.KerchunkDetection.ThresholdSec,
+			KerchunkWindow:         cfg.Gamification.KerchunkDetection.WindowSec,
+			KerchunkSinglePenalty:  cfg.Gamification.KerchunkDetection.SinglePenalty,
+			Kerchunk2to3Penalty:    cfg.Gamification.KerchunkDetection.TwoThree,
+			Kerchunk4to5Penalty:    cfg.Gamification.KerchunkDetection.FourFive,
+			Kerchunk6PlusPenalty:   cfg.Gamification.KerchunkDetection.SixPlus,
+			CapsEnabled:            cfg.Gamification.XPCaps.Enabled,
+			DailyCapSeconds:        cfg.Gamification.XPCaps.DailyCap,
+			WeeklyCapSeconds:       cfg.Gamification.XPCaps.WeeklyCap,
+		}
+
+		// Convert DR tiers
+		if len(cfg.Gamification.DiminishingReturns.Tiers) > 0 {
+			for _, tier := range cfg.Gamification.DiminishingReturns.Tiers {
+				gameCfg.DRTiers = append(gameCfg.DRTiers, gamification.DRTier{
+					MaxSeconds: tier.MaxSeconds,
+					Multiplier: tier.Multiplier,
+				})
+			}
+		} else {
+			// Default tiers if not configured
+			gameCfg.DRTiers = []gamification.DRTier{
+				{MaxSeconds: 1200, Multiplier: 1.0},
+				{MaxSeconds: 2400, Multiplier: 0.75},
+				{MaxSeconds: 3600, Multiplier: 0.5},
+				{MaxSeconds: 999999, Multiplier: 0.25},
+			}
+		}
+
+		// Initialize and start TallyService
+		tallyInterval := time.Duration(cfg.Gamification.TallyIntervalMinutes) * time.Minute
+		tallyService = gamification.NewTallyService(
+			gormDB,
+			txLogRepo,
+			profileRepo,
+			levelConfigRepo,
+			activityRepo,
+			gameCfg,
+			tallyInterval,
+			logger,
+		)
+
+		if err := tallyService.Start(); err != nil {
+			logger.Error("failed to start tally service", zap.Error(err))
+		} else {
+			logger.Info("gamification tally service started",
+				zap.Duration("interval", tallyInterval),
+				zap.Bool("rested_bonus", gameCfg.RestedEnabled),
+				zap.Bool("diminishing_returns", gameCfg.DREnabled),
+				zap.Bool("kerchunk_detection", gameCfg.KerchunkEnabled),
+				zap.Bool("xp_caps", gameCfg.CapsEnabled),
+			)
+		}
+
+		// Register gamification API endpoints
+		gamificationAPI := api.NewGamificationAPI(profileRepo, txLogRepo, levelConfigRepo, activityRepo)
+
+		if cfg.AllowAnonDashboard {
+			publicLimiter := middleware.RateLimiter(cfg.PublicStatsRateLimitRPM)
+			mux.Handle("/api/gamification/scoreboard", publicLimiter(http.HandlerFunc(gamificationAPI.Scoreboard)))
+			mux.Handle("/api/gamification/profile/", publicLimiter(http.HandlerFunc(gamificationAPI.Profile)))
+			mux.Handle("/api/gamification/recent-transmissions", publicLimiter(http.HandlerFunc(gamificationAPI.RecentTransmissions)))
+			mux.Handle("/api/gamification/level-config", publicLimiter(http.HandlerFunc(gamificationAPI.LevelConfig)))
+		} else {
+			mux.Handle("/api/gamification/scoreboard", authMW(http.HandlerFunc(gamificationAPI.Scoreboard)))
+			mux.Handle("/api/gamification/profile/", authMW(http.HandlerFunc(gamificationAPI.Profile)))
+			mux.Handle("/api/gamification/recent-transmissions", authMW(http.HandlerFunc(gamificationAPI.RecentTransmissions)))
+			mux.Handle("/api/gamification/level-config", authMW(http.HandlerFunc(gamificationAPI.LevelConfig)))
+		}
+
+		logger.Info("gamification API endpoints registered")
 	}
 
 	// Serve Vue.js dashboard from embedded frontend/dist
@@ -193,7 +301,7 @@ func main() {
 			logger.Info("initialized keying tracker for source node", zap.Int("node_id", node.NodeID))
 		}
 		// Seed persisted link stats (if any) so totals survive restarts
-		lsRepo := repository.NewLinkStatsRepo(db.DB)
+		lsRepo := repository.NewLinkStatsRepo(gormDB)
 		seedCtx, seedCancel := context.WithTimeout(context.Background(), 2*time.Second)
 		if stats, err := lsRepo.GetAll(seedCtx); err == nil && len(stats) > 0 {
 			li := make([]core.LinkInfo, 0, len(stats))
@@ -303,7 +411,7 @@ func main() {
 
 				// Update active links in database
 				for _, li := range currentLinks {
-					stat := repository.LinkStat{
+					stat := models.LinkStat{
 						Node:           li.Node,
 						TotalTxSeconds: li.TotalTxSeconds,
 						LastTxStart:    li.LastTxStart,
@@ -344,7 +452,7 @@ func main() {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			for _, li := range list {
-				stat := repository.LinkStat{Node: li.Node, TotalTxSeconds: li.TotalTxSeconds, LastTxStart: li.LastTxStart, LastTxEnd: li.LastTxEnd, ConnectedSince: &li.ConnectedSince}
+				stat := models.LinkStat{Node: li.Node, TotalTxSeconds: li.TotalTxSeconds, LastTxStart: li.LastTxStart, LastTxEnd: li.LastTxEnd, ConnectedSince: &li.ConnectedSince}
 				_ = lsRepo.Upsert(ctx, stat)
 			}
 		})
@@ -423,6 +531,12 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 	log.Printf("shutdown signal received, shutting down...")
+
+	// Stop gamification tally service
+	if tallyService != nil {
+		tallyService.Stop()
+	}
+
 	ctxShutdown, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctxShutdown); err != nil {

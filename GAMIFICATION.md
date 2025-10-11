@@ -828,41 +828,51 @@ if cfg.Gamification.Enabled {
 
 ---
 
-## Summary of Changes
+## Implementation Status
 
-### Backend GORM Migration
+### ✅ Backend GORM Migration (COMPLETED)
 - ✅ Convert `User` model to GORM with tags
 - ✅ Convert `LinkStat` model to GORM with tags
 - ✅ Convert `UserRepo` to use GORM API
 - ✅ Convert `LinkStatsRepo` to use GORM API
 - ✅ Update main.go to use GORM for existing repos
-- ✅ Phase out raw SQL in favor of GORM
+- ✅ Update handlers.go to accept gorm.DB
 
-### New Gamification Models
+### ✅ New Gamification Models (COMPLETED)
 - ✅ `CallsignProfile` model for XP/level/renown tracking
 - ✅ `LevelConfig` model for XP requirements
+- ✅ `XPActivityLog` model for anti-cheating transparency
 - ✅ `CallsignProfileRepo` with GORM methods
 - ✅ `LevelConfigRepo` with GORM methods
+- ✅ `XPActivityRepo` with comprehensive tracking methods
 
-### Gamification Service
-- ✅ Level scaling calculator (linear + logarithmic)
-- ✅ Tally service for periodic XP processing
+### ✅ Gamification Service (COMPLETED)
+- ✅ Level scaling calculator (linear + logarithmic) - low-activity hub version
+- ✅ Tally service for periodic XP processing (30-minute intervals)
 - ✅ Level-up logic with renown prestige system
-- ✅ API endpoints: scoreboard, profile, recent transmissions
+- ✅ Complete anti-cheating implementation:
+  - ✅ Rested XP bonus (2.0x multiplier, 14-day max)
+  - ✅ Diminishing returns (4 tiers: 100% → 75% → 50% → 25%)
+  - ✅ Kerchunk detection (penalizes <3sec spam)
+  - ✅ Daily/weekly XP caps (20 min/day, 2 hrs/week)
+- ✅ API endpoints: scoreboard, profile, recent transmissions, level config
+- ✅ Integrated into main.go with graceful shutdown
 
-### Frontend Changes
-- ✅ Remove NodeStatus route, add TalkerLog route
-- ✅ Create TalkerLog.vue view with grid layout
-- ✅ Create TransmissionHistoryCard component (paginated)
-- ✅ Create ScoreboardCard component (ranked leaderboard)
-- ✅ Create LevelProgressBar component
-- ✅ Update Dashboard.vue: remove talker log, keep TopLinksCard
-- ✅ Update stores/node.js with gamification state/methods
+### 🚧 Frontend Changes (TODO - Phase 4)
+- ⬜ Remove NodeStatus route, add TalkerLog route
+- ⬜ Create TalkerLog.vue view with grid layout
+- ⬜ Create TransmissionHistoryCard component (paginated)
+- ⬜ Create ScoreboardCard component (ranked leaderboard)
+- ⬜ Create LevelProgressBar component
+- ⬜ Update Dashboard.vue: remove talker log, keep TopLinksCard
+- ⬜ Update stores/node.js with gamification state/methods
 
-### Configuration
-- ✅ Add `gamification` section to config.yaml
+### ✅ Configuration (COMPLETED)
+- ✅ Add `gamification` section to config.yaml with full low-activity hub settings
 - ✅ Support for customizable level scaling
 - ✅ Configurable tally interval (default 30 min)
+- ✅ All anti-cheating mechanics configurable
+- ✅ Default: disabled (set `enabled: true` to activate)
 
 ---
 

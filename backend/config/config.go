@@ -15,6 +15,51 @@ type NodeConfig struct {
 	Name   string `mapstructure:"name" yaml:"name,omitempty" json:"name,omitempty"` // Optional - if empty, lookup from astdb
 }
 
+// GamificationConfig holds gamification system settings
+type GamificationConfig struct {
+	Enabled              bool                   `mapstructure:"enabled" yaml:"enabled"`
+	TallyIntervalMinutes int                    `mapstructure:"tally_interval_minutes" yaml:"tally_interval_minutes"`
+	RestedBonus          RestedBonusConfig      `mapstructure:"rested_bonus" yaml:"rested_bonus"`
+	DiminishingReturns   DiminishingReturnsConfig `mapstructure:"diminishing_returns" yaml:"diminishing_returns"`
+	KerchunkDetection    KerchunkConfig         `mapstructure:"kerchunk_detection" yaml:"kerchunk_detection"`
+	XPCaps               XPCapsConfig           `mapstructure:"xp_caps" yaml:"xp_caps"`
+}
+
+type RestedBonusConfig struct {
+	Enabled          bool    `mapstructure:"enabled" yaml:"enabled"`
+	AccumulationRate float64 `mapstructure:"accumulation_rate" yaml:"accumulation_rate"`
+	MaxHours         int     `mapstructure:"max_hours" yaml:"max_hours"`
+	Multiplier       float64 `mapstructure:"multiplier" yaml:"multiplier"`
+}
+
+type DiminishingReturnsConfig struct {
+	Enabled bool     `mapstructure:"enabled" yaml:"enabled"`
+	Tiers   []DRTier `mapstructure:"tiers" yaml:"tiers"`
+}
+
+type DRTier struct {
+	MaxSeconds int     `mapstructure:"max_seconds" yaml:"max_seconds"`
+	Multiplier float64 `mapstructure:"multiplier" yaml:"multiplier"`
+}
+
+type KerchunkConfig struct {
+	Enabled       bool    `mapstructure:"enabled" yaml:"enabled"`
+	ThresholdSec  int     `mapstructure:"threshold_seconds" yaml:"threshold_seconds"`
+	WindowSec     int     `mapstructure:"consecutive_window" yaml:"consecutive_window"`
+	SinglePenalty float64 `mapstructure:"single" yaml:"single"`
+	TwoThree      float64 `mapstructure:"two_to_three" yaml:"two_to_three"`
+	FourFive      float64 `mapstructure:"four_to_five" yaml:"four_to_five"`
+	SixPlus       float64 `mapstructure:"six_plus" yaml:"six_plus"`
+}
+
+type XPCapsConfig struct {
+	Enabled     bool   `mapstructure:"enabled" yaml:"enabled"`
+	DailyCap    int    `mapstructure:"daily_cap_seconds" yaml:"daily_cap_seconds"`
+	WeeklyCap   int    `mapstructure:"weekly_cap_seconds" yaml:"weekly_cap_seconds"`
+	ResetHour   int    `mapstructure:"reset_hour" yaml:"reset_hour"`
+	WeekStarts  string `mapstructure:"week_starts" yaml:"week_starts"`
+}
+
 // Config holds runtime configuration values.
 type Config struct {
 	Port                    string
@@ -42,6 +87,7 @@ type Config struct {
 	AllowAnonDashboard      bool
 	Title                   string
 	Subtitle                string
+	Gamification            GamificationConfig
 }
 
 // Load loads configuration from config file and environment variables using Viper
@@ -71,6 +117,23 @@ func Load(configPath ...string) Config {
 	viper.SetDefault("allow_anon_dashboard", true)
 	viper.SetDefault("title", "Allstar Nexus")
 	viper.SetDefault("subtitle", "")
+
+	// Gamification defaults (low-activity hub configuration)
+	viper.SetDefault("gamification.enabled", false) // Disabled by default
+	viper.SetDefault("gamification.tally_interval_minutes", 30)
+	viper.SetDefault("gamification.rested_bonus.enabled", true)
+	viper.SetDefault("gamification.rested_bonus.accumulation_rate", 1.5)
+	viper.SetDefault("gamification.rested_bonus.max_hours", 336)
+	viper.SetDefault("gamification.rested_bonus.multiplier", 2.0)
+	viper.SetDefault("gamification.diminishing_returns.enabled", true)
+	viper.SetDefault("gamification.kerchunk_detection.enabled", true)
+	viper.SetDefault("gamification.kerchunk_detection.threshold_seconds", 3)
+	viper.SetDefault("gamification.kerchunk_detection.consecutive_window", 30)
+	viper.SetDefault("gamification.xp_caps.enabled", true)
+	viper.SetDefault("gamification.xp_caps.daily_cap_seconds", 1200)
+	viper.SetDefault("gamification.xp_caps.weekly_cap_seconds", 7200)
+	viper.SetDefault("gamification.xp_caps.reset_hour", 0)
+	viper.SetDefault("gamification.xp_caps.week_starts", "sunday")
 
 	// Config file search paths
 	if len(configPath) > 0 && configPath[0] != "" {
@@ -130,6 +193,11 @@ func Load(configPath ...string) Config {
 		AllowAnonDashboard:      viper.GetBool("allow_anon_dashboard"),
 		Title:                   viper.GetString("title"),
 		Subtitle:                viper.GetString("subtitle"),
+	}
+
+	// Load gamification configuration
+	if err := viper.UnmarshalKey("gamification", &cfg.Gamification); err != nil {
+		log.Printf("warning: failed to load gamification config: %v (using defaults)", err)
 	}
 
 	// Load nodes configuration - supports multiple formats:

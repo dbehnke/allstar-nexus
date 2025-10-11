@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"sort"
@@ -14,6 +13,7 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 	"github.com/dbehnke/allstar-nexus/internal/ami"
+	"gorm.io/gorm"
 )
 
 type StateManagerInterface interface {
@@ -31,7 +31,7 @@ type API struct {
 	TriggerPoll  func(nodeID int)
 }
 
-func New(db *sql.DB, secret string, ttl time.Duration) *API {
+func New(db *gorm.DB, secret string, ttl time.Duration) *API {
 	return &API{
 		Users:        repository.NewUserRepo(db),
 		LinkStats:    repository.NewLinkStatsRepo(db),
@@ -195,7 +195,7 @@ func (a *API) LinkStatsHandler(w http.ResponseWriter, r *http.Request) {
 			ref = t
 		}
 		if !ref.IsZero() {
-			filtered := make([]repository.LinkStat, 0, len(stats))
+			filtered := make([]models.LinkStat, 0, len(stats))
 			for _, s := range stats {
 				if !s.UpdatedAt.Before(ref) {
 					filtered = append(filtered, s)
@@ -217,7 +217,7 @@ func (a *API) LinkStatsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if len(wanted) > 0 {
-			filtered := make([]repository.LinkStat, 0, len(stats))
+			filtered := make([]models.LinkStat, 0, len(stats))
 			for _, s := range stats {
 				if _, ok := wanted[s.Node]; ok {
 					filtered = append(filtered, s)
@@ -265,7 +265,7 @@ func (a *API) TopLinkStatsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// compute rate if requested
 	type row struct {
-		repository.LinkStat
+		models.LinkStat
 		Rate float64
 	}
 	rows := make([]row, 0, len(stats))

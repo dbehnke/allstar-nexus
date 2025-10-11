@@ -646,18 +646,27 @@ Player rapidly keys up 10 times for 2 seconds each:
 
 ---
 
-## Implementation Priority
+## Implementation Status
 
-1. **Phase 1:** XP Caps (highest priority - prevents extreme abuse)
-2. **Phase 2:** Rested Bonus (high priority - big engagement win)
-3. **Phase 3:** Diminishing Returns (medium priority - supplements caps)
-4. **Phase 4:** Kerchunk Detection (low priority - edge case)
-5. **Phase 5:** Transparency Dashboard (nice to have - builds trust)
+### ✅ BACKEND COMPLETE (All phases implemented!)
+
+1. ✅ **XP Caps** - Daily (20 min) and weekly (2 hrs) limits fully implemented
+2. ✅ **Rested Bonus** - 1.5x accumulation, 336hr max, 2.0x multiplier active
+3. ✅ **Diminishing Returns** - 4-tier system with rolling 24-hour window
+4. ✅ **Kerchunk Detection** - Spam detection with escalating penalties
+5. ✅ **Transparency System** - XPActivityLog tracks all multipliers
+
+### 🚧 Frontend Transparency Dashboard (TODO - Phase 4)
+- Profile UI showing rested bonus status
+- Profile UI showing weekly/daily cap progress
+- Profile UI showing current XP rate multiplier
+- Activity breakdown visualization
 
 ---
 
 ## Testing Checklist
 
+### Backend Logic (Ready for Testing)
 - [ ] Weekly cap enforces 2-hour limit
 - [ ] Daily cap enforces 20-minute limit
 - [ ] Rested bonus accumulates correctly (1.5x rate)
@@ -668,8 +677,13 @@ Player rapidly keys up 10 times for 2 seconds each:
 - [ ] Kerchunk detection identifies consecutive < 3s transmissions
 - [ ] Kerchunk penalties escalate correctly
 - [ ] Activity logs record all multipliers
+- [ ] Multiple simultaneous multipliers stack correctly
+- [ ] Caps prevent XP award but still log transmission
+- [ ] API endpoints return correct data
+
+### Frontend UI (TODO - Not Yet Implemented)
 - [ ] Profile UI shows rested bonus status
 - [ ] Profile UI shows weekly cap progress
 - [ ] Profile UI warns when approaching daily cap
-- [ ] Multiple simultaneous multipliers stack correctly
-- [ ] Caps prevent XP award but still log transmission
+- [ ] Scoreboard displays correctly
+- [ ] Transmission history paginates properly

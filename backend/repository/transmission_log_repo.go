@@ -88,3 +88,23 @@ func (r *TransmissionLogRepository) DeleteOldLogs(before time.Time) (int64, erro
 	result := r.db.Where("timestamp_start < ?", before).Delete(&models.TransmissionLog{})
 	return result.RowsAffected, result.Error
 }
+
+// GetLogsSince returns transmission logs since the specified time, grouped by callsign
+func (r *TransmissionLogRepository) GetLogsSince(since time.Time) (map[string][]models.TransmissionLog, error) {
+	var logs []models.TransmissionLog
+	err := r.db.Where("timestamp_start >= ?", since).
+		Order("callsign ASC, timestamp_start ASC").
+		Find(&logs).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Group by callsign
+	grouped := make(map[string][]models.TransmissionLog)
+	for _, log := range logs {
+		grouped[log.Callsign] = append(grouped[log.Callsign], log)
+	}
+
+	return grouped, nil
+}

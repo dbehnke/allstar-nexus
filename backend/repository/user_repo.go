@@ -2,75 +2,76 @@ package repository
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/models"
+	"gorm.io/gorm"
 )
 
-type UserRepo struct{ DB *sql.DB }
+type UserRepo struct{ DB *gorm.DB }
 
-func NewUserRepo(db *sql.DB) *UserRepo { return &UserRepo{DB: db} }
+func NewUserRepo(db *gorm.DB) *UserRepo { return &UserRepo{DB: db} }
 
 func (r *UserRepo) Create(ctx context.Context, email, passwordHash, role string) (*models.User, error) {
-	res, err := r.DB.ExecContext(ctx, `INSERT INTO users(email,password_hash,role) VALUES(?,?,?)`, email, passwordHash, role)
-	if err != nil {
+	user := &models.User{
+		Email:        email,
+		PasswordHash: passwordHash,
+		Role:         role,
+		CreatedAt:    time.Now(),
+	}
+	if err := r.DB.WithContext(ctx).Create(user).Error; err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
-	return &models.User{ID: id, Email: email, PasswordHash: passwordHash, Role: role, CreatedAt: time.Now()}, nil
+	return user, nil
 }
 
 func (r *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, error) {
-	row := r.DB.QueryRowContext(ctx, `SELECT id,email,password_hash,role,created_at FROM users WHERE email = ?`, email)
-	u := models.User{}
-	if err := row.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+	var user models.User
+	err := r.DB.WithContext(ctx).Where("email = ?", email).First(&user).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
 		return nil, err
 	}
-	return &u, nil
+	return &user, nil
 }
 
 // Count returns total number of users.
 func (r *UserRepo) Count(ctx context.Context) (int64, error) {
-	row := r.DB.QueryRowContext(ctx, `SELECT COUNT(1) FROM users`)
-	var c int64
-	if err := row.Scan(&c); err != nil {
-		return 0, err
-	}
-	return c, nil
+	var count int64
+	err := r.DB.WithContext(ctx).Model(&models.User{}).Count(&count).Error
+	return count, err
 }
 
 // RoleCounts returns map[role]count.
 func (r *UserRepo) RoleCounts(ctx context.Context) (map[string]int64, error) {
-	rows, err := r.DB.QueryContext(ctx, `SELECT role, COUNT(1) FROM users GROUP BY role`)
+	type Result struct {
+		Role  string
+		Count int64
+	}
+	var results []Result
+	err := r.DB.WithContext(ctx).Model(&models.User{}).
+		Select("role, count(*) as count").
+		Group("role").
+		Scan(&results).Error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	res := map[string]int64{}
-	for rows.Next() {
-		var role string
-		var cnt int64
-		if err := rows.Scan(&role, &cnt); err != nil {
-			return nil, err
-		}
-		res[role] = cnt
+	res := make(map[string]int64)
+	for _, r := range results {
+		res[r.Role] = r.Count
 	}
-	return res, rows.Err()
+	return res, nil
 }
 
 // NewUsersSince returns number of users created at or after 'since'.
 func (r *UserRepo) NewUsersSince(ctx context.Context, since time.Time) (int64, error) {
-	row := r.DB.QueryRowContext(ctx, `SELECT COUNT(1) FROM users WHERE created_at >= ?`, since)
-	var c int64
-	if err := row.Scan(&c); err != nil {
-		return 0, err
-	}
-	return c, nil
+	var count int64
+	err := r.DB.WithContext(ctx).Model(&models.User{}).
+		Where("created_at >= ?", since).
+		Count(&count).Error
+	return count, err
 }
 
 // SafeUser minimal representation.
