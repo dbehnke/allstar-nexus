@@ -81,6 +81,10 @@ func TestProfileAPI_ReturnsAccurateAggregates(t *testing.T) {
 		RestedMultiplier:       1.0,
 	}
 	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, cfg, 30*time.Minute, zaptestLogger())
+	if err := ts.Start(); err != nil {
+		t.Fatalf("start tally: %v", err)
+	}
+	defer ts.Stop()
 	if err := ts.ProcessTally(); err != nil {
 		t.Fatalf("process tally: %v", err)
 	}

@@ -104,6 +104,12 @@ func TestTallyService_ProcessOnce(t *testing.T) {
 		t.Fatalf("save profile: %v", err)
 	}
 
+	// Start after seeding logs and profile so the initial lastTallyTime doesn't skip our data
+	if err := ts.Start(); err != nil {
+		t.Fatalf("start tally: %v", err)
+	}
+	defer ts.Stop()
+
 	// Run one tally pass
 	if err := ts.ProcessTally(); err != nil {
 		t.Fatalf("process tally: %v", err)
