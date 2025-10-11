@@ -883,12 +883,20 @@ if cfg.Gamification.Enabled {
 
 Build status: Frontend production build PASS (vite)
 
-### ✅ Configuration (COMPLETED)
+### ✅ Configuration (COMPLETED) — updated 2025-10-11
 - ✅ Add `gamification` section to config.yaml with full low-activity hub settings
 - ✅ Support for customizable level scaling
 - ✅ Configurable tally interval (default 30 min)
 - ✅ All anti-cheating mechanics configurable
 - ✅ Default: disabled (set `enabled: true` to activate)
+
+Build status: Backend build PASS (go)
+
+Files changed in Phase 5:
+- `backend/config/config.go` — add `LevelScale` config and defaults
+- `backend/gamification/levels.go` — implement configurable level scaling
+- `main.go` — seed level config using configured scale
+- `config.yaml.example` — include `gamification` section and examples
 
 ---
 
