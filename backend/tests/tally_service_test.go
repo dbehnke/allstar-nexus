@@ -28,6 +28,7 @@ func setUpGormTestDB(t *testing.T) *gorm.DB {
 		&models.LevelConfig{},
 		&models.TransmissionLog{},
 		&models.XPActivityLog{},
+		&models.TallyState{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -42,6 +43,7 @@ func TestTallyService_ProcessOnce(t *testing.T) {
 	profileRepo := repository.NewCallsignProfileRepo(gdb)
 	txRepo := repository.NewTransmissionLogRepository(gdb)
 	activityRepo := repository.NewXPActivityRepo(gdb)
+	stateRepo := repository.NewTallyStateRepo(gdb)
 
 	// Seed simple level requirements (use defaults)
 	reqs := gamification.CalculateLevelRequirements()
@@ -77,7 +79,7 @@ func TestTallyService_ProcessOnce(t *testing.T) {
 	}
 
 	// Build TallyService (logger nil-safe in code; if not, we'd stub)
-	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, cfg, 30*time.Minute, zaptestLogger())
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger())
 
 	// Seed transmissions across a single callsign to exercise logic
 	callsign := "K9TEST"

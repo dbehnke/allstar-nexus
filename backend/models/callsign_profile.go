@@ -12,6 +12,8 @@ type CallsignProfile struct {
 	LastTallyAt        time.Time `gorm:"index" json:"last_tally_at"`
 	LastTransmissionAt time.Time `gorm:"index" json:"last_transmission_at"`
 	RestedBonusSeconds int       `gorm:"default:0" json:"rested_bonus_seconds"`
+	DailyXP            int       `gorm:"default:0" json:"daily_xp"`
+	WeeklyXP           int       `gorm:"default:0" json:"weekly_xp"`
 	CreatedAt          time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt          time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }

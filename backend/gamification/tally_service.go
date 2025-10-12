@@ -44,18 +44,29 @@ type DRTier struct {
 
 // TallyService processes XP from transmission logs periodically
 type TallyService struct {
-	db              *gorm.DB
-	txLogRepo       *repository.TransmissionLogRepository
-	profileRepo     *repository.CallsignProfileRepo
-	levelConfigRepo *repository.LevelConfigRepo
-	activityRepo    *repository.XPActivityRepo
-	config          *Config
+	db                *gorm.DB
+	txLogRepo         *repository.TransmissionLogRepository
+	profileRepo       *repository.CallsignProfileRepo
+	levelConfigRepo   *repository.LevelConfigRepo
+	activityRepo      *repository.XPActivityRepo
+	stateRepo         *repository.TallyStateRepo
+	config            *Config
 	levelRequirements map[int]int // level -> xp_required
-	tallyInterval   time.Duration
-	ticker          *time.Ticker
-	stopChan        chan struct{}
-	lastTallyTime   time.Time
-	logger          *zap.Logger
+	tallyInterval     time.Duration
+	ticker            *time.Ticker
+	stopChan          chan struct{}
+	lastTallyTime     time.Time
+	logger            *zap.Logger
+	// Optional hook invoked after each tally completes
+	OnTallyComplete func(summary TallySummary)
+}
+
+// TallySummary contains basic metrics about a completed tally run
+type TallySummary struct {
+	CallsignsProcessed   int       `json:"callsigns_processed"`
+	TransmissionsHandled int       `json:"transmissions_handled"`
+	StartedAt            time.Time `json:"started_at"`
+	CompletedAt          time.Time `json:"completed_at"`
 }
 
 func NewTallyService(
@@ -64,6 +75,7 @@ func NewTallyService(
 	profileRepo *repository.CallsignProfileRepo,
 	levelRepo *repository.LevelConfigRepo,
 	activityRepo *repository.XPActivityRepo,
+	stateRepo *repository.TallyStateRepo,
 	config *Config,
 	interval time.Duration,
 	logger *zap.Logger,
@@ -74,6 +86,7 @@ func NewTallyService(
 		profileRepo:     profileRepo,
 		levelConfigRepo: levelRepo,
 		activityRepo:    activityRepo,
+		stateRepo:       stateRepo,
 		config:          config,
 		tallyInterval:   interval,
 		stopChan:        make(chan struct{}),
@@ -91,6 +104,25 @@ func (s *TallyService) Start() error {
 	s.levelRequirements = levelMap
 
 	s.logger.Info("TallyService starting", zap.Duration("interval", s.tallyInterval))
+
+	// Load persisted last tally time (if any)
+	if s.stateRepo != nil {
+		if state, err := s.stateRepo.GetOrInit(context.Background()); err == nil {
+			if !state.LastTallyAt.IsZero() {
+				s.lastTallyTime = state.LastTallyAt
+			} else {
+				// No persisted time — seed from oldest transmission log if available
+				if oldest, err := s.txLogRepo.GetOldestLogTime(); err == nil && !oldest.IsZero() {
+					s.lastTallyTime = oldest
+					s.logger.Info("Initialized last tally time from oldest log", zap.Time("oldest", oldest))
+				}
+			}
+		} else {
+			s.logger.Warn("failed to load tally state; using default window", zap.Error(err))
+		}
+	}
+	// Test-trace: emit at error-level so it shows in tests
+	s.logger.Error("tally.start.seed", zap.Time("lastTallyTime", s.lastTallyTime))
 
 	// Run initial tally
 	if err := s.ProcessTally(); err != nil {
@@ -126,124 +158,177 @@ func (s *TallyService) Stop() {
 func (s *TallyService) ProcessTally() error {
 	ctx := context.Background()
 
-	s.logger.Info("Processing XP tally", zap.Time("since", s.lastTallyTime))
+	now := time.Now().UTC()
+	// Test-trace
+	s.logger.Error("tally.process.begin", zap.Time("from", s.lastTallyTime), zap.Time("to", now))
+	s.logger.Info("Processing XP tally (windowed)", zap.Time("from", s.lastTallyTime), zap.Time("to", now), zap.Duration("step", s.tallyInterval))
 
-	// 1. Get transmissions since last tally, grouped by callsign
-	transmissions, err := s.txLogRepo.GetLogsSince(s.lastTallyTime)
-	if err != nil {
-		return err
+	processed := make(map[string]struct{})
+	summary := TallySummary{
+		CallsignsProcessed:   0,
+		TransmissionsHandled: 0,
+		StartedAt:            time.Now(),
 	}
 
-	s.logger.Info("Tally batch", zap.Int("callsigns", len(transmissions)))
-
-	for callsign, txLogs := range transmissions {
-		if callsign == "" {
-			continue // Skip empty callsigns
-		}
-
-		// 2. Load or create profile
-		profile, err := s.profileRepo.GetByCallsign(ctx, callsign)
-		if err != nil {
-			s.logger.Error("Failed to get profile", zap.String("callsign", callsign), zap.Error(err))
-			continue
-		}
-
-		// 3. Update rested bonus accumulation
-		s.updateRestedBonus(profile)
-
-		// 4. Get current daily/weekly XP for caps
-		weeklyXP, dailyXP := 0, 0
-		if s.config.CapsEnabled {
-			weeklyXP, _ = s.activityRepo.GetWeeklyXP(ctx, callsign)
-			dailyXP, _ = s.activityRepo.GetDailyXP(ctx, callsign)
-		}
-
-		// 5. Get recent activity for diminishing returns calculation
-		currentDailySeconds := 0
-		if s.config.DREnabled {
-			recentActivity, _ := s.activityRepo.GetLast24Hours(ctx, callsign)
-			for _, activity := range recentActivity {
-				currentDailySeconds += activity.RawXP
+	// Helper: process grouped logs for a window
+	processGroup := func(transmissions map[string][]models.TransmissionLog) {
+		for callsign, txLogs := range transmissions {
+			if callsign == "" {
+				continue
 			}
-		}
+			processed[callsign] = struct{}{}
 
-		// 6. Process each transmission
-		for i, tx := range txLogs {
-			rawXP := tx.DurationSeconds
-
-			// Skip if at weekly cap
-			if s.config.CapsEnabled && weeklyXP >= s.config.WeeklyCapSeconds {
-				s.activityRepo.LogActivity(ctx, callsign, rawXP, 0, 0, 0, 0)
+			// Load or create profile
+			profile, err := s.profileRepo.GetByCallsign(ctx, callsign)
+			if err != nil {
+				s.logger.Error("Failed to get profile", zap.String("callsign", callsign), zap.Error(err))
 				continue
 			}
 
-			// Skip if at daily cap
-			if s.config.CapsEnabled && dailyXP >= s.config.DailyCapSeconds {
-				s.activityRepo.LogActivity(ctx, callsign, rawXP, 0, 0, 0, 0)
-				continue
-			}
+			// Update rested bonus accumulation
+			s.updateRestedBonus(profile)
 
-			// Apply rested bonus
-			restedMultiplier := s.applyRestedBonus(profile, tx.DurationSeconds)
-
-			// Apply diminishing returns
-			drMultiplier := s.calculateDRMultiplier(currentDailySeconds)
-			currentDailySeconds += tx.DurationSeconds
-
-			// Apply kerchunk penalty
-			kerchunkPenalty := s.calculateKerchunkPenalty(txLogs[:i], tx)
-
-			// Calculate final XP
-			finalXP := float64(rawXP) * restedMultiplier * drMultiplier * kerchunkPenalty
-			awardedXP := int(finalXP)
-
-			// Apply daily cap to awarded amount
+			// Caps context
+			weeklyXP, dailyXP := 0, 0
 			if s.config.CapsEnabled {
-				remainingDaily := s.config.DailyCapSeconds - dailyXP
-				if awardedXP > remainingDaily {
-					awardedXP = remainingDaily
-				}
+				weeklyXP, _ = s.activityRepo.GetWeeklyXP(ctx, callsign)
+				dailyXP, _ = s.activityRepo.GetDailyXP(ctx, callsign)
+			}
 
-				// Apply weekly cap to awarded amount
-				remainingWeekly := s.config.WeeklyCapSeconds - weeklyXP
-				if awardedXP > remainingWeekly {
-					awardedXP = remainingWeekly
+			// DR context
+			currentDailySeconds := 0
+			if s.config.DREnabled {
+				recentActivity, _ := s.activityRepo.GetLast24Hours(ctx, callsign)
+				for _, activity := range recentActivity {
+					currentDailySeconds += activity.RawXP
 				}
 			}
 
-			// Log activity (transparency)
-			s.activityRepo.LogActivity(ctx, callsign, rawXP, awardedXP, restedMultiplier, drMultiplier, kerchunkPenalty)
+			// Process each transmission in order
+			for i, tx := range txLogs {
+				rawXP := tx.DurationSeconds
+				summary.TransmissionsHandled++
 
-			// Award XP to profile
-			profile.ExperiencePoints += awardedXP
+				if s.config.CapsEnabled && weeklyXP >= s.config.WeeklyCapSeconds {
+					_ = s.activityRepo.LogActivity(ctx, callsign, rawXP, 0, 0, 0, 0)
+					continue
+				}
+				if s.config.CapsEnabled && dailyXP >= s.config.DailyCapSeconds {
+					_ = s.activityRepo.LogActivity(ctx, callsign, rawXP, 0, 0, 0, 0)
+					continue
+				}
 
-			// Update running totals
-			weeklyXP += awardedXP
-			dailyXP += awardedXP
-		}
+				restedMultiplier := s.applyRestedBonus(profile, tx.DurationSeconds)
+				drMultiplier := s.calculateDRMultiplier(currentDailySeconds)
+				currentDailySeconds += tx.DurationSeconds
+				kerchunkPenalty := s.calculateKerchunkPenalty(txLogs[:i], tx)
 
-		// 7. Update last transmission timestamp
-		if len(txLogs) > 0 {
-			profile.LastTransmissionAt = txLogs[len(txLogs)-1].TimestampEnd
-		}
+				finalXP := float64(rawXP) * restedMultiplier * drMultiplier * kerchunkPenalty
+				awardedXP := int(finalXP)
 
-		// 8. Process level-ups
-		leveledUp := s.processLevelUps(profile)
-		if leveledUp {
-			s.logger.Info("Level up!",
-				zap.String("callsign", profile.Callsign),
-				zap.Int("level", profile.Level),
-				zap.Int("renown", profile.RenownLevel),
-			)
-		}
+				if s.config.CapsEnabled {
+					remainingDaily := s.config.DailyCapSeconds - dailyXP
+					if awardedXP > remainingDaily {
+						awardedXP = remainingDaily
+					}
+					remainingWeekly := s.config.WeeklyCapSeconds - weeklyXP
+					if awardedXP > remainingWeekly {
+						awardedXP = remainingWeekly
+					}
+				}
 
-		// 9. Save updated profile
-		if err := s.profileRepo.Upsert(ctx, profile); err != nil {
-			s.logger.Error("Failed to save profile", zap.String("callsign", callsign), zap.Error(err))
+				_ = s.activityRepo.LogActivity(ctx, callsign, rawXP, awardedXP, restedMultiplier, drMultiplier, kerchunkPenalty)
+				profile.ExperiencePoints += awardedXP
+				profile.DailyXP += awardedXP
+				profile.WeeklyXP += awardedXP
+				weeklyXP += awardedXP
+				dailyXP += awardedXP
+			}
+
+			if len(txLogs) > 0 {
+				profile.LastTransmissionAt = txLogs[len(txLogs)-1].TimestampEnd
+				profile.LastTallyAt = time.Now().UTC()
+			}
+
+			leveledUp := s.processLevelUps(profile)
+			if leveledUp {
+				s.logger.Info("Level up!", zap.String("callsign", profile.Callsign), zap.Int("level", profile.Level), zap.Int("renown", profile.RenownLevel))
+			}
+
+			if err := s.profileRepo.Upsert(ctx, profile); err != nil {
+				s.logger.Error("Failed to save profile", zap.String("callsign", callsign), zap.Error(err))
+			}
 		}
 	}
 
-	s.lastTallyTime = time.Now()
+	// Iterate windows from lastTallyTime to now
+	originalStart := s.lastTallyTime
+	cursor := s.lastTallyTime
+	if cursor.IsZero() || cursor.After(now) {
+		cursor = now.Add(-s.tallyInterval)
+	}
+	for cursor.Before(now) {
+		next := cursor.Add(s.tallyInterval)
+		if next.After(now) {
+			next = now
+		}
+		s.logger.Info("Tally window", zap.Time("from", cursor), zap.Time("to", next))
+		// Test-trace
+		s.logger.Error("tally.process.window", zap.Time("from", cursor), zap.Time("to", next))
+		transmissions, err := s.txLogRepo.GetLogsBetween(cursor, next)
+		if err != nil {
+			return err
+		}
+		if len(transmissions) > 0 {
+			// Test-trace: log counts
+			txCount := 0
+			for _, arr := range transmissions {
+				txCount += len(arr)
+			}
+			s.logger.Error("tally.window.results", zap.Int("callsigns", len(transmissions)), zap.Int("tx_count", txCount))
+			processGroup(transmissions)
+		}
+		// Persist window completion
+		s.lastTallyTime = next
+		if s.stateRepo != nil {
+			if err := s.stateRepo.UpdateLastTally(ctx, s.lastTallyTime); err != nil {
+				s.logger.Warn("failed to persist last tally time", zap.Error(err))
+			}
+		}
+		cursor = next
+	}
+
+	summary.CallsignsProcessed = len(processed)
+	summary.CompletedAt = s.lastTallyTime
+
+	// Fallback: if no transmissions were handled (e.g., due to DB datetime format edge cases),
+	// run a single-batch tally using the legacy GetLogsSince path to preserve compatibility.
+	if summary.TransmissionsHandled == 0 {
+		s.logger.Info("Windowed tally handled 0 transmissions; falling back to single-batch GetLogsSince",
+			zap.Time("since", originalStart))
+		transmissions, err := s.txLogRepo.GetLogsSince(originalStart)
+		if err != nil {
+			return err
+		}
+		if len(transmissions) > 0 {
+			processGroup(transmissions)
+			s.lastTallyTime = now
+			summary.CompletedAt = s.lastTallyTime
+			if s.stateRepo != nil {
+				if err := s.stateRepo.UpdateLastTally(ctx, s.lastTallyTime); err != nil {
+					s.logger.Warn("failed to persist last tally time (fallback)", zap.Error(err))
+				}
+			}
+			summary.CallsignsProcessed = len(processed)
+		}
+	}
+
+	if s.OnTallyComplete != nil {
+		go func(cb func(TallySummary), sum TallySummary) {
+			defer func() { recover() }()
+			cb(sum)
+		}(s.OnTallyComplete, summary)
+	}
 	return nil
 }
 

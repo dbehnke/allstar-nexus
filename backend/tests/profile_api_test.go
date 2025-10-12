@@ -31,6 +31,7 @@ func setupDBForProfileTest(t *testing.T) (*gorm.DB, *repository.LevelConfigRepo,
 		&models.LevelConfig{},
 		&models.TransmissionLog{},
 		&models.XPActivityLog{},
+		&models.TallyState{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -44,6 +45,7 @@ func setupDBForProfileTest(t *testing.T) (*gorm.DB, *repository.LevelConfigRepo,
 
 func TestProfileAPI_ReturnsAccurateAggregates(t *testing.T) {
 	gdb, levelRepo, profileRepo, txRepo, activityRepo := setupDBForProfileTest(t)
+	stateRepo := repository.NewTallyStateRepo(gdb)
 
 	// Seed default level requirements
 	reqs := gamification.CalculateLevelRequirements()
@@ -80,7 +82,7 @@ func TestProfileAPI_ReturnsAccurateAggregates(t *testing.T) {
 		RestedMaxSeconds:       0,
 		RestedMultiplier:       1.0,
 	}
-	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, cfg, 30*time.Minute, zaptestLogger())
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger())
 	if err := ts.Start(); err != nil {
 		t.Fatalf("start tally: %v", err)
 	}

@@ -1,0 +1,66 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run backend (with fresh frontend)",
+			"type": "shell",
+			"command": "go run -ldflags \"-X 'main.buildVersion=dev' -X 'main.buildTime=$(date -u +'%Y-%m-%dT%H:%M:%SZ')'\" .",
+			"args": [],
+			"isBackground": true,
+			"problemMatcher": [
+				"$go"
+			],
+			"group": "build"
+		},
+		{
+			"label": "go test backend",
+			"type": "shell",
+			"command": "go test ./backend/...",
+			"args": [],
+			"problemMatcher": [
+				"$go"
+			],
+			"group": "build"
+		},
+		{
+			"label": "go test backend (windowed tally)",
+			"type": "shell",
+			"command": "go test ./backend/...",
+			"args": [],
+			"problemMatcher": [
+				"$go"
+			],
+			"group": "build"
+		},
+		{
+			"label": "go test backend after oldest-log seeding",
+			"type": "shell",
+			"command": "go test ./backend/...",
+			"args": [],
+			"problemMatcher": [
+				"$go"
+			],
+			"group": "build"
+		},
+		{
+			"label": "re-run backend tests after fix",
+			"type": "shell",
+			"command": "go test ./backend/... -count=1",
+			"args": [],
+			"problemMatcher": [
+				"$go"
+			],
+			"group": "build"
+		},
+		{
+			"label": "run failing tests again",
+			"type": "shell",
+			"command": "go test ./backend/tests -run TestLevelUp_CarryoverXP|TestRenownTransition_Level59To60|TestProfileAPI_ReturnsAccurateAggregates|TestTallyService_ProcessOnce -v -count=1",
+			"args": [],
+			"problemMatcher": [
+				"$go"
+			],
+			"group": "build"
+		}
+	]
+}

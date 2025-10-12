@@ -380,6 +380,17 @@ func (h *Hub) SourceNodeKeyingEventLoop(events <-chan core.SourceNodeKeyingEvent
 	}
 }
 
+// BroadcastTallyCompleted emits a GAMIFICATION_TALLY_COMPLETED event with an optional summary payload
+func (h *Hub) BroadcastTallyCompleted(summary interface{}) {
+	env := messageEnvelope{MessageType: "GAMIFICATION_TALLY_COMPLETED", Data: summary, Timestamp: time.Now().UnixMilli()}
+	payload, _ := json.Marshal(env)
+	h.mu.RLock()
+	for c := range h.clients {
+		go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, payload)
+	}
+	h.mu.RUnlock()
+}
+
 // maskIP masks the last two octets of an IPv4 address, leaving others unchanged
 func maskIP(ip string) string {
 	if ip == "" {
@@ -398,9 +409,17 @@ func maskNodeStateIPs(st *core.NodeState) {
 	if st == nil {
 		return
 	}
-	for i := range st.LinksDetailed {
-		st.LinksDetailed[i].IP = maskIP(st.LinksDetailed[i].IP)
+	// Make a defensive copy of the LinksDetailed slice so masking doesn't
+	// mutate the shared backing array that may be referenced elsewhere.
+	if len(st.LinksDetailed) == 0 {
+		return
 	}
+	copied := make([]core.LinkInfo, len(st.LinksDetailed))
+	copy(copied, st.LinksDetailed)
+	for i := range copied {
+		copied[i].IP = maskIP(copied[i].IP)
+	}
+	st.LinksDetailed = copied
 }
 
 // maskSourceNodeKeyingUpdateIPs mutates the update to mask IPs in AdjacentNodes

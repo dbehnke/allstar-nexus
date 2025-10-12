@@ -8,15 +8,21 @@
 <script setup>
 import { computed } from 'vue'
 
+// Use camel-cased prop names that match Vue's attribute -> prop mapping for kebab-case attrs
 const props = defineProps({
-  currentXP: { type: Number, default: 0 },
-  requiredXP: { type: Number, default: 1 },
+  currentXp: { type: Number, default: 0 },
+  requiredXp: { type: Number, default: 1 },
   level: { type: Number, default: 1 }
 })
 
+// Provide backwards-friendly local bindings the template expects (currentXP/requiredXP)
+const currentXP = props.currentXp
+const requiredXP = props.requiredXp
+
+
 const percent = computed(() => {
-  const req = Math.max(1, props.requiredXP)
-  const pct = Math.max(0, Math.min(100, (props.currentXP / req) * 100))
+  const req = Math.max(1, requiredXP)
+  const pct = Math.max(0, Math.min(100, (currentXP / req) * 100))
   return pct
 })
 

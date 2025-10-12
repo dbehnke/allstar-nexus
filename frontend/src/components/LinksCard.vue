@@ -711,11 +711,29 @@ function formatNodeNumber(nodeNum, callsign) {
   return nodeNum
 }
 
+function parseAnyToMs(v) {
+  if (v == null) return NaN
+  if (typeof v === 'number') return v < 1e12 ? v * 1000 : v
+  if (typeof v === 'string') {
+    const s = v.trim()
+    if (/^\d+$/.test(s)) { const n = Number(s); return n < 1e12 ? n * 1000 : n }
+    const hasTZ = /Z|[+\-]\d{2}:?\d{2}/i.test(s)
+    const iso = hasTZ ? s : `${s}Z`
+    const ms = Date.parse(iso)
+    return Number.isFinite(ms) ? ms : NaN
+  }
+  const d = new Date(v).getTime()
+  return Number.isFinite(d) ? d : NaN
+}
+
 function formatSince(ts) {
   if (!ts) return '—'
-  const d = new Date(ts)
-  const diff = (Date.now()-d.getTime())/1000
-  if (diff < 60) return Math.floor(diff)+ 's ago'
+  const now = Date.now()
+  let t = parseAnyToMs(ts)
+  if (!Number.isFinite(t)) return '—'
+  if (t > now) t = now
+  const diff = Math.floor((now - t) / 1000)
+  if (diff < 60) return diff + 's ago'
   if (diff < 3600) return Math.floor(diff/60)+ 'm ago'
   if (diff < 86400) return Math.floor(diff/3600)+ 'h ago'
   return Math.floor(diff/86400)+'d ago'

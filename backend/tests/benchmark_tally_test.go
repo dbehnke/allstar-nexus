@@ -26,6 +26,7 @@ func BenchmarkProcessTally_ManyLogs(b *testing.B) {
 		&models.LevelConfig{},
 		&models.TransmissionLog{},
 		&models.XPActivityLog{},
+		&models.TallyState{},
 	); err != nil {
 		b.Fatalf("automigrate: %v", err)
 	}
@@ -34,6 +35,7 @@ func BenchmarkProcessTally_ManyLogs(b *testing.B) {
 	profileRepo := repository.NewCallsignProfileRepo(gdb)
 	txRepo := repository.NewTransmissionLogRepository(gdb)
 	activityRepo := repository.NewXPActivityRepo(gdb)
+	stateRepo := repository.NewTallyStateRepo(gdb)
 
 	// Seed defaults
 	reqs := gamification.CalculateLevelRequirements()
@@ -59,7 +61,7 @@ func BenchmarkProcessTally_ManyLogs(b *testing.B) {
 	}
 
 	cfg := &gamification.Config{CapsEnabled: false, RestedEnabled: false, DREnabled: false, KerchunkEnabled: false}
-	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, cfg, 30*time.Minute, zaptestLogger())
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger())
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

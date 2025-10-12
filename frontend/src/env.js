@@ -1,4 +1,6 @@
 // Simple runtime config loader.
+const hostConfig = (typeof window !== 'undefined' && window.__NEXUS_CONFIG__) ? window.__NEXUS_CONFIG__ : (typeof globalThis !== 'undefined' && globalThis.__NEXUS_CONFIG__ ? globalThis.__NEXUS_CONFIG__ : {})
+
 export const cfg = Object.assign({
   WS_PATH: '/ws',
   DEFAULT_TOKEN: 'MISSING_TOKEN'
@@ -7,7 +9,7 @@ export const cfg = Object.assign({
   STALE_RETENTION_MS: 60 * 1000,
   // How long (ms) to treat a freshly connected node as "new" (highlight)
   NEW_NODE_HIGHLIGHT_MS: 60 * 1000
-}, window.__NEXUS_CONFIG__ || {});
+}, hostConfig);
 
 import { logger } from './utils/logger'
 
@@ -19,7 +21,14 @@ export function connectWS({ onMessage, onStatus, tokenProvider, maxDelay = 15000
   function open() {
     const token = encodeURIComponent(tokenProvider ? tokenProvider() : '');
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${location.host}${cfg.WS_PATH}?token=${token}`;
+    // Allow tests or deployments to provide a full ws:// or wss:// URL in cfg.WS_PATH.
+    // If WS_PATH starts with ws:// or wss:// treat it as an absolute websocket URL.
+    let url = '';
+    if (typeof cfg.WS_PATH === 'string' && (cfg.WS_PATH.startsWith('ws://') || cfg.WS_PATH.startsWith('wss://'))) {
+      url = `${cfg.WS_PATH}?token=${token}`;
+    } else {
+      url = `${protocol}//${location.host}${cfg.WS_PATH}?token=${token}`;
+    }
     const ws = new WebSocket(url);
     onStatus && onStatus('connecting');
     ws.onopen = () => { attempt = 0; onStatus && onStatus('open'); };

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/models"
@@ -71,6 +72,51 @@ func (r *TransmissionLogRepository) GetLogsInTimeRange(start, end time.Time, lim
 		Limit(limit).
 		Find(&logs).Error
 	return logs, err
+}
+
+// GetLogsBetween returns transmission logs within the specified time range, grouped by callsign
+func (r *TransmissionLogRepository) GetLogsBetween(from, to time.Time) (map[string][]models.TransmissionLog, error) {
+	var logs []models.TransmissionLog
+	err := r.db.Where("datetime(timestamp_start) >= datetime(?) AND datetime(timestamp_start) < datetime(?)", from, to).Order("timestamp_start").Find(&logs).Error
+	if err != nil {
+		return nil, err
+	}
+	groups := make(map[string][]models.TransmissionLog)
+	for _, log := range logs {
+		groups[log.Callsign] = append(groups[log.Callsign], log)
+	}
+	return groups, nil
+}
+
+// GetOldestLogTime returns the earliest timestamp_start in the transmission_logs table.
+// If there are no logs, it returns a zero time and nil error.
+func (r *TransmissionLogRepository) GetOldestLogTime() (time.Time, error) {
+	// SQLite often returns datetime as TEXT; scan into string and parse flexibly
+	type row struct {
+		TS string `gorm:"column:ts"`
+	}
+	var out row
+	if err := r.db.Model(&models.TransmissionLog{}).
+		Select("MIN(timestamp_start) as ts").
+		Scan(&out).Error; err != nil {
+		return time.Time{}, err
+	}
+	if out.TS == "" {
+		return time.Time{}, nil
+	}
+	// Try multiple layouts commonly emitted by SQLite/GORM
+	layouts := []string{
+		time.RFC3339Nano,
+		"2006-01-02 15:04:05.999999999Z07:00",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02 15:04:05",
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, out.TS); err == nil {
+			return t.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unrecognized time format for oldest timestamp: %q", out.TS)
 }
 
 // GetTotalTransmissionTime returns the total transmission time for a callsign

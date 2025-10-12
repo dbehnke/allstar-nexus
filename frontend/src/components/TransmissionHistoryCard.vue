@@ -16,7 +16,7 @@
           </thead>
           <tbody>
             <tr v-for="(t, idx) in pagedTransmissions" :key="idx">
-              <td :title="formatTitle(getTimestamp(t))">{{ formatRelative(getTimestamp(t)) }}</td>
+              <td :title="formatTitle(getTimestamp(t))">{{ formatRelativeRow(t) }}</td>
               <td>
                 <a v-if="t.callsign" class="callsign" :href="`https://www.qrz.com/db/${(t.callsign||'').toUpperCase()}`" target="_blank" rel="noopener noreferrer">{{ t.callsign }}</a>
                 <span v-else class="muted">—</span>
@@ -87,6 +87,19 @@ function formatRelative(at) {
     const h = Math.floor(diff/3600)
     return `${h}h ${Math.floor((diff%3600)/60)}m ago`
   } catch { return '' }
+}
+
+// Prefer showing time since END of transmission (start + duration)
+function formatRelativeRow(t) {
+  try {
+    const at = getTimestamp(t)
+    const startMs = parseToMs(at)
+    if (!Number.isFinite(startMs)) return '—'
+    const dur = Number(getDuration(t) || 0)
+    const endMs = startMs + (Number.isFinite(dur) ? dur * 1000 : 0)
+    const baseMs = endMs > 0 ? endMs : startMs
+    return formatRelative(baseMs)
+  } catch { return '—' }
 }
 
 function getDuration(t) {

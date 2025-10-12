@@ -26,6 +26,7 @@ func setupDB(t *testing.T) *gorm.DB {
 		&models.LevelConfig{},
 		&models.TransmissionLog{},
 		&models.XPActivityLog{},
+		&models.TallyState{},
 	); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
@@ -38,6 +39,7 @@ func TestLevelUp_CarryoverXP(t *testing.T) {
 	profileRepo := repository.NewCallsignProfileRepo(gdb)
 	txRepo := repository.NewTransmissionLogRepository(gdb)
 	activityRepo := repository.NewXPActivityRepo(gdb)
+	stateRepo := repository.NewTallyStateRepo(gdb)
 
 	// Seed level config
 	reqs := gamification.CalculateLevelRequirements()
@@ -64,7 +66,7 @@ func TestLevelUp_CarryoverXP(t *testing.T) {
 	}
 
 	cfg := &gamification.Config{CapsEnabled: false, RestedEnabled: false, DREnabled: false, KerchunkEnabled: false}
-	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, cfg, 30*time.Minute, zaptestLogger())
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger())
 	if err := ts.Start(); err != nil {
 		t.Fatalf("start tally: %v", err)
 	}
@@ -88,6 +90,7 @@ func TestRenownTransition_Level59To60(t *testing.T) {
 	profileRepo := repository.NewCallsignProfileRepo(gdb)
 	txRepo := repository.NewTransmissionLogRepository(gdb)
 	activityRepo := repository.NewXPActivityRepo(gdb)
+	stateRepo := repository.NewTallyStateRepo(gdb)
 
 	// Seed level config
 	reqs := gamification.CalculateLevelRequirements()
@@ -115,7 +118,7 @@ func TestRenownTransition_Level59To60(t *testing.T) {
 	}
 
 	cfg := &gamification.Config{CapsEnabled: false, RestedEnabled: false, DREnabled: false, KerchunkEnabled: false}
-	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, cfg, 30*time.Minute, zaptestLogger())
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger())
 	if err := ts.Start(); err != nil {
 		t.Fatalf("start tally: %v", err)
 	}

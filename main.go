@@ -20,6 +20,7 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/middleware"
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
+	"github.com/dbehnke/allstar-nexus/backend/server"
 	"github.com/dbehnke/allstar-nexus/internal/ami"
 	"github.com/dbehnke/allstar-nexus/internal/astdb"
 	"github.com/dbehnke/allstar-nexus/internal/core"
@@ -69,14 +70,21 @@ func main() {
 		&models.CallsignProfile{},
 		&models.LevelConfig{},
 		&models.XPActivityLog{},
+		&models.TallyState{},
 	); err != nil {
 		log.Fatalf("GORM auto-migrate error: %v", err)
 	}
 	logger.Info("GORM database initialized successfully")
 
+	// Repository variables (declare so closures later can access)
+	var txLogRepo *repository.TransmissionLogRepository
+	var nodeInfoRepo *repository.NodeInfoRepository
+	var profileRepo *repository.CallsignProfileRepo
+	var levelConfigRepo *repository.LevelConfigRepo
+
 	// Initialize repositories
-	txLogRepo := repository.NewTransmissionLogRepository(gormDB)
-	nodeInfoRepo := repository.NewNodeInfoRepository(gormDB)
+	txLogRepo = repository.NewTransmissionLogRepository(gormDB)
+	nodeInfoRepo = repository.NewNodeInfoRepository(gormDB)
 
 	// Initialize astdb downloader with node info repository
 	astdbDownloader := astdb.NewDownloader(cfg.AstDBURL, cfg.AstDBPath, cfg.AstDBUpdateHours, logger)
@@ -161,9 +169,10 @@ func main() {
 		logger.Info("initializing gamification system...")
 
 		// Initialize gamification repositories
-		profileRepo := repository.NewCallsignProfileRepo(gormDB)
-		levelConfigRepo := repository.NewLevelConfigRepo(gormDB)
+		profileRepo = repository.NewCallsignProfileRepo(gormDB)
+		levelConfigRepo = repository.NewLevelConfigRepo(gormDB)
 		activityRepo := repository.NewXPActivityRepo(gormDB)
+		stateRepo := repository.NewTallyStateRepo(gormDB)
 
 		// Calculate and seed level requirements (configurable)
 		var levelRequirements map[int]int
@@ -223,6 +232,7 @@ func main() {
 			profileRepo,
 			levelConfigRepo,
 			activityRepo,
+			stateRepo,
 			gameCfg,
 			tallyInterval,
 			logger,
@@ -260,12 +270,16 @@ func main() {
 	}
 
 	// Serve Vue.js dashboard from embedded frontend/dist
-	staticFS, err := fs.Sub(frontendFiles, "frontend/dist")
-	if err != nil {
+	if _, err := fs.Sub(frontendFiles, "frontend/dist"); err != nil {
 		log.Fatalf("embed fs error: %v", err)
 	}
 	log.Printf("serving Vue.js dashboard at /")
-	mux.Handle("/", http.FileServer(http.FS(staticFS)))
+	// Use SPA fallback so direct reloads on client routes (e.g., /talker) work.
+	spaHandler, err := server.SPAFileServer(frontendFiles, "frontend/dist")
+	if err != nil {
+		log.Fatalf("spa file server error: %v", err)
+	}
+	mux.Handle("/", spaHandler)
 
 	// AMI + WebSocket wiring (conditional). Always provide a /ws endpoint so the UI never hard-fails.
 	var hub *web.Hub
@@ -368,6 +382,44 @@ func main() {
 				}
 			}
 		}()
+
+		// If tally service is running, broadcast a WS event when it completes
+		if tallyService != nil {
+			// When a tally completes, broadcast the summary and include the current leaderboard
+			// so clients can update immediately without an extra HTTP fetch.
+			tallyService.OnTallyComplete = func(summary gamification.TallySummary) {
+				if hub == nil {
+					return
+				}
+				// Build a lightweight scoreboard snapshot to send over WS
+				ctx := context.Background()
+				profiles, err := profileRepo.GetLeaderboard(ctx, 50)
+				if err != nil {
+					// fallback: broadcast only summary
+					hub.BroadcastTallyCompleted(summary)
+					return
+				}
+				levelCfg, _ := levelConfigRepo.GetAllAsMap(ctx)
+				// Build entries similar to API response shape
+				entries := make([]map[string]interface{}, 0, len(profiles))
+				for _, p := range profiles {
+					nextXP := 0
+					if xp, ok := levelCfg[p.Level+1]; ok {
+						nextXP = xp
+					}
+					totalTime, _ := txLogRepo.GetTotalTransmissionTime(p.Callsign)
+					entries = append(entries, map[string]interface{}{
+						"callsign":                p.Callsign,
+						"level":                   p.Level,
+						"experience_points":       p.ExperiencePoints,
+						"renown_level":            p.RenownLevel,
+						"next_level_xp":           nextXP,
+						"total_talk_time_seconds": totalTime,
+					})
+				}
+				hub.BroadcastTallyCompleted(map[string]interface{}{"summary": summary, "scoreboard": entries})
+			}
+		}
 
 		log.Printf("starting AMI connector (will auto-reconnect on failure)")
 		if err := conn.Start(ctxAMI); err != nil {

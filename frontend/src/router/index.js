@@ -38,6 +38,7 @@ const routes = [
     name: 'Voter',
     component: VoterDisplay
   }
+  
 ]
 
 const router = createRouter({

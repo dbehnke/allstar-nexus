@@ -221,7 +221,7 @@ import { computed, watch, reactive, ref, onMounted, onUnmounted } from 'vue'
 import Card from './Card.vue'
 import { useNodeStore } from '../stores/node'
 import { useTxNotifications } from '../composables/useTxNotifications'
-import { cfg } from '../env'
+import { cfg as defaultCfg } from '../env'
 import { useAuthStore } from '../stores/auth'
 import { logger } from '../utils/logger'
 
@@ -233,13 +233,16 @@ const props = defineProps({
   data: {
     type: Object,
     required: true
-  }
-  ,
+  },
   showLostColumn: {
     type: Boolean,
     required: false,
     default: true
-  }
+  },
+  // Optional injected providers for easier testing/mounting
+  nodeStore: { type: Object, required: false },
+  txNotifications: { type: Object, required: false },
+  cfgProp: { type: Object, required: false }
 })
 
 logger.debug('[SourceNodeCard] Component loaded, props:', {
@@ -249,7 +252,8 @@ logger.debug('[SourceNodeCard] Component loaded, props:', {
   dataSourceNodeID: props.data?.source_node_id || props.data?.sourceNodeID
 })
 
-const nodeStore = useNodeStore()
+// Prefer an injected nodeStore for tests; otherwise use the canonical Pinia store
+const nodeStore = props.nodeStore || useNodeStore()
 
 // Get the actual source node ID from props or data
 const actualSourceNodeID = computed(() => {
@@ -258,8 +262,8 @@ const actualSourceNodeID = computed(() => {
 
 logger.debug('[SourceNodeCard] Actual source node ID:', actualSourceNodeID.value)
 
-// Initialize TX notifications for this source node
-const txNotif = useTxNotifications(actualSourceNodeID.value)
+// Initialize TX notifications for this source node; allow injection for tests
+const txNotif = props.txNotifications || useTxNotifications(actualSourceNodeID.value)
 logger.info('[SourceNodeCard] TX notifications initialized for node:', actualSourceNodeID.value)
 
 // Get display node ID from either prop or data
@@ -307,6 +311,9 @@ const recentRemoved = reactive({}) // nodeID -> { raw, removedAt }
 // can show steadily-increasing connected timers even across remounts.
 // nodeStore.connectionSeenAt is a Ref, so use its .value (fall back to a local reactive map).
 const seenAt = (nodeStore.connectionSeenAt && nodeStore.connectionSeenAt.value) ? nodeStore.connectionSeenAt.value : reactive({}) // nodeID -> first-seen timestamp (ms)
+
+// Provide cfg from injected prop or default
+const cfg = props.cfgProp || defaultCfg
 
 // Convert adjacent nodes map to sorted array - MUST BE DEFINED BEFORE WATCH
 const adjacentList = computed(() => {
@@ -430,6 +437,11 @@ const adjacentList = computed(() => {
       // the removal timestamp so the UI shows time-since-lost. For present nodes, use a persistent
       // seenAt timestamp so the counter increments rather than resetting to now on every recompute.
       let connectedSince = raw.ConnectedSince || raw.connected_since || raw.connectedSince || raw.connected_at || null
+      // Normalize to milliseconds when provided as string/seconds
+      if (connectedSince) {
+        const parsed = parseAnyToMs(connectedSince)
+        connectedSince = Number.isFinite(parsed) ? parsed : connectedSince
+      }
       if (entry._stale) {
         if (entry.removedAt) {
           // use the removedAt (ms since epoch) so formatConnectedTime shows time-since-lost
@@ -454,7 +466,7 @@ const adjacentList = computed(() => {
           } catch (e) {}
         }
         if (connectedSince) {
-          // server supplied timestamp - use it
+          // server supplied timestamp - already normalized
         } else if (seenAt[id]) {
           // use previously recorded first-seen timestamp so the counter increments
           connectedSince = seenAt[id]
@@ -734,13 +746,57 @@ const rxActive = computed(() => {
   return Object.values(nodes).some(n => n && (n.IsKeyed || n.IsTransmitting || n.keyed))
 })
 
+function parseAnyToMs(v) {
+  if (v == null) return NaN
+  // Numeric epoch (seconds or ms)
+  if (typeof v === 'number') {
+    // Heuristic: < 1e12 => seconds, else milliseconds
+    return v < 1e12 ? v * 1000 : v
+  }
+  if (typeof v === 'string') {
+    const s = v.trim()
+    // Pure digits => epoch seconds/ms
+    if (/^\d+$/.test(s)) {
+      const n = Number(s)
+      return n < 1e12 ? n * 1000 : n
+    }
+    // Append Z if naive ISO-like string (treat as UTC)
+    const hasTZ = /Z|[+\-]\d{2}:?\d{2}/i.test(s)
+    const iso = hasTZ ? s : `${s}Z`
+    const ms = Date.parse(iso)
+    return Number.isFinite(ms) ? ms : NaN
+  }
+  const d = new Date(v).getTime()
+  return Number.isFinite(d) ? d : NaN
+}
+
 function formatConnectedTime(timestamp) {
   if (!timestamp) return '-'
   const nowRef = nodeStore.nowTick
   const now = (typeof nowRef === 'number') ? nowRef : ((nowRef && nowRef.value) || Date.now())
-  const connectedAt = new Date(timestamp).getTime()
-  const diffSec = Math.floor((now - connectedAt) / 1000)
+  let connectedAt = parseAnyToMs(timestamp)
+  if (!Number.isFinite(connectedAt)) return '-'
+  // If connectedAt is somehow in the future, clamp to now
+  if (connectedAt > now) connectedAt = now
+  let diffSec = Math.floor((now - connectedAt) / 1000)
 
+  // Guard against absurd durations caused by unit mistakes; attempt a correction once
+  // If diff looks like thousands of years, assume timestamp may have been provided in seconds-but-treated-as-ms or vice versa
+  const HUNDRED_YEARS_SEC = 100 * 365 * 24 * 3600
+  if (diffSec > HUNDRED_YEARS_SEC) {
+    // Try reinterpreting original input more strictly
+    const raw = typeof timestamp === 'string' ? timestamp.trim() : timestamp
+    if (typeof raw === 'number') {
+      // If number and >= 1e12, maybe it was milliseconds but parse went wrong; if < 1e12, maybe seconds
+      connectedAt = raw < 1e12 ? raw * 1000 : raw
+    } else if (typeof raw === 'string' && /^\d+$/.test(raw)) {
+      const n = Number(raw)
+      connectedAt = n < 1e12 ? n * 1000 : n
+    }
+    diffSec = Math.floor(((typeof now === 'number' ? now : Date.now()) - connectedAt) / 1000)
+  }
+
+  if (!Number.isFinite(diffSec) || diffSec < 0) return '-'
   if (diffSec < 60) return `${diffSec}s`
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m`
   const hours = Math.floor(diffSec / 3600)

@@ -6,14 +6,15 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 )
 
 type GamificationAPI struct {
-	profileRepo *repository.CallsignProfileRepo
-	txLogRepo   *repository.TransmissionLogRepository
-	levelRepo   *repository.LevelConfigRepo
+	profileRepo  *repository.CallsignProfileRepo
+	txLogRepo    *repository.TransmissionLogRepository
+	levelRepo    *repository.LevelConfigRepo
 	activityRepo *repository.XPActivityRepo
 }
 
@@ -159,18 +160,18 @@ func (g *GamificationAPI) Profile(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"callsign":                 profile.Callsign,
-		"level":                    profile.Level,
-		"experience_points":        profile.ExperiencePoints,
-		"renown_level":             profile.RenownLevel,
-		"next_level_xp":            nextLevelXP,
-		"total_talk_time_seconds":  totalTime,
-		"rested_bonus_hours":       profile.RestedBonusSeconds / 3600,
-		"rested_bonus_seconds":     profile.RestedBonusSeconds,
-		"last_transmission_at":     profile.LastTransmissionAt,
-		"weekly_xp":                weeklyXP,
-		"daily_xp":                 dailyXP,
-		"daily_breakdown":          breakdown,
+		"callsign":                profile.Callsign,
+		"level":                   profile.Level,
+		"experience_points":       profile.ExperiencePoints,
+		"renown_level":            profile.RenownLevel,
+		"next_level_xp":           nextLevelXP,
+		"total_talk_time_seconds": totalTime,
+		"rested_bonus_hours":      profile.RestedBonusSeconds / 3600,
+		"rested_bonus_seconds":    profile.RestedBonusSeconds,
+		"last_transmission_at":    profile.LastTransmissionAt,
+		"weekly_xp":               weeklyXP,
+		"daily_xp":                dailyXP,
+		"daily_breakdown":         breakdown,
 	})
 }
 
@@ -208,10 +209,12 @@ func (g *GamificationAPI) RecentTransmissions(w http.ResponseWriter, r *http.Req
 
 	var entries []TransmissionEntry
 	for _, log := range logs {
+		// Ensure we emit a correctly labeled UTC timestamp in RFC3339 format
+		ts := log.TimestampStart.UTC().Format(time.RFC3339)
 		entries = append(entries, TransmissionEntry{
 			Callsign:        log.Callsign,
 			Node:            log.AdjacentLinkID,
-			TimestampStart:  log.TimestampStart.Format("2006-01-02T15:04:05Z"),
+			TimestampStart:  ts,
 			DurationSeconds: log.DurationSeconds,
 		})
 	}

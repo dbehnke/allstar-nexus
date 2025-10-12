@@ -18,7 +18,7 @@
 
       <div class="navbar-menu" :class="{ 'mobile-open': mobileMenuOpen }">
         <router-link to="/" class="nav-link" @click="mobileMenuOpen = false">Dashboard</router-link>
-  <router-link to="/talker" class="nav-link" @click="mobileMenuOpen = false">Talker Log</router-link>
+        <router-link to="/talker" class="nav-link" @click="mobileMenuOpen = false">Talker Log</router-link>
         <router-link to="/lookup" class="nav-link" @click="mobileMenuOpen = false">Node Lookup</router-link>
         <router-link to="/network-map" class="nav-link" @click="mobileMenuOpen = false">Network Map</router-link>
         <router-link to="/rpt-stats" class="nav-link" v-if="authStore.isAuthenticated" @click="mobileMenuOpen = false">RPT Stats</router-link>
@@ -29,70 +29,30 @@
         <button @click="cycleTheme" class="btn-icon theme-toggle" :title="themeTooltip">
           <span v-if="theme === 'light'">☀️</span>
           <span v-else-if="theme === 'dark'">🌙</span>
-          <span v-else>🖥️</span>
         </button>
-
-        <div v-if="!authStore.authed" class="login-toggle">
-          <button @click="showLogin = !showLogin; mobileMenuOpen = false" class="btn-secondary">
-            {{ showLogin ? 'Hide Login' : 'Admin Login' }}
-          </button>
-        </div>
-        <div v-else class="user-info">
-          <span class="user-role">{{ authStore.userRole }}</span>
-          <button @click="logout; mobileMenuOpen = false" class="btn-secondary">Logout</button>
-        </div>
       </div>
     </nav>
-
-    <div v-if="showLogin && !authStore.authed" class="login-panel">
-      <div class="login-container">
-        <h3>Admin Login</h3>
-        <form @submit.prevent="login">
-          <div class="field">
-            <label>Email</label>
-            <input v-model="email" type="email" required />
-          </div>
-          <div class="field">
-            <label>Password</label>
-            <input v-model="password" type="password" required />
-          </div>
-          <div class="actions">
-            <button type="submit" :disabled="loggingIn" class="btn-primary">
-              {{ loggingIn ? 'Logging in...' : 'Login' }}
-            </button>
-          </div>
-          <div v-if="loginError" class="error">{{ loginError }}</div>
-        </form>
-      </div>
-    </div>
 
     <main class="main-content">
       <router-view />
     </main>
-
-    <footer class="footer">
-      <div class="footer-content">
-  <p>&copy; 2025 Allstar Nexus<span v-if="status && status.version">&nbsp;{{ status.version }}</span>.</p>
-  <p>Made with ❤️ in Macomb, MI</p>
-        <p v-if="status && status.build_time">
-          Build: {{ new Date(status.build_time).toLocaleString() }}
-        </p>
-      </div>
-    </footer>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { onMounted, computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTheme } from './composables/useTheme'
+import { initGlobalTxNotifications } from './composables/useGlobalTxNotifications'
+import { logger } from './utils/logger'
 import { useAuthStore } from './stores/auth'
 import { useNodeStore } from './stores/node'
-import { useTheme } from './composables/useTheme'
-import { logger } from './utils/logger'
+import { useUIStore } from './stores/ui'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const nodeStore = useNodeStore()
+const uiStore = useUIStore()
 const { theme, setTheme } = useTheme()
 
 const mobileMenuOpen = ref(false)
@@ -155,7 +115,7 @@ async function login() {
     password.value = ''
   } catch (e) {
     loginError.value = 'Network error'
-  logger.error('Login error:', e)
+    logger.error('Login error:', e)
   } finally {
     loggingIn.value = false
   }
@@ -170,6 +130,19 @@ function logout() {
 if (authStore.token) {
   authStore.authed = true
 }
+
+// Initialize global TX notifications so they work regardless of current view
+onMounted(() => {
+  try { initGlobalTxNotifications() } catch (e) { logger.debug('initGlobalTxNotifications failed', e) }
+
+  // Dynamically import dev-only test helpers in development builds. This keeps the
+  // helper module out of production bundles.
+  try {
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV) {
+      import('./dev/test-helpers.js').then(m => { try { m && m.default && m.default() } catch (e) {} }).catch(() => {})
+    }
+  } catch (e) {}
+})
 </script>
 
 <style>
@@ -249,6 +222,32 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* Toasts */
+.toast-container {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000;
+}
+.toast {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px var(--shadow);
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  min-width: 220px;
+  text-align: center;
+}
+.toast.success { border-color: #16a34a; }
+.toast.info { border-color: var(--accent-primary); }
+.toast.warn { border-color: #f59e0b; }
+.toast.error { border-color: #ef4444; }
 
 /* Navbar */
 .navbar {

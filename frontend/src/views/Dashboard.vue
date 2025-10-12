@@ -3,17 +3,39 @@
     <!-- Global gauges removed: counters are shown inside each SourceNodeCard -->
 
     <div class="dashboard-grid">
-      <!-- Source Node Cards - Full Width -->
-      <div v-for="(data, sourceNodeID) in nodeStore.sourceNodes" :key="sourceNodeID" class="grid-item full-width">
-        <SourceNodeCard :source-node-id="parseInt(sourceNodeID)" :data="data" />
-      </div>
-
       <!-- Top Links -->
       <div class="grid-item full-width">
         <TopLinksCard :top-links="nodeStore.topLinks" @refresh="refreshStats" />
       </div>
 
-      <!-- Talker Log moved to dedicated /talker route -->
+      <!-- Talker Log + Scoreboard (moved back to dashboard) -->
+      <div class="grid-item">
+        <div class="talker-section">
+          <h3>Talker Log</h3>
+          <div class="talker-log">
+            <div class="log-entries">
+              <div v-for="entry in talkerDisplay" :key="entry.at" class="log-entry">
+                <div class="time">{{ formatRelative(entry.at) }}</div>
+                <div class="kind" v-html="entry.displayLabel"></div>
+              </div>
+              <div v-if="!talkerDisplay.length" class="no-data">No talker events yet</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-item">
+        <ScoreboardCard :scoreboard="nodeStore.scoreboard" :level-config="nodeStore.levelConfig" @refresh="nodeStore.fetchScoreboard" />
+      </div>
+
+      <!-- Render SourceNodeCard for each source node so E2E WS tests can observe cards -->
+      <div class="grid-item full-width">
+        <h3>Source Nodes</h3>
+        <div v-if="Object.keys(nodeStore.sourceNodes || {}).length === 0" class="no-data">No source nodes</div>
+        <div v-for="(entry, key) in nodeStore.sourceNodes" :key="key" class="source-node-wrapper">
+          <SourceNodeCard :source-node-id="Number(key)" :data="entry" />
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -28,6 +50,7 @@ import { logger } from '../utils/logger'
 import Card from '../components/Card.vue'
 import TopLinksCard from '../components/TopLinksCard.vue'
 import SourceNodeCard from '../components/SourceNodeCard.vue'
+import ScoreboardCard from '../components/ScoreboardCard.vue'
 
 const nodeStore = useNodeStore()
 const authStore = useAuthStore()
@@ -126,12 +149,21 @@ onMounted(() => {
   initWS()
   refreshStats()
   nodeStore.startTickTimer()
+  // Queue a scoreboard reload on mount so WS initial snapshot can populate first,
+  // then ensure we poll the scoreboard every minute to keep it fresh.
+  try {
+    nodeStore.queueScoreboardReload(600, 50)
+    nodeStore.startScoreboardPoll(60000, 50)
+  } catch (e) {}
+  
 })
 
 onUnmounted(() => {
   if (wsCloser) {
     wsCloser()
   }
+  try { nodeStore.stopScoreboardPoll() } catch (e) {}
+  
 })
 
 // helper to format durations (seconds -> human friendly)

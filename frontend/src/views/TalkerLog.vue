@@ -1,5 +1,6 @@
 <template>
   <div class="talker-log-page">
+    <h2 class="page-title">Talker Log</h2>
     <div class="grid-layout">
       <TransmissionHistoryCard
         :transmissions="recentTransmissions"
@@ -7,70 +8,45 @@
         :totalPages="totalPages"
         @page-change="handlePageChange"
       />
-
-      <ScoreboardCard
-        :scoreboard="scoreboard"
-        :level-config="levelConfig"
-        @refresh="refreshScoreboard"
-      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import TransmissionHistoryCard from '../components/TransmissionHistoryCard.vue'
-import ScoreboardCard from '../components/ScoreboardCard.vue'
-import { useAuthStore } from '../stores/auth'
+import { useNodeStore } from '../stores/node'
 
-const scoreboard = ref([])
-const recentTransmissions = ref([])
+const nodeStore = useNodeStore()
+const scoreboard = nodeStore.scoreboard
+const recentTransmissions = nodeStore.recentTransmissions
+const levelConfig = nodeStore.levelConfig
 const currentPage = ref(1)
 const totalPages = ref(5)
-const levelConfig = ref({})
-
-async function fetchScoreboard() {
-  const auth = useAuthStore()
-  const res = await fetch('/api/gamification/scoreboard?limit=50', {
-    headers: auth.getAuthHeaders()
-  })
-  const data = await res.json()
-  scoreboard.value = (data && (data.scoreboard || data.data || data.results)) || []
-}
-
-async function fetchRecentTransmissions(page = 1) {
-  const limit = 10
-  const offset = (page - 1) * limit
-  const auth = useAuthStore()
-  const res = await fetch(`/api/gamification/recent-transmissions?limit=50&offset=${offset}`, {
-    headers: auth.getAuthHeaders()
-  })
-  const data = await res.json()
-  recentTransmissions.value = (data && (data.transmissions || data.data || data.results)) || []
-  totalPages.value = Math.ceil(50 / limit)
-}
-
-async function fetchLevelConfig() {
-  try {
-    const res = await fetch('/api/gamification/level-config')
-    const data = await res.json()
-    levelConfig.value = (data && (data.config || data.data || {})) || {}
-  } catch {}
-}
 
 function handlePageChange(page) {
   currentPage.value = page
-  fetchRecentTransmissions(page)
+  // Our API uses limit 50/offset; keep same page calc
+  nodeStore.fetchRecentTransmissions(50, (page - 1) * 50)
 }
 
 function refreshScoreboard() {
-  fetchScoreboard()
+  nodeStore.fetchScoreboard(50)
 }
 
+let intervalId = null
 onMounted(() => {
-  fetchScoreboard()
-  fetchRecentTransmissions(1)
-  fetchLevelConfig()
+  // Scoreboard is displayed on the Dashboard; still fetch recent transmissions here
+  nodeStore.fetchRecentTransmissions(50, 0)
+  nodeStore.fetchLevelConfig()
+  // periodic refresh every 60s to keep list fresh even if WS missed
+  intervalId = setInterval(() => {
+    nodeStore.fetchRecentTransmissions(50, (currentPage.value - 1) * 50)
+  }, 60000)
+})
+
+onUnmounted(() => {
+  if (intervalId) clearInterval(intervalId)
 })
 </script>
 
@@ -80,6 +56,8 @@ onMounted(() => {
   max-width: 1600px;
   margin: 0 auto;
 }
+
+.page-title { margin: 0 0 0.5rem 0; font-size: 1.25rem; color: var(--text-secondary); }
 
 .grid-layout {
   display: grid;
