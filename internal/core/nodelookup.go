@@ -63,7 +63,7 @@ func (nls *NodeLookupService) EnrichLinkInfo(link *LinkInfo) {
 	if link.Node < 0 {
 		if name, found := getTextNodeName(link.Node); found {
 			link.NodeCallsign = name
-			link.NodeDescription = "VOIP Node"
+			link.NodeDescription = "VOIP Client"
 		}
 		return
 	}

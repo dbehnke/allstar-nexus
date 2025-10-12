@@ -160,3 +160,47 @@ func TestPerLinkTxStop(t *testing.T) {
 		t.Fatalf("expected tx start/end timestamps recorded: %+v", after)
 	}
 }
+
+func TestTextNodeCallsignAndDescription(t *testing.T) {
+	sm := NewStateManager()
+	// Test with a text-based node (callsign without numeric ID)
+	alinks := "2,W1ABCTU,KF8STTK"
+	sm.apply(ami.Message{Headers: map[string]string{"RPT_ALINKS": alinks}})
+	
+	snap := sm.Snapshot()
+	if len(snap.LinksDetailed) != 2 {
+		t.Fatalf("expected 2 links, got %d", len(snap.LinksDetailed))
+	}
+	
+	// Both should have negative node IDs (hashed)
+	for _, link := range snap.LinksDetailed {
+		if link.Node >= 0 {
+			t.Errorf("expected negative node ID for text node, got %d", link.Node)
+		}
+		if link.NodeCallsign == "" {
+			t.Errorf("expected callsign to be set for node %d", link.Node)
+		}
+		if link.NodeDescription != "VOIP Client" {
+			t.Errorf("expected 'VOIP Client' description, got '%s'", link.NodeDescription)
+		}
+	}
+	
+	// Check specific callsigns are preserved
+	foundW1ABC := false
+	foundKF8ST := false
+	for _, link := range snap.LinksDetailed {
+		if link.NodeCallsign == "W1ABC" {
+			foundW1ABC = true
+		}
+		if link.NodeCallsign == "KF8ST" {
+			foundKF8ST = true
+		}
+	}
+	
+	if !foundW1ABC {
+		t.Error("expected to find W1ABC callsign")
+	}
+	if !foundKF8ST {
+		t.Error("expected to find KF8ST callsign")
+	}
+}
