@@ -159,12 +159,16 @@
           <tbody>
             <tr v-for="node in adjacentList" :key="node.NodeID" :class="{ transmitting: node.IsTransmitting, stale: node._stale, 'newly-connected': node.IsNew }">
               <td>
-                <a :href="`https://stats.allstarlink.org/stats/${node.NodeID}`"
+                <a v-if="node.NodeID >= 0"
+                   :href="`https://stats.allstarlink.org/stats/${node.NodeID}`"
                    target="_blank"
                    rel="noopener noreferrer"
                    class="node-link">
                   {{ node.NodeID }}
                 </a>
+                <span v-else class="text-node">
+                  {{ node.Callsign || node.NodeID }}
+                </span>
               </td>
               <td>
                 <a v-if="node.Callsign"
