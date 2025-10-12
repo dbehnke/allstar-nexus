@@ -44,7 +44,7 @@ func (r *XPActivityRepo) GetWeeklyXP(ctx context.Context, callsign string) (int,
 	var totalXP int64
 	err := r.db.WithContext(ctx).
 		Model(&models.XPActivityLog{}).
-		Where("callsign = ? AND datetime(hour_bucket) >= datetime(?)", callsign, startOfWeek).
+		Where("callsign = ? AND hour_bucket >= ?", callsign, startOfWeek).
 		Select("COALESCE(SUM(awarded_xp), 0)").
 		Scan(&totalXP).Error
 	return int(totalXP), err
@@ -56,7 +56,7 @@ func (r *XPActivityRepo) GetDailyXP(ctx context.Context, callsign string) (int, 
 	var totalXP int64
 	err := r.db.WithContext(ctx).
 		Model(&models.XPActivityLog{}).
-		Where("callsign = ? AND datetime(hour_bucket) >= datetime(?)", callsign, startOfDay).
+		Where("callsign = ? AND hour_bucket >= ?", callsign, startOfDay).
 		Select("COALESCE(SUM(awarded_xp), 0)").
 		Scan(&totalXP).Error
 	return int(totalXP), err
@@ -68,7 +68,7 @@ func (r *XPActivityRepo) GetLast24Hours(ctx context.Context, callsign string) ([
 	cutoff := time.Now().Add(-24 * time.Hour)
 	var logs []models.XPActivityLog
 	err := r.db.WithContext(ctx).
-		Where("callsign = ? AND datetime(created_at) >= datetime(?)", callsign, cutoff).
+		Where("callsign = ? AND created_at >= ?", callsign, cutoff).
 		Order("created_at ASC").
 		Find(&logs).Error
 	return logs, err

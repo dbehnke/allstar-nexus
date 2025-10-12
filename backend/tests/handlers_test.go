@@ -16,6 +16,8 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	_ "modernc.org/sqlite"
 )
 
 type envelope struct {
@@ -44,7 +46,10 @@ func newTestServer(t *testing.T) (*httptest.Server, func()) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	gdb, err := gorm.Open(sqlite.New(sqlite.Config{
+		DriverName: "sqlite",
+		DSN:        dbPath,
+	}), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open gorm sqlite: %v", err)
 	}
