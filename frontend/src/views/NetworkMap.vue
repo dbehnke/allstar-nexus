@@ -34,29 +34,41 @@ import Card from '../components/Card.vue'
 const nodeStore = useNodeStore()
 const selectedNode = ref(null)
 
-// Get list of configured nodes from status
+// Get list of configured nodes from source nodes
 const configuredNodes = computed(() => {
-  if (!nodeStore.status) return []
-  
-  // Check for multiple nodes array format (future enhancement)
-  if (nodeStore.status.nodes && Array.isArray(nodeStore.status.nodes)) {
-    return nodeStore.status.nodes.map(n => n.node_id).filter(id => id > 0)
+  // Get source nodes from the store
+  const sourceNodes = nodeStore.sourceNodes || {}
+  const nodeIds = Object.keys(sourceNodes).map(k => Number(k)).filter(id => !isNaN(id) && id > 0)
+
+  if (nodeIds.length > 0) {
+    return nodeIds
   }
-  
-  // Fall back to single node_id
-  if (nodeStore.status.node_id && nodeStore.status.node_id > 0) {
+
+  // Fallback: check status for legacy single node_id
+  if (nodeStore.status?.node_id && nodeStore.status.node_id > 0) {
     return [nodeStore.status.node_id]
   }
-  
+
   return []
 })
 
-// Get node label (callsign if available, otherwise just node number)
+// Get node label (description/location if available, otherwise just node number)
 function getNodeLabel(nodeId) {
+  // Try to get info from source nodes first
+  const sourceNode = nodeStore.sourceNodes?.[nodeId]
+  if (sourceNode) {
+    const desc = sourceNode.description || sourceNode.Description
+    const loc = sourceNode.location || sourceNode.Location
+    if (desc && loc) return `${nodeId} - ${desc} - ${loc}`
+    if (desc) return `${nodeId} - ${desc}`
+  }
+
+  // Fallback to link info
   const link = nodeStore.links.find(l => l.node === nodeId)
   if (link && link.node_callsign) {
     return `${link.node_callsign} (${nodeId})`
   }
+
   return `Node ${nodeId}`
 }
 

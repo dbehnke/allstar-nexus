@@ -198,6 +198,27 @@ export const useNodeStore = defineStore('node', () => {
       } catch (e) {}
     }, 800)
   }
+
+  async function fetchRecentTransmissions(limit = 50, offset = 0) {
+    try {
+      let headers = {}
+      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) {}
+      const res = await fetch(`/api/gamification/recent-transmissions?limit=${limit}&offset=${offset}`, { headers })
+      const data = await res.json()
+      recentTransmissions.value = (data && (data.transmissions || data.data || data.results)) || []
+    } catch (e) { logger.debug('fetchRecentTransmissions failed', e) }
+  }
+
+  async function fetchLevelConfig() {
+    try {
+      let headers = {}
+      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) {}
+      const res = await fetch('/api/gamification/level-config', { headers })
+      const data = await res.json()
+      levelConfig.value = (data && (data.config || data.data)) || {}
+    } catch (e) { logger.debug('fetchLevelConfig failed', e) }
+  }
+
   return {
     scoreboard,
     recentTransmissions,
@@ -214,8 +235,9 @@ export const useNodeStore = defineStore('node', () => {
     queueScoreboardReload,
     startScoreboardPoll,
     stopScoreboardPoll,
-    triggerRecentTxRefresh
-    ,
+    triggerRecentTxRefresh,
+    fetchRecentTransmissions,
+    fetchLevelConfig,
     // restored helpers
     setTopLinks,
     loadTalkerHistory,

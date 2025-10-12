@@ -29,6 +29,8 @@ type API struct {
 	StateManager StateManagerInterface
 	AstDBPath    string
 	TriggerPoll  func(nodeID int)
+	BuildVersion string
+	BuildTime    string
 }
 
 func New(db *gorm.DB, secret string, ttl time.Duration) *API {
@@ -60,6 +62,12 @@ func (a *API) SetStateManager(sm StateManagerInterface) {
 // SetTriggerPoll configures a function to trigger a server-side poll (optionally for a specific node)
 func (a *API) SetTriggerPoll(fn func(nodeID int)) {
 	a.TriggerPoll = fn
+}
+
+// SetBuildInfo sets the build version and build time
+func (a *API) SetBuildInfo(version, buildTime string) {
+	a.BuildVersion = version
+	a.BuildTime = buildTime
 }
 
 func (a *API) Register(w http.ResponseWriter, r *http.Request) {
@@ -357,6 +365,14 @@ func (a *API) currentUser(r *http.Request) (*repository.SafeUser, int) {
 
 func Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"status": "ok"})
+}
+
+// Version returns the build version and build time
+func (a *API) Version(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{
+		"version":    a.BuildVersion,
+		"build_time": a.BuildTime,
+	})
 }
 
 // PollNow triggers an immediate poll. Optional query param node specifies a node to poll.

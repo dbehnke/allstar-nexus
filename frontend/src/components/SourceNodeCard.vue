@@ -2,10 +2,6 @@
   <Card :title="cardTitle">
     <div class="source-node-info">
       <div class="node-header">
-        <div class="node-id">
-          <span class="label">Source Node:</span>
-          <span class="value">{{ displayNodeID }}</span>
-        </div>
         <div class="header-right">
           <div class="link-counters">
             <div class="counter">
@@ -152,12 +148,11 @@
               <th>Callsign</th>
               <th>Description</th>
               <th>Status</th>
-              <th>Mode</th>
-              <th>Direction</th>
-              <th>IP</th>
-              <th>Connected</th>
+              <th class="hide-mobile">Mode</th>
+              <th class="hide-mobile">Direction</th>
+              <th class="hide-mobile">IP</th>
+              <th class="hide-mobile">Connected</th>
               <th v-if="showLostColumn">Lost</th>
-              <th>TX State</th>
               <th>Duration</th>
             </tr>
           </thead>
@@ -181,24 +176,23 @@
                 </a>
                 <span v-else class="no-data">-</span>
               </td>
-              <td class="description-cell">{{ node.Description || '-' }}</td>
+              <td class="description-cell">
+                <div v-if="node.Description || node.Location" class="description-wrapper">
+                  <div v-if="node.Description" class="desc-line">{{ node.Description }}</div>
+                  <div v-if="node.Location" class="loc-line">{{ node.Location }}</div>
+                </div>
+                <span v-else class="no-data">-</span>
+              </td>
               <td>
                 <span class="status-badge" :class="getStatusClass(node)">
                   {{ getStatusText(node) }}
                 </span>
               </td>
-              <td>{{ node.Mode || '-' }}</td>
-              <td>{{ node.Direction || '-' }}</td>
-              <td class="ip-cell">{{ node.IP || '-' }}</td>
-              <td class="time-cell">{{ formatConnectedTime(node.ConnectedSince) }}</td>
+              <td class="hide-mobile">{{ node.Mode || '-' }}</td>
+              <td class="hide-mobile">{{ node.Direction || '-' }}</td>
+              <td class="ip-cell hide-mobile">{{ node.IP || '-' }}</td>
+              <td class="time-cell hide-mobile">{{ formatConnectedTime(node.ConnectedSince) }}</td>
               <td v-if="showLostColumn" class="time-cell">{{ formatLostTime(node.RemovedAt) }}</td>
-              <td>
-                <span v-if="node.IsTransmitting" class="tx-active">
-                  <span class="pulse-dot"></span>
-                  TX
-                </span>
-                <span v-else class="tx-idle">-</span>
-              </td>
               <td class="time-cell">
                 <span v-if="node.IsTransmitting && node.KeyedStartTime">
                   {{ formatDuration(node.KeyedStartTime) }}
@@ -237,7 +231,7 @@ const props = defineProps({
   showLostColumn: {
     type: Boolean,
     required: false,
-    default: true
+    default: false
   },
   // Optional injected providers for easier testing/mounting
   nodeStore: { type: Object, required: false },
@@ -294,7 +288,7 @@ watch(() => actualSourceNodeID.value, (nodeId) => {
   fetchSourceNodeInfo(nodeId)
 }, { immediate: true })
 
-// Title format: "<node> - <description> - <location>"
+// Title format: node number - description - location
 const cardTitle = computed(() => {
   const id = displayNodeID.value
   const desc = sourceNodeInfo.value?.description?.trim()
@@ -430,6 +424,7 @@ const adjacentList = computed(() => {
       const nodeID = raw.NodeID || raw.node || raw.node_id || raw.Node || raw.NodeId
       const callsign = raw.Callsign || raw.callsign || raw.node_callsign || raw.nodeCallsign || raw.node_callsign
       const description = raw.Description || raw.description || raw.node_description || raw.nodeDescription
+      const location = raw.Location || raw.location || raw.node_location || raw.nodeLocation
       const isTransmitting = raw.IsTransmitting || raw.is_transmitting || raw.current_tx || raw.currentTx || raw.current_tx || false
       const isKeyed = raw.IsKeyed || raw.is_keyed || raw.is_keyed || raw.isKeyed || raw.is_keyed || false
       const keyedStart = raw.KeyedStartTime || raw.keyed_start_time || raw.keyedStartTime || raw.keyed_start || raw.KeyedStart
@@ -535,6 +530,7 @@ const adjacentList = computed(() => {
         NodeID: isNaN(numericNodeID) ? nodeID : numericNodeID,
         Callsign: callsign || '',
         Description: description || '',
+        Location: location || '',
         IsTransmitting: !!isTransmitting,
         IsKeyed: !!isKeyed,
     KeyedStartTime: keyedStart || null,
@@ -885,28 +881,11 @@ function getStatusText(node) {
 
 .node-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   padding: 0.75rem;
   background: var(--bg-tertiary);
   border-radius: 6px;
-}
-
-.node-id {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.node-id .label {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.node-id .value {
-  color: var(--accent-primary);
-  font-weight: 600;
-  font-size: 1.125rem;
 }
 
 .status-indicators {
@@ -1109,9 +1088,22 @@ td {
 
 .description-cell {
   max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.description-cell .description-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.description-cell .desc-line {
+  color: var(--text-primary);
+}
+
+.description-cell .loc-line {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.85em;
 }
 
 .ip-cell {
@@ -1316,5 +1308,19 @@ td {
   font-size: 0.875rem;
   color: var(--text-primary);
   margin-top: 0.75rem;
+}
+
+/* Responsive: Hide columns on mobile/smaller screens */
+@media (max-width: 767px) {
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+/* Also hide on portrait orientation even if slightly larger screen */
+@media (max-width: 1024px) and (orientation: portrait) {
+  .hide-mobile {
+    display: none !important;
+  }
 }
 </style>

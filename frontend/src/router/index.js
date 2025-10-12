@@ -5,18 +5,12 @@ import NodeLookup from '../views/NodeLookup.vue'
 import RptStats from '../views/RptStats.vue'
 import VoterDisplay from '../views/VoterDisplay.vue'
 import NetworkMap from '../views/NetworkMap.vue'
-import TalkerLog from '../views/TalkerLog.vue'
 
 const routes = [
   {
     path: '/',
     name: 'Dashboard',
     component: Dashboard
-  },
-  {
-    path: '/talker',
-    name: 'TalkerLog',
-    component: TalkerLog
   },
   {
     path: '/lookup',

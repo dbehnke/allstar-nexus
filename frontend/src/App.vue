@@ -18,7 +18,6 @@
 
       <div class="navbar-menu" :class="{ 'mobile-open': mobileMenuOpen }">
         <router-link to="/" class="nav-link" @click="mobileMenuOpen = false">Dashboard</router-link>
-        <router-link to="/talker" class="nav-link" @click="mobileMenuOpen = false">Talker Log</router-link>
         <router-link to="/lookup" class="nav-link" @click="mobileMenuOpen = false">Node Lookup</router-link>
         <router-link to="/network-map" class="nav-link" @click="mobileMenuOpen = false">Network Map</router-link>
         <router-link to="/rpt-stats" class="nav-link" v-if="authStore.isAuthenticated" @click="mobileMenuOpen = false">RPT Stats</router-link>
@@ -36,6 +35,13 @@
     <main class="main-content">
       <router-view />
     </main>
+
+    <footer class="footer">
+      <div class="footer-content">
+        <p>&copy; 2025 Allstar Nexus. {{ version }}</p>
+        <p>Made with ❤️ in Macomb, MI</p>
+      </div>
+    </footer>
   </div>
 </template>
 
@@ -63,6 +69,13 @@ const loggingIn = ref(false)
 const loginError = ref('')
 
 const status = computed(() => nodeStore.status)
+
+const versionInfo = ref({ version: '', build_time: '' })
+
+const version = computed(() => {
+  // Prefer API version, fallback to status version, then default
+  return versionInfo.value.version || status.value?.version || 'v1.0.0'
+})
 
 const themeTooltip = computed(() => {
   if (theme.value === 'light') return 'Switch to dark mode'
@@ -131,9 +144,27 @@ if (authStore.token) {
   authStore.authed = true
 }
 
+// Fetch version info from API
+async function fetchVersion() {
+  try {
+    const response = await fetch('/api/version')
+    const data = await response.json()
+    if (data.ok !== false && data.data) {
+      versionInfo.value = data.data
+    } else if (data.version) {
+      versionInfo.value = data
+    }
+  } catch (e) {
+    logger.debug('Failed to fetch version info', e)
+  }
+}
+
 // Initialize global TX notifications so they work regardless of current view
 onMounted(() => {
   try { initGlobalTxNotifications() } catch (e) { logger.debug('initGlobalTxNotifications failed', e) }
+
+  // Fetch version information
+  fetchVersion()
 
   // Dynamically import dev-only test helpers in development builds. This keeps the
   // helper module out of production bundles.
