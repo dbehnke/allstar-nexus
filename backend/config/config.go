@@ -24,6 +24,7 @@ type GamificationConfig struct {
 	KerchunkDetection    KerchunkConfig           `mapstructure:"kerchunk_detection" yaml:"kerchunk_detection"`
 	XPCaps               XPCapsConfig             `mapstructure:"xp_caps" yaml:"xp_caps"`
 	LevelScale           []LevelScaleConfig       `mapstructure:"level_scale" yaml:"level_scale"`
+	LevelGroupings       []LevelGrouping          `mapstructure:"level_groupings" yaml:"level_groupings"`
 }
 
 type RestedBonusConfig struct {
@@ -69,6 +70,14 @@ type LevelScaleConfig struct {
 	XPPerLevel         int    `mapstructure:"xp_per_level" yaml:"xp_per_level"`
 	Scaling            string `mapstructure:"scaling" yaml:"scaling"`
 	TargetTotalSeconds int    `mapstructure:"target_total_seconds" yaml:"target_total_seconds"`
+}
+
+// LevelGrouping defines a level range with a title and badge
+type LevelGrouping struct {
+	Levels string `mapstructure:"levels" yaml:"levels"`       // e.g., "1-9", "11-19"
+	Title  string `mapstructure:"title" yaml:"title"`         // e.g., "Novice", "General"
+	Badge  string `mapstructure:"badge" yaml:"badge"`         // e.g., "🌱", "📻"
+	Color  string `mapstructure:"color" yaml:"color"`         // e.g., "#10b981", "#3b82f6"
 }
 
 // Config holds runtime configuration values.
@@ -369,6 +378,38 @@ gamification:
 	#   - levels: "11-60"
 	#     scaling: "logarithmic"
 	#     target_total_seconds: 255600
+
+	# Level groupings (badges and titles for level ranges)
+	# If omitted, uses sensible defaults
+	# level_groupings:
+	#   - levels: "1-9"
+	#     title: "Novice"
+	#     badge: "🌱"
+	#     color: "#10b981"
+	#   - levels: "11-19"
+	#     title: "General"
+	#     badge: "📻"
+	#     color: "#3b82f6"
+	#   - levels: "21-29"
+	#     title: "Extra"
+	#     badge: "⚡"
+	#     color: "#8b5cf6"
+	#   - levels: "30-39"
+	#     title: "Elmer"
+	#     badge: "🎓"
+	#     color: "#f59e0b"
+	#   - levels: "40-49"
+	#     title: "Ambassador"
+	#     badge: "🏆"
+	#     color: "#ef4444"
+	#   - levels: "50-55"
+	#     title: "Master"
+	#     badge: "👑"
+	#     color: "#ec4899"
+	#   - levels: "56-60"
+	#     title: "Professor"
+	#     badge: "🎖️"
+	#     color: "#6366f1"
 `
 	return os.WriteFile(path, []byte(exampleConfig), 0644)
 }

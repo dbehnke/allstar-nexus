@@ -15,6 +15,7 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/api"
 	"github.com/dbehnke/allstar-nexus/backend/auth"
 	"github.com/dbehnke/allstar-nexus/backend/config"
+	cfgpkg "github.com/dbehnke/allstar-nexus/backend/config"
 	"github.com/dbehnke/allstar-nexus/backend/database"
 	"github.com/dbehnke/allstar-nexus/backend/gamification"
 	"github.com/dbehnke/allstar-nexus/backend/middleware"
@@ -170,6 +171,20 @@ func main() {
 	if cfg.Gamification.Enabled {
 		logger.Info("initializing gamification system...")
 
+		// Validate level groupings
+		var levelGroupings []cfgpkg.LevelGrouping
+		if len(cfg.Gamification.LevelGroupings) > 0 {
+			levelGroupings = cfg.Gamification.LevelGroupings
+			if err := gamification.ValidateGroupings(levelGroupings); err != nil {
+				log.Fatalf("invalid level groupings configuration: %v", err)
+			}
+			logger.Info("level groupings validated", zap.Int("groups", len(levelGroupings)))
+		} else {
+			// Use defaults
+			levelGroupings = gamification.DefaultLevelGroupings()
+			logger.Info("using default level groupings", zap.Int("groups", len(levelGroupings)))
+		}
+
 		// Initialize gamification repositories
 		profileRepo = repository.NewCallsignProfileRepo(gormDB)
 		levelConfigRepo = repository.NewLevelConfigRepo(gormDB)
@@ -253,7 +268,7 @@ func main() {
 		}
 
 		// Register gamification API endpoints
-		gamificationAPI := api.NewGamificationAPI(profileRepo, txLogRepo, levelConfigRepo, activityRepo)
+		gamificationAPI := api.NewGamificationAPI(profileRepo, txLogRepo, levelConfigRepo, activityRepo, levelGroupings)
 
 		if cfg.AllowAnonDashboard {
 			publicLimiter := middleware.RateLimiter(cfg.PublicStatsRateLimitRPM)

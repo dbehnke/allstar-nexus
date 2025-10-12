@@ -47,7 +47,7 @@ func testGamificationServer(t *testing.T) (*httptest.Server, *gorm.DB, func()) {
 		t.Fatalf("seed level config: %v", err)
 	}
 
-	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo)
+	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings())
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/gamification/scoreboard", gapi.Scoreboard)
@@ -73,12 +73,18 @@ func TestLevelConfigEndpoint_ReturnsConfig(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
-	var payload map[string]map[string]int
+	var payload struct {
+		Config    map[string]int                           `json:"config"`
+		Groupings map[string]*gamification.GroupingInfo    `json:"groupings"`
+	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(payload["config"]) == 0 {
+	if len(payload.Config) == 0 {
 		t.Fatalf("expected non-empty config")
+	}
+	if len(payload.Groupings) == 0 {
+		t.Fatalf("expected non-empty groupings")
 	}
 }
 
