@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/repository"
+	"github.com/dbehnke/allstar-nexus/internal/ami"
 )
 
 // NodeInfo represents enriched node information from astdb
@@ -61,7 +62,14 @@ func (nls *NodeLookupService) EnrichLinkInfo(link *LinkInfo) {
 
 	// Handle negative node IDs (hashed text nodes)
 	if link.Node < 0 {
+		// Check core registry first
 		if name, found := getTextNodeName(link.Node); found {
+			link.NodeCallsign = name
+			link.NodeDescription = "VOIP Client"
+			return
+		}
+		// Fallback to AMI registry (for nodes parsed from LinkedNodes)
+		if name, found := ami.GetTextNodeFromAMI(link.Node); found {
 			link.NodeCallsign = name
 			link.NodeDescription = "VOIP Client"
 		}

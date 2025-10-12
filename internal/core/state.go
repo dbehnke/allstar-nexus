@@ -483,6 +483,10 @@ func (sm *StateManager) apply(m ami.Message) {
 					if name, found := getTextNodeName(id); found {
 						ni.NodeCallsign = name
 						ni.NodeDescription = "VOIP Client"
+					} else if name, found := ami.GetTextNodeFromAMI(id); found {
+						// Fallback to AMI registry
+						ni.NodeCallsign = name
+						ni.NodeDescription = "VOIP Client"
 					}
 				}
 				newDetails = append(newDetails, ni)
