@@ -45,6 +45,20 @@ Build without CGO:
 CGO_ENABLED=0 go build .
 ```
 
+Cross-compile for different platforms (examples):
+```bash
+# Linux ARM64
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build .
+
+# macOS ARM64 (Apple Silicon)
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build .
+
+# Windows AMD64
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build .
+```
+
+All of these now work without any CGO dependencies!
+
 ## Notes
 
 - `mattn/go-sqlite3` is still listed as an indirect dependency in go.mod because `gorm.io/driver/sqlite` depends on it. However, it's not used at runtime since we explicitly specify `DriverName: "sqlite"`.
