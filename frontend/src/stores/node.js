@@ -1,149 +1,248 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { useAuthStore } from './auth'
+import { logger } from '../utils/logger'
+import { useUIStore } from './ui'
 
+// Clean, minimal Pinia node store focused on scoreboard behaviors used by unit tests.
 export const useNodeStore = defineStore('node', () => {
-  const status = ref(null)
-  const links = ref([])
-  const talker = ref([])
+  const scoreboard = ref([])
+  const recentTransmissions = ref([])
+  const levelConfig = ref({})
+  const gamificationEnabled = ref(false)
+
+  // Restored shape expected by the Dashboard and other components
+  const links = ref([]) // array of link objects { node, current_tx, node_callsign, ... }
+  const talker = ref([]) // talker events
   const topLinks = ref([])
+  const sourceNodes = ref({}) // keyed by source node id
   const nowTick = ref(Date.now())
-  // pending stop timers: node -> timer id
-  const pendingStops = new Map()
-  // track server session to detect restarts
-  const lastSessionStart = ref(null)
+  const status = ref({}) // most recent STATUS_UPDATE payload
+  const connectionSeenAt = ref({}) // per-node first-seen timestamps (used by SourceNodeCard)
+  const lastEnvelopes = ref([]) // small ring buffer of recent WS envelopes for debugging
+
+  let _scoreboardReloadTimer = null
+  let _scoreboardPollTimer = null
+  let _recentTxTimer = null
+  let _tickTimer = null
 
   function handleWSMessage(msg) {
+    try { logger.debug('[WS RECV]', msg && msg.messageType, msg) } catch (_) {}
+    if (!msg || !msg.messageType) return
+    // Handle several envelope types that update store state used by UI
     if (msg.messageType === 'STATUS_UPDATE') {
-      // Detect server restart by checking session_start
-      if (msg.data.session_start && lastSessionStart.value && msg.data.session_start !== lastSessionStart.value) {
-        // Server restarted - clear talker log
-        talker.value = []
-        console.log('Server restarted, cleared talker log')
-      }
-      lastSessionStart.value = msg.data.session_start
-
-      status.value = msg.data
-      if (msg.data.links_detailed) links.value = msg.data.links_detailed
-    } else if (msg.messageType === 'TALKER_LOG_SNAPSHOT') {
-      // Full talker log snapshot from server (on connect or periodic refresh)
-      // Replace entire talker log with enriched server data
-      // Note: events may not have a node field at all (omitempty), so keep all events
-      talker.value = Array.isArray(msg.data) ? msg.data : []
-      console.log('Received talker log snapshot:', talker.value.length, 'events')
-    } else if (msg.messageType === 'TALKER_EVENT') {
       try {
-        const incoming = msg.data
-        
-        // Skip events without a valid node number (node 0 or missing)
-        if (!incoming.node || incoming.node === 0) {
-          return
+        const data = msg.data || {}
+        status.value = data
+        // Populate canonical links array from links_detailed or links
+        if (Array.isArray(data.links_detailed) && data.links_detailed.length > 0) {
+          links.value = data.links_detailed
+        } else if (Array.isArray(data.links) && data.links.length > 0) {
+          // If only ids provided, map to simple objects
+          links.value = data.links.map(id => ({ node: id }))
+        } else {
+          links.value = []
         }
-        
-        const now = new Date(incoming.at).getTime()
-        
-        // Check last 5 events for duplicates (same node+kind within 2s)
-        const recentEvents = talker.value.slice(-5)
-        for (const recent of recentEvents) {
-          if (recent.kind === incoming.kind && recent.node === incoming.node) {
-            const recentTs = new Date(recent.at).getTime()
-            if (Math.abs(now - recentTs) < 2000) {
-              console.log('Skipping duplicate talker event:', incoming.kind, incoming.node)
-              return
-            }
-          }
-        }
+      } catch (e) { logger.debug('STATUS_UPDATE handler failed', e) }
+      return
+    }
+    if (msg.messageType === 'TALKER_LOG_SNAPSHOT') {
+      try { talker.value = Array.isArray(msg.data) ? msg.data : (msg.data && msg.data.events ? msg.data.events : []) } catch (e) { logger.debug('TALKER_LOG_SNAPSHOT handler failed', e) }
+      return
+    }
+    if (msg.messageType === 'SOURCE_NODE_KEYING') {
+      try {
+        const snapshot = msg.data || {}
+        const id = snapshot.source_node_id || snapshot.sourceNodeID || snapshot.sourceNode || snapshot.SourceNodeID || snapshot.SourceNode
+        if (id) {
+          // Normalize common snake_case -> camelCase fields so components can read either
+          try {
+            // source node id variants
+            if (!snapshot.sourceNodeID && snapshot.source_node_id) snapshot.sourceNodeID = snapshot.source_node_id
+            if (!snapshot.sourceNodeID && snapshot.SourceNodeID) snapshot.sourceNodeID = snapshot.SourceNodeID
+            if (!snapshot.source_node_id && snapshot.sourceNodeID) snapshot.source_node_id = snapshot.sourceNodeID
 
-        // If this is a STOP without a known start, buffer it briefly to allow a delayed START to arrive
-        if (incoming.kind === 'TX_STOP') {
-          const nodeId = incoming.node || 0
-          const hasRecentStart = talker.value.some(t => (t.node || 0) === nodeId && t.kind === 'TX_START' && (new Date(incoming.at).getTime() - new Date(t.at).getTime()) < 30000)
-          if (!hasRecentStart) {
-            // set a 1s timer to push the STOP unless a START arrives in the meantime
-            if (pendingStops.has(nodeId)) {
-              clearTimeout(pendingStops.get(nodeId))
-            }
-            const tid = setTimeout(() => {
-              talker.value.push(incoming)
-              if (talker.value.length > 100) talker.value.shift()
-              pendingStops.delete(nodeId)
-            }, 1000)
-            pendingStops.set(nodeId, tid)
-            return
-          }
-        }
+            // adjacent nodes variants
+            if (!snapshot.adjacentNodes && snapshot.adjacent_nodes) snapshot.adjacentNodes = snapshot.adjacent_nodes
+            if (!snapshot.adjacentNodes && snapshot.AdjacentNodes) snapshot.adjacentNodes = snapshot.AdjacentNodes
+            if (!snapshot.adjacent_nodes && snapshot.adjacentNodes) snapshot.adjacent_nodes = snapshot.adjacentNodes
+            if (!snapshot.AdjacentNodes && snapshot.adjacentNodes) snapshot.AdjacentNodes = snapshot.adjacentNodes
 
-        // Normal push
-        talker.value.push(incoming)
-        if (talker.value.length > 100) talker.value.shift()
-        // If this is a START, cancel any pending STOP timers for the same node
-        if (incoming.kind === 'TX_START') {
-          const nodeId = incoming.node || 0
-          if (pendingStops.has(nodeId)) {
-            clearTimeout(pendingStops.get(nodeId))
-            pendingStops.delete(nodeId)
-          }
+            // links_detailed variants
+            if (!snapshot.links_detailed && snapshot.linksDetailed) snapshot.links_detailed = snapshot.linksDetailed
+            if (!snapshot.linksDetailed && snapshot.links_detailed) snapshot.linksDetailed = snapshot.links_detailed
+            if (!snapshot.links_detailed && snapshot.LinksDetailed) snapshot.links_detailed = snapshot.LinksDetailed
+            if (!snapshot.LinksDetailed && snapshot.links_detailed) snapshot.LinksDetailed = snapshot.links_detailed
+          } catch (e) {}
+          // Ensure adjacent node entries include numeric NodeID for templates
+          try {
+            const map = snapshot.adjacentNodes || snapshot.adjacent_nodes || snapshot.AdjacentNodes
+            if (map && typeof map === 'object') {
+              for (const k of Object.keys(map)) {
+                const entry = map[k] || {}
+                // If numeric NodeID missing, populate from key
+                if (entry.NodeID == null && entry.node == null && entry.node_id == null) {
+                  entry.NodeID = Number(k)
+                }
+                // coerce NodeID to number
+                if (entry.NodeID != null) entry.NodeID = Number(entry.NodeID)
+                map[k] = entry
+              }
+              // ensure snapshot.adjacentNodes points to the normalized map
+              snapshot.adjacentNodes = map
+            }
+          } catch (e) {}
+
+          // assign in an immutable way so reactivity picks up the change
+          sourceNodes.value = Object.assign({}, sourceNodes.value, { [id]: snapshot })
         }
+      } catch (e) { logger.debug('SOURCE_NODE_KEYING handler failed', e) }
+      return
+    }
+
+    if (msg.messageType === 'GAMIFICATION_TALLY_COMPLETED') {
+      try {
+        const payload = msg.data || {}
+        if (Array.isArray(payload.scoreboard) && payload.scoreboard.length > 0) {
+          scoreboard.value = payload.scoreboard
+        } else if (Array.isArray(payload)) {
+          scoreboard.value = payload
+        } else {
+          fetchScoreboard(50)
+        }
+        triggerRecentTxRefresh()
+        try { const ui = useUIStore(); ui.addToast && ui.addToast('Scoreboard updated', { type: 'success' }) } catch (e) { logger.debug('toast show failed', e) }
       } catch (e) {
-        talker.value.push(msg.data)
-        if (talker.value.length > 100) talker.value.shift()
-      }
-    } else if (msg.messageType === 'LINK_ADDED') {
-      for (const add of msg.data) {
-        if (!links.value.find(l => l.node === add.node)) links.value.push(add)
-      }
-    } else if (msg.messageType === 'LINK_REMOVED') {
-      for (const id of msg.data) {
-        const idx = links.value.findIndex(l => l.node === id)
-        if (idx >= 0) links.value.splice(idx, 1)
-      }
-    } else if (msg.messageType === 'LINK_TX') {
-      updateLinkTX([msg.data])
-    } else if (msg.messageType === 'LINK_TX_BATCH') {
-      updateLinkTX(msg.data)
-    }
-  }
-
-  function updateLinkTX(events) {
-    for (const e of events) {
-      const li = links.value.find(l => l.node === e.node)
-      if (li) {
-        if (e.kind === 'START') {
-          li.current_tx = true
-          li.last_tx_start = e.last_tx_start || e.at
-        } else if (e.kind === 'STOP') {
-          li.current_tx = false
-          li.last_tx_end = e.last_tx_end || e.at
-          li.total_tx_seconds = e.total_tx_seconds
-        }
+        logger.debug('[WS] GAMIFICATION_TALLY_COMPLETED handler error', e)
+        fetchScoreboard(50)
+        triggerRecentTxRefresh()
       }
     }
   }
 
-  function setTopLinks(data) {
-    topLinks.value = data
-  }
+    // Record a brief summary of the envelope for debugging (keep last 20)
+    try {
+      const summary = { type: msg.messageType, ts: Date.now(), keys: msg && msg.data ? Object.keys(msg.data) : [] }
+      lastEnvelopes.value = lastEnvelopes.value.concat([summary]).slice(-20)
+    } catch (e) {}
 
-  function startTickTimer() {
-    setInterval(() => {
-      nowTick.value = Date.now()
-    }, 1000)
+  // Restore API expected by Dashboard.vue and other components
+  function setTopLinks(arr) {
+    try { topLinks.value = Array.isArray(arr) ? arr : [] } catch (e) {}
   }
 
   function loadTalkerHistory(events) {
-    // Load historical talker events (from API on page load)
-    // Keep all events - node field may be omitted entirely due to omitempty
-    talker.value = events || []
+    try { talker.value = Array.isArray(events) ? events : [] } catch (e) {}
+  }
+
+  function startTickTimer() {
+    if (_tickTimer) return
+    nowTick.value = Date.now()
+    _tickTimer = setInterval(() => { nowTick.value = Date.now() }, 1000)
+  }
+
+  function stopTickTimer() {
+    if (_tickTimer) { clearInterval(_tickTimer); _tickTimer = null }
+  }
+
+  function getRemovedAt(sourceNodeID, nodeID) {
+    // Stub: persistent removed timestamps not implemented yet
+    return null
+  }
+
+  async function fetchScoreboard(limit = 50) {
+    try {
+      let headers = {}
+      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) {}
+      const res = await fetch(`/api/gamification/scoreboard?limit=${limit}`, { headers })
+      const data = await res.json().catch(() => ({}))
+      scoreboard.value = (data && (data.scoreboard || data.data || data.results)) || []
+      gamificationEnabled.value = !!(data && (data.enabled || data.ok))
+    } catch (e) { logger.debug('fetchScoreboard failed', e) }
+  }
+
+  function queueScoreboardReload(delayMs = 500, limit = 50) {
+    if (_scoreboardReloadTimer) clearTimeout(_scoreboardReloadTimer)
+    _scoreboardReloadTimer = setTimeout(() => {
+      try {
+        if (Array.isArray(scoreboard.value) && scoreboard.value.length > 0) return
+        fetchScoreboard(limit)
+      } catch (e) { logger.debug('queued scoreboard reload failed', e) }
+      _scoreboardReloadTimer = null
+    }, delayMs)
+  }
+
+  function startScoreboardPoll(intervalMs = 60000, limit = 50) {
+    if (_scoreboardPollTimer) clearInterval(_scoreboardPollTimer)
+    try { if (!Array.isArray(scoreboard.value) || scoreboard.value.length === 0) fetchScoreboard(limit) } catch (e) { logger.debug('initial scoreboard poll failed', e) }
+    _scoreboardPollTimer = setInterval(() => {
+      try { fetchScoreboard(limit) } catch (e) { logger.debug('scoreboard poll fetch failed', e) }
+    }, intervalMs)
+  }
+
+  function stopScoreboardPoll() {
+    if (_scoreboardReloadTimer) { clearTimeout(_scoreboardReloadTimer); _scoreboardReloadTimer = null }
+    if (_scoreboardPollTimer) { clearInterval(_scoreboardPollTimer); _scoreboardPollTimer = null }
+  }
+
+  function triggerRecentTxRefresh() {
+    if (_recentTxTimer) clearTimeout(_recentTxTimer)
+    _recentTxTimer = setTimeout(() => {
+      try {
+        let headers = {}
+        try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) {}
+        fetch(`/api/gamification/recent-transmissions?limit=50&offset=0`, { headers })
+          .then(r => r.json())
+          .then(data => { recentTransmissions.value = (data && (data.transmissions || data.data || data.results)) || [] })
+          .catch(() => {})
+      } catch (e) {}
+    }, 800)
+  }
+
+  async function fetchRecentTransmissions(limit = 50, offset = 0) {
+    try {
+      let headers = {}
+      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) {}
+      const res = await fetch(`/api/gamification/recent-transmissions?limit=${limit}&offset=${offset}`, { headers })
+      const data = await res.json()
+      recentTransmissions.value = (data && (data.transmissions || data.data || data.results)) || []
+    } catch (e) { logger.debug('fetchRecentTransmissions failed', e) }
+  }
+
+  async function fetchLevelConfig() {
+    try {
+      let headers = {}
+      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) {}
+      const res = await fetch('/api/gamification/level-config', { headers })
+      const data = await res.json()
+      levelConfig.value = (data && (data.config || data.data)) || {}
+    } catch (e) { logger.debug('fetchLevelConfig failed', e) }
   }
 
   return {
-    status,
+    scoreboard,
+    recentTransmissions,
+    levelConfig,
+    gamificationEnabled,
+    // restored fields
     links,
     talker,
     topLinks,
+    sourceNodes,
     nowTick,
     handleWSMessage,
+    fetchScoreboard,
+    queueScoreboardReload,
+    startScoreboardPoll,
+    stopScoreboardPoll,
+    triggerRecentTxRefresh,
+    fetchRecentTransmissions,
+    fetchLevelConfig,
+    // restored helpers
     setTopLinks,
+    loadTalkerHistory,
     startTickTimer,
-    loadTalkerHistory
+    stopTickTimer
   }
 })
+

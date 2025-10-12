@@ -1,6 +1,7 @@
 # Build artifacts
 allstar-nexus
 dist/
+data/
 
 # Node modules
 **/node_modules/

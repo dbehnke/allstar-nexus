@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/api"
-	"github.com/dbehnke/allstar-nexus/backend/database"
+	"github.com/dbehnke/allstar-nexus/backend/models"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type envelope struct {
@@ -42,19 +44,19 @@ func newTestServer(t *testing.T) (*httptest.Server, func()) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	db, err := database.Open(dbPath)
+	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
-		t.Fatalf("open db: %v", err)
+		t.Fatalf("open gorm sqlite: %v", err)
 	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
+	if err := gdb.AutoMigrate(&models.User{}, &models.LinkStat{}); err != nil {
+		t.Fatalf("automigrate: %v", err)
 	}
-	apiLayer := api.New(db.DB, "test-secret", 2*time.Hour)
+	apiLayer := api.New(gdb, "test-secret", 2*time.Hour)
 	mux := buildMux(apiLayer)
 	srv := httptest.NewServer(mux)
 	cleanup := func() {
 		srv.Close()
-		db.CloseSafe()
+		// nothing to close for gorm/sqlite file; remove temp dir
 		os.RemoveAll(dir)
 	}
 	return srv, cleanup

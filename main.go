@@ -16,13 +16,18 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/auth"
 	"github.com/dbehnke/allstar-nexus/backend/config"
 	"github.com/dbehnke/allstar-nexus/backend/database"
+	"github.com/dbehnke/allstar-nexus/backend/gamification"
 	"github.com/dbehnke/allstar-nexus/backend/middleware"
+	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
+	"github.com/dbehnke/allstar-nexus/backend/server"
 	"github.com/dbehnke/allstar-nexus/internal/ami"
 	"github.com/dbehnke/allstar-nexus/internal/astdb"
 	"github.com/dbehnke/allstar-nexus/internal/core"
 	"github.com/dbehnke/allstar-nexus/internal/web"
 	"go.uber.org/zap"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 //go:embed all:frontend/dist
@@ -42,18 +47,6 @@ func main() {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
-	// Initialize astdb downloader and ensure file exists
-	astdbDownloader := astdb.NewDownloader(cfg.AstDBURL, cfg.AstDBPath, cfg.AstDBUpdateHours, logger)
-	if err := astdbDownloader.EnsureExists(); err != nil {
-		logger.Warn("failed to download astdb, node lookup may not work", zap.Error(err))
-	} else {
-		// Start auto-updater in background
-		astdbDownloader.StartAutoUpdater()
-		if count, err := astdbDownloader.GetNodeCount(); err == nil {
-			logger.Info("astdb loaded successfully", zap.Int("node_count", count))
-		}
-	}
-
 	// Open DB
 	db, err := database.Open(cfg.DBPath)
 	if err != nil {
@@ -64,18 +57,67 @@ func main() {
 		log.Fatalf("migrate error: %v", err)
 	}
 
-	// API setup
-	apiLayer := api.New(db.DB, cfg.JWTSecret, cfg.TokenTTL)
+	// Initialize GORM database for all models
+	gormDB, err := gorm.Open(sqlite.Open(cfg.DBPath), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("GORM database open error: %v", err)
+	}
+	if err := gormDB.AutoMigrate(
+		&models.User{},
+		&models.TransmissionLog{},
+		&models.NodeInfo{},
+		&models.LinkStat{},
+		&models.CallsignProfile{},
+		&models.LevelConfig{},
+		&models.XPActivityLog{},
+		&models.TallyState{},
+	); err != nil {
+		log.Fatalf("GORM auto-migrate error: %v", err)
+	}
+	logger.Info("GORM database initialized successfully")
+
+	// Repository variables (declare so closures later can access)
+	var txLogRepo *repository.TransmissionLogRepository
+	var nodeInfoRepo *repository.NodeInfoRepository
+	var profileRepo *repository.CallsignProfileRepo
+	var levelConfigRepo *repository.LevelConfigRepo
+
+	// Initialize repositories
+	txLogRepo = repository.NewTransmissionLogRepository(gormDB)
+	nodeInfoRepo = repository.NewNodeInfoRepository(gormDB)
+
+	// Initialize astdb downloader with node info repository
+	astdbDownloader := astdb.NewDownloader(cfg.AstDBURL, cfg.AstDBPath, cfg.AstDBUpdateHours, logger)
+	astdbDownloader.SetNodeInfoRepository(nodeInfoRepo)
+
+	if err := astdbDownloader.EnsureExists(); err != nil {
+		logger.Warn("failed to download/import astdb, node lookup may not work", zap.Error(err))
+	} else {
+		// Start auto-updater in background
+		astdbDownloader.StartAutoUpdater()
+
+		// Log node count from database
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		if count, err := nodeInfoRepo.GetCount(ctx); err == nil {
+			logger.Info("astdb loaded successfully", zap.Int64("node_count", count))
+		}
+		cancel()
+	}
+
+	// API setup (use GORM for all repos now)
+	apiLayer := api.New(gormDB, cfg.JWTSecret, cfg.TokenTTL)
 	apiLayer.SetAstDBPath(cfg.AstDBPath)
+	apiLayer.SetBuildInfo(buildVersion, buildTime)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", api.Health)
+	mux.HandleFunc("/api/version", apiLayer.Version)
 	mux.HandleFunc("/api/dashboard/summary", apiLayer.DashboardSummary)
 	limiter := middleware.RateLimiter(cfg.AuthRateLimitRPM)
 	mux.Handle("/api/auth/register", limiter(http.HandlerFunc(apiLayer.Register)))
 	mux.Handle("/api/auth/login", limiter(http.HandlerFunc(apiLayer.Login)))
 
 	// Repositories for middleware loaders
-	userRepo := repository.NewUserRepo(db.DB)
+	userRepo := repository.NewUserRepo(gormDB)
 	userLoader := func(email string) (*repository.SafeUser, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -106,6 +148,14 @@ func main() {
 	mux.Handle("/api/rpt-stats", authMW(http.HandlerFunc(apiLayer.RPTStats)))
 	mux.Handle("/api/voter-stats", authMW(http.HandlerFunc(apiLayer.VoterStats)))
 
+	// Poll-now endpoint - authenticated by default; if anon dashboard is allowed, rate-limit it
+	if cfg.AllowAnonDashboard {
+		publicLimiter := middleware.RateLimiter(cfg.PublicStatsRateLimitRPM)
+		mux.Handle("/api/poll-now", publicLimiter(http.HandlerFunc(apiLayer.PollNow)))
+	} else {
+		mux.Handle("/api/poll-now", authMW(http.HandlerFunc(apiLayer.PollNow)))
+	}
+
 	if cfg.AllowAnonDashboard {
 		publicLimiter := middleware.RateLimiter(cfg.PublicStatsRateLimitRPM)
 		mux.Handle("/api/link-stats", publicLimiter(http.HandlerFunc(apiLayer.LinkStatsHandler)))
@@ -115,23 +165,139 @@ func main() {
 		mux.Handle("/api/link-stats/top", authMW(http.HandlerFunc(apiLayer.TopLinkStatsHandler)))
 	}
 
+	// Gamification System Initialization
+	var tallyService *gamification.TallyService
+	if cfg.Gamification.Enabled {
+		logger.Info("initializing gamification system...")
+
+		// Initialize gamification repositories
+		profileRepo = repository.NewCallsignProfileRepo(gormDB)
+		levelConfigRepo = repository.NewLevelConfigRepo(gormDB)
+		activityRepo := repository.NewXPActivityRepo(gormDB)
+		stateRepo := repository.NewTallyStateRepo(gormDB)
+
+		// Calculate and seed level requirements (configurable)
+		var levelRequirements map[int]int
+		if len(cfg.Gamification.LevelScale) > 0 {
+			levelRequirements = gamification.CalculateLevelRequirementsWithScale(cfg.Gamification.LevelScale)
+		} else {
+			levelRequirements = gamification.CalculateLevelRequirements()
+		}
+		if err := levelConfigRepo.SeedDefaults(context.Background(), levelRequirements); err != nil {
+			logger.Warn("failed to seed level config", zap.Error(err))
+		} else {
+			logger.Info("level config seeded", zap.Int("levels", len(levelRequirements)))
+		}
+
+		// Build gamification config for TallyService
+		gameCfg := &gamification.Config{
+			RestedEnabled:          cfg.Gamification.RestedBonus.Enabled,
+			RestedAccumulationRate: cfg.Gamification.RestedBonus.AccumulationRate,
+			RestedMaxSeconds:       cfg.Gamification.RestedBonus.MaxHours * 3600,
+			RestedMultiplier:       cfg.Gamification.RestedBonus.Multiplier,
+			DREnabled:              cfg.Gamification.DiminishingReturns.Enabled,
+			KerchunkEnabled:        cfg.Gamification.KerchunkDetection.Enabled,
+			KerchunkThreshold:      cfg.Gamification.KerchunkDetection.ThresholdSec,
+			KerchunkWindow:         cfg.Gamification.KerchunkDetection.WindowSec,
+			KerchunkSinglePenalty:  cfg.Gamification.KerchunkDetection.SinglePenalty,
+			Kerchunk2to3Penalty:    cfg.Gamification.KerchunkDetection.TwoThree,
+			Kerchunk4to5Penalty:    cfg.Gamification.KerchunkDetection.FourFive,
+			Kerchunk6PlusPenalty:   cfg.Gamification.KerchunkDetection.SixPlus,
+			CapsEnabled:            cfg.Gamification.XPCaps.Enabled,
+			DailyCapSeconds:        cfg.Gamification.XPCaps.DailyCap,
+			WeeklyCapSeconds:       cfg.Gamification.XPCaps.WeeklyCap,
+		}
+
+		// Convert DR tiers
+		if len(cfg.Gamification.DiminishingReturns.Tiers) > 0 {
+			for _, tier := range cfg.Gamification.DiminishingReturns.Tiers {
+				gameCfg.DRTiers = append(gameCfg.DRTiers, gamification.DRTier{
+					MaxSeconds: tier.MaxSeconds,
+					Multiplier: tier.Multiplier,
+				})
+			}
+		} else {
+			// Default tiers if not configured
+			gameCfg.DRTiers = []gamification.DRTier{
+				{MaxSeconds: 1200, Multiplier: 1.0},
+				{MaxSeconds: 2400, Multiplier: 0.75},
+				{MaxSeconds: 3600, Multiplier: 0.5},
+				{MaxSeconds: 999999, Multiplier: 0.25},
+			}
+		}
+
+		// Initialize and start TallyService
+		tallyInterval := time.Duration(cfg.Gamification.TallyIntervalMinutes) * time.Minute
+		tallyService = gamification.NewTallyService(
+			gormDB,
+			txLogRepo,
+			profileRepo,
+			levelConfigRepo,
+			activityRepo,
+			stateRepo,
+			gameCfg,
+			tallyInterval,
+			logger,
+		)
+
+		if err := tallyService.Start(); err != nil {
+			logger.Error("failed to start tally service", zap.Error(err))
+		} else {
+			logger.Info("gamification tally service started",
+				zap.Duration("interval", tallyInterval),
+				zap.Bool("rested_bonus", gameCfg.RestedEnabled),
+				zap.Bool("diminishing_returns", gameCfg.DREnabled),
+				zap.Bool("kerchunk_detection", gameCfg.KerchunkEnabled),
+				zap.Bool("xp_caps", gameCfg.CapsEnabled),
+			)
+		}
+
+		// Register gamification API endpoints
+		gamificationAPI := api.NewGamificationAPI(profileRepo, txLogRepo, levelConfigRepo, activityRepo)
+
+		if cfg.AllowAnonDashboard {
+			publicLimiter := middleware.RateLimiter(cfg.PublicStatsRateLimitRPM)
+			mux.Handle("/api/gamification/scoreboard", publicLimiter(http.HandlerFunc(gamificationAPI.Scoreboard)))
+			mux.Handle("/api/gamification/profile/", publicLimiter(http.HandlerFunc(gamificationAPI.Profile)))
+			mux.Handle("/api/gamification/recent-transmissions", publicLimiter(http.HandlerFunc(gamificationAPI.RecentTransmissions)))
+			mux.Handle("/api/gamification/level-config", publicLimiter(http.HandlerFunc(gamificationAPI.LevelConfig)))
+		} else {
+			mux.Handle("/api/gamification/scoreboard", authMW(http.HandlerFunc(gamificationAPI.Scoreboard)))
+			mux.Handle("/api/gamification/profile/", authMW(http.HandlerFunc(gamificationAPI.Profile)))
+			mux.Handle("/api/gamification/recent-transmissions", authMW(http.HandlerFunc(gamificationAPI.RecentTransmissions)))
+			mux.Handle("/api/gamification/level-config", authMW(http.HandlerFunc(gamificationAPI.LevelConfig)))
+		}
+
+		logger.Info("gamification API endpoints registered")
+	}
+
 	// Serve Vue.js dashboard from embedded frontend/dist
-	staticFS, err := fs.Sub(frontendFiles, "frontend/dist")
-	if err != nil {
+	if _, err := fs.Sub(frontendFiles, "frontend/dist"); err != nil {
 		log.Fatalf("embed fs error: %v", err)
 	}
 	log.Printf("serving Vue.js dashboard at /")
-	mux.Handle("/", http.FileServer(http.FS(staticFS)))
+	// Use SPA fallback so direct reloads on client routes (e.g., /talker) work.
+	spaHandler, err := server.SPAFileServer(frontendFiles, "frontend/dist")
+	if err != nil {
+		log.Fatalf("spa file server error: %v", err)
+	}
+	mux.Handle("/", spaHandler)
 
 	// AMI + WebSocket wiring (conditional). Always provide a /ws endpoint so the UI never hard-fails.
 	var hub *web.Hub
 	if cfg.AMIEnabled {
 		hub = web.NewHub()
 		sm := core.NewStateManager()
+
+		// Initialize transmission log repository and inject into StateManager
+		sm.SetTransmissionLogRepo(txLogRepo)
+		logger.Info("transmission log repository initialized")
+
 		// Configure node lookup service for server-side enrichment
 		nodeLookup := core.NewNodeLookupService(cfg.AstDBPath)
+		nodeLookup.SetNodeInfoRepository(nodeInfoRepo)
 		sm.SetNodeLookup(nodeLookup)
-		logger.Info("node lookup service configured", zap.String("astdb_path", cfg.AstDBPath))
+		logger.Info("node lookup service configured with SQLite backend")
 		// Propagate build metadata into StateManager so UI can display it
 		if buildVersion != "" {
 			sm.SetVersion(buildVersion)
@@ -150,17 +316,33 @@ func main() {
 		if len(cfg.Nodes) > 0 {
 			sm.SetNodeID(cfg.Nodes[0].NodeID)
 		}
+		// Initialize keying trackers for all configured source nodes (2 second jitter delay)
+		for _, node := range cfg.Nodes {
+			sm.AddSourceNode(node.NodeID, 2000)
+			logger.Info("initialized keying tracker for source node", zap.Int("node_id", node.NodeID))
+		}
 		// Seed persisted link stats (if any) so totals survive restarts
-		lsRepo := repository.NewLinkStatsRepo(db.DB)
+		lsRepo := repository.NewLinkStatsRepo(gormDB)
 		seedCtx, seedCancel := context.WithTimeout(context.Background(), 2*time.Second)
 		if stats, err := lsRepo.GetAll(seedCtx); err == nil && len(stats) > 0 {
 			li := make([]core.LinkInfo, 0, len(stats))
+			primaryNodeID := 0
+			if len(cfg.Nodes) > 0 {
+				primaryNodeID = cfg.Nodes[0].NodeID
+			}
 			for _, s := range stats {
 				cs := time.Now()
 				if s.ConnectedSince != nil {
 					cs = *s.ConnectedSince
 				}
-				linkInfo := core.LinkInfo{Node: s.Node, ConnectedSince: cs, LastTxStart: s.LastTxStart, LastTxEnd: s.LastTxEnd, TotalTxSeconds: s.TotalTxSeconds}
+				linkInfo := core.LinkInfo{
+					Node:           s.Node,
+					LocalNode:      primaryNodeID, // Set LocalNode for multi-node compatibility
+					ConnectedSince: cs,
+					LastTxStart:    s.LastTxStart,
+					LastTxEnd:      s.LastTxEnd,
+					TotalTxSeconds: s.TotalTxSeconds,
+				}
 				// Enrich seeded links with node lookup data
 				nodeLookup.EnrichLinkInfo(&linkInfo)
 				li = append(li, linkInfo)
@@ -168,45 +350,183 @@ func main() {
 			sm.SeedLinkStats(li)
 		}
 		seedCancel()
+		// Seed keying tracker with existing links (if any were loaded from persistence)
+		// This ensures the keying tracker has data even before AMI events arrive
+		if len(cfg.Nodes) > 0 {
+			sm.SeedKeyingTrackerFromLinks(cfg.Nodes[0].NodeID)
+		}
 		go hub.BroadcastLoop(sm.Updates())
 		go hub.TalkerLoop(sm.TalkerEvents())
 		go hub.LinkUpdateLoop(sm.LinkUpdates())
 		go hub.LinkRemovalLoop(sm.LinkRemovals())
 		go hub.LinkTxBatchLoop(sm.LinkTxEvents(), 100*time.Millisecond)
 		go hub.HeartbeatLoop(sm, 5*time.Second)
-		go hub.TalkerLogRefreshLoop(sm, 2*time.Minute) // Periodic talker log refresh
+		go hub.TalkerLogRefreshLoop(sm, 2*time.Minute)      // Periodic talker log refresh
+		go hub.SourceNodeKeyingLoop(sm.KeyingUpdates())     // Source node keying updates
+		go hub.SourceNodeKeyingEventLoop(sm.KeyingEvents()) // Session edge events (TX_START/TX_END)
 		conn := ami.NewConnector(cfg.AMIHost, cfg.AMIPort, cfg.AMIUser, cfg.AMIPassword, cfg.AMIEvents, cfg.AMIRetryInterval, cfg.AMIRetryMax)
 		// Pass AMI connector and StateManager to API layer
 		apiLayer.SetAMIConnector(conn)
 		apiLayer.SetStateManager(sm)
 		ctxAMI, cancelAMI := context.WithCancel(context.Background())
+
+		// Monitor AMI connection status changes
+		go func() {
+			for status := range conn.ConnectionStatusChan() {
+				if status.Connected {
+					logger.Info("AMI connection established", zap.Time("timestamp", status.Timestamp))
+				} else {
+					if status.Error != nil {
+						logger.Warn("AMI connection lost", zap.Error(status.Error), zap.Time("timestamp", status.Timestamp))
+					} else {
+						logger.Info("AMI connection closed", zap.Time("timestamp", status.Timestamp))
+					}
+				}
+			}
+		}()
+
+		// If tally service is running, broadcast a WS event when it completes
+		if tallyService != nil {
+			// When a tally completes, broadcast the summary and include the current leaderboard
+			// so clients can update immediately without an extra HTTP fetch.
+			tallyService.OnTallyComplete = func(summary gamification.TallySummary) {
+				if hub == nil {
+					return
+				}
+				// Build a lightweight scoreboard snapshot to send over WS
+				ctx := context.Background()
+				profiles, err := profileRepo.GetLeaderboard(ctx, 50)
+				if err != nil {
+					// fallback: broadcast only summary
+					hub.BroadcastTallyCompleted(summary)
+					return
+				}
+				levelCfg, _ := levelConfigRepo.GetAllAsMap(ctx)
+				// Build entries similar to API response shape
+				entries := make([]map[string]interface{}, 0, len(profiles))
+				for _, p := range profiles {
+					nextXP := 0
+					if xp, ok := levelCfg[p.Level+1]; ok {
+						nextXP = xp
+					}
+					totalTime, _ := txLogRepo.GetTotalTransmissionTime(p.Callsign)
+					entries = append(entries, map[string]interface{}{
+						"callsign":                p.Callsign,
+						"level":                   p.Level,
+						"experience_points":       p.ExperiencePoints,
+						"renown_level":            p.RenownLevel,
+						"next_level_xp":           nextXP,
+						"total_talk_time_seconds": totalTime,
+					})
+				}
+				hub.BroadcastTallyCompleted(map[string]interface{}{"summary": summary, "scoreboard": entries})
+			}
+		}
+
+		log.Printf("starting AMI connector (will auto-reconnect on failure)")
 		if err := conn.Start(ctxAMI); err != nil {
 			log.Printf("AMI start error: %v", err)
+		} else {
+			log.Printf("AMI connector started successfully")
 		}
+		// Diagnostic: issue a test AMI command after startup to verify responses are received and parsed.
+		// Startup diagnostics removed: relying solely on event-driven AMI processing.
 		go sm.Run(conn.Raw())
-		logger.Info("using event-driven AMI processing only (no polling)")
-		// Note: All state updates are driven by AMI events (RPT_LINKS, RPT_ALINKS, RPT_TXKEYED, RPT_RXKEYED, etc.)
-		// No periodic polling needed - this matches the event-driven philosophy
+		logger.Info("using hybrid event-driven + polling AMI processing")
+
+		// Start periodic polling service for data sync and enrichment
+		// This provides a hybrid approach:
+		// - Events drive real-time updates (ALINKS, TXKEYED, etc.)
+		// - Polling (1 min) ensures sync and enriches with XStat/SawStat data (direction, IP, elapsed, mode)
+		if !cfg.DisableLinkPoller {
+			nodeIDs := make([]int, len(cfg.Nodes))
+			for i, node := range cfg.Nodes {
+				nodeIDs[i] = node.NodeID
+			}
+			pollingService := core.NewPollingService(conn, sm, 60*time.Second, nodeIDs)
+
+			// Set cleanup callback to sync database with actual state after first poll
+			// This cleans up any stale links that were seeded from database but are no longer connected
+			pollingService.SetCleanupCallback(func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+
+				// Get current link state from StateManager
+				currentLinks := sm.Snapshot().LinksDetailed
+
+				// Collect active node IDs
+				activeNodeIDs := make([]int, len(currentLinks))
+				for i, li := range currentLinks {
+					activeNodeIDs[i] = li.Node
+				}
+
+				// Delete stale entries from database (nodes not in current state)
+				deleted, err := lsRepo.DeleteNotIn(ctx, activeNodeIDs)
+				if err != nil {
+					logger.Warn("failed to clean up stale link stats", zap.Error(err))
+				} else if deleted > 0 {
+					logger.Info("cleaned up stale link stats from database", zap.Int64("deleted_count", deleted))
+				}
+
+				// Update active links in database
+				for _, li := range currentLinks {
+					stat := models.LinkStat{
+						Node:           li.Node,
+						TotalTxSeconds: li.TotalTxSeconds,
+						LastTxStart:    li.LastTxStart,
+						LastTxEnd:      li.LastTxEnd,
+						ConnectedSince: &li.ConnectedSince,
+					}
+					if err := lsRepo.Upsert(ctx, stat); err != nil {
+						logger.Warn("failed to sync link stat", zap.Int("node", li.Node), zap.Error(err))
+					}
+				}
+
+				logger.Info("database synchronized with current link state", zap.Int("active_link_count", len(currentLinks)))
+			})
+
+			if err := pollingService.Start(); err != nil {
+				logger.Warn("failed to start polling service", zap.Error(err))
+			} else {
+				logger.Info("polling service started", zap.Duration("interval", 60*time.Second), zap.Ints("nodes", nodeIDs))
+			}
+			// If a hub exists, wire a trigger so new WS clients cause an immediate
+			// on-demand poll shortly after connecting (debounced).
+			hub.SetTriggerPoll(func() { pollingService.TriggerPollOnce() })
+			// Expose poll trigger to API: node==0 => poll all; else poll specific node
+			apiLayer.SetTriggerPoll(func(nodeID int) {
+				if nodeID > 0 {
+					pollingService.TriggerPollNode(nodeID)
+				} else {
+					pollingService.TriggerPollOnce()
+				}
+			})
+			// Stop polling service on shutdown
+			defer pollingService.Stop()
+		} else {
+			logger.Info("polling service disabled via config (disable_link_poller=true)")
+		}
 		// Persist per-link TX stats on edges
 		sm.SetPersistHook(func(list []core.LinkInfo) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			for _, li := range list {
-				stat := repository.LinkStat{Node: li.Node, TotalTxSeconds: li.TotalTxSeconds, LastTxStart: li.LastTxStart, LastTxEnd: li.LastTxEnd, ConnectedSince: &li.ConnectedSince}
+				stat := models.LinkStat{Node: li.Node, TotalTxSeconds: li.TotalTxSeconds, LastTxStart: li.LastTxStart, LastTxEnd: li.LastTxEnd, ConnectedSince: &li.ConnectedSince}
 				_ = lsRepo.Upsert(ctx, stat)
 			}
 		})
-		validator := func(r *http.Request) bool {
+		validator := func(r *http.Request) (bool, bool) {
 			token := r.URL.Query().Get("token")
 			if token == "" {
 				// allow anonymous if configured
-				return cfg.AllowAnonDashboard
+				return cfg.AllowAnonDashboard, false
 			}
-			_, _, exp, err := auth.ParseJWT(token, cfg.JWTSecret)
+			_, role, exp, err := auth.ParseJWT(token, cfg.JWTSecret)
 			if err != nil || time.Now().After(exp) {
-				return false
+				return false, false
 			}
-			return true
+			isAdmin := role == models.RoleAdmin || role == models.RoleSuperAdmin
+			return true, isAdmin
 		}
 		mux.HandleFunc("/ws", hub.HandleWS(sm, validator))
 		defer cancelAMI()
@@ -231,16 +551,17 @@ func main() {
 		if len(cfg.Nodes) > 0 {
 			sm.SetNodeID(cfg.Nodes[0].NodeID)
 		}
-		validator := func(r *http.Request) bool {
+		validator := func(r *http.Request) (bool, bool) {
 			token := r.URL.Query().Get("token")
 			if token == "" {
-				return cfg.AllowAnonDashboard
+				return cfg.AllowAnonDashboard, false
 			}
-			_, _, exp, err := auth.ParseJWT(token, cfg.JWTSecret)
+			_, role, exp, err := auth.ParseJWT(token, cfg.JWTSecret)
 			if err != nil || time.Now().After(exp) {
-				return false
+				return false, false
 			}
-			return true
+			isAdmin := role == models.RoleAdmin || role == models.RoleSuperAdmin
+			return true, isAdmin
 		}
 		mux.HandleFunc("/ws", hub.HandleWS(sm, validator))
 		// Heartbeat provides periodic STATUS_UPDATE so client replaces 'Waiting for data'.
@@ -269,6 +590,12 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 	log.Printf("shutdown signal received, shutting down...")
+
+	// Stop gamification tally service
+	if tallyService != nil {
+		tallyService.Stop()
+	}
+
 	ctxShutdown, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctxShutdown); err != nil {

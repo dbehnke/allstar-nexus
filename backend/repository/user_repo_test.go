@@ -6,28 +6,28 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dbehnke/allstar-nexus/backend/database"
 	"github.com/dbehnke/allstar-nexus/backend/models"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
-func setupTestDB(t *testing.T) *database.DB {
+func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "repo.db")
-	db, err := database.Open(dbPath)
+	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
-		t.Fatalf("open: %v", err)
+		t.Fatalf("open gorm sqlite: %v", err)
 	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
+	if err := gdb.AutoMigrate(&models.User{}); err != nil {
+		t.Fatalf("automigrate: %v", err)
 	}
-	return db
+	return gdb
 }
 
 func TestUserRepoCRUDAndCounts(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.CloseSafe()
-	repo := NewUserRepo(db.DB)
+	repo := NewUserRepo(db)
 	ctx := context.Background()
 	// empty counts
 	c, err := repo.Count(ctx)

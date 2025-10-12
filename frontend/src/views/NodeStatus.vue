@@ -8,12 +8,13 @@
 import { onMounted } from 'vue'
 import { useNodeStore } from '../stores/node'
 import StatusCard from '../components/StatusCard.vue'
+import { logger } from '../utils/logger'
 
 const nodeStore = useNodeStore()
 
 function refreshStats() {
   // Refresh happens via WebSocket, this is just for manual refresh button
-  console.log('Manual refresh requested')
+  logger.info('Manual refresh requested')
 }
 
 onMounted(() => {

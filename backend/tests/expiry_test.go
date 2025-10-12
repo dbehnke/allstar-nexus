@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/api"
-	"github.com/dbehnke/allstar-nexus/backend/database"
+	"github.com/dbehnke/allstar-nexus/backend/models"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 // Helper to create API/server with custom TTL
@@ -18,20 +20,20 @@ func newServerWithTTL(t *testing.T, ttl time.Duration) (*httptest.Server, func()
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "ttl.db")
-	db, err := database.Open(dbPath)
+	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
-		t.Fatalf("open db: %v", err)
+		t.Fatalf("open gorm sqlite: %v", err)
 	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("migrate: %v", err)
+	if err := gdb.AutoMigrate(&models.User{}); err != nil {
+		t.Fatalf("automigrate: %v", err)
 	}
-	apiLayer := api.New(db.DB, "secret", ttl)
+	apiLayer := api.New(gdb, "secret", ttl)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/auth/register", apiLayer.Register)
 	mux.HandleFunc("/api/auth/login", apiLayer.Login)
 	mux.HandleFunc("/api/me", apiLayer.Me)
 	srv := httptest.NewServer(mux)
-	cleanup := func() { srv.Close(); db.CloseSafe() }
+	cleanup := func() { srv.Close() }
 	return srv, cleanup
 }
 

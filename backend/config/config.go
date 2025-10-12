@@ -15,6 +15,62 @@ type NodeConfig struct {
 	Name   string `mapstructure:"name" yaml:"name,omitempty" json:"name,omitempty"` // Optional - if empty, lookup from astdb
 }
 
+// GamificationConfig holds gamification system settings
+type GamificationConfig struct {
+	Enabled              bool                     `mapstructure:"enabled" yaml:"enabled"`
+	TallyIntervalMinutes int                      `mapstructure:"tally_interval_minutes" yaml:"tally_interval_minutes"`
+	RestedBonus          RestedBonusConfig        `mapstructure:"rested_bonus" yaml:"rested_bonus"`
+	DiminishingReturns   DiminishingReturnsConfig `mapstructure:"diminishing_returns" yaml:"diminishing_returns"`
+	KerchunkDetection    KerchunkConfig           `mapstructure:"kerchunk_detection" yaml:"kerchunk_detection"`
+	XPCaps               XPCapsConfig             `mapstructure:"xp_caps" yaml:"xp_caps"`
+	LevelScale           []LevelScaleConfig       `mapstructure:"level_scale" yaml:"level_scale"`
+}
+
+type RestedBonusConfig struct {
+	Enabled          bool    `mapstructure:"enabled" yaml:"enabled"`
+	AccumulationRate float64 `mapstructure:"accumulation_rate" yaml:"accumulation_rate"`
+	MaxHours         int     `mapstructure:"max_hours" yaml:"max_hours"`
+	Multiplier       float64 `mapstructure:"multiplier" yaml:"multiplier"`
+}
+
+type DiminishingReturnsConfig struct {
+	Enabled bool     `mapstructure:"enabled" yaml:"enabled"`
+	Tiers   []DRTier `mapstructure:"tiers" yaml:"tiers"`
+}
+
+type DRTier struct {
+	MaxSeconds int     `mapstructure:"max_seconds" yaml:"max_seconds"`
+	Multiplier float64 `mapstructure:"multiplier" yaml:"multiplier"`
+}
+
+type KerchunkConfig struct {
+	Enabled       bool    `mapstructure:"enabled" yaml:"enabled"`
+	ThresholdSec  int     `mapstructure:"threshold_seconds" yaml:"threshold_seconds"`
+	WindowSec     int     `mapstructure:"consecutive_window" yaml:"consecutive_window"`
+	SinglePenalty float64 `mapstructure:"single" yaml:"single"`
+	TwoThree      float64 `mapstructure:"two_to_three" yaml:"two_to_three"`
+	FourFive      float64 `mapstructure:"four_to_five" yaml:"four_to_five"`
+	SixPlus       float64 `mapstructure:"six_plus" yaml:"six_plus"`
+}
+
+type XPCapsConfig struct {
+	Enabled    bool   `mapstructure:"enabled" yaml:"enabled"`
+	DailyCap   int    `mapstructure:"daily_cap_seconds" yaml:"daily_cap_seconds"`
+	WeeklyCap  int    `mapstructure:"weekly_cap_seconds" yaml:"weekly_cap_seconds"`
+	ResetHour  int    `mapstructure:"reset_hour" yaml:"reset_hour"`
+	WeekStarts string `mapstructure:"week_starts" yaml:"week_starts"`
+}
+
+// LevelScaleConfig defines scaling for level XP requirements
+// Example linear: { levels: "1-10", xp_per_level: 360 }
+// Example logarithmic: { levels: "11-60", scaling: "logarithmic", target_total_seconds: 255600 }
+type LevelScaleConfig struct {
+	Levels             string `mapstructure:"levels" yaml:"levels"`
+	XPPerLevel         int    `mapstructure:"xp_per_level" yaml:"xp_per_level"`
+	Scaling            string `mapstructure:"scaling" yaml:"scaling"`
+	TargetTotalSeconds int    `mapstructure:"target_total_seconds" yaml:"target_total_seconds"`
+}
+
 // Config holds runtime configuration values.
 type Config struct {
 	Port                    string
@@ -42,6 +98,7 @@ type Config struct {
 	AllowAnonDashboard      bool
 	Title                   string
 	Subtitle                string
+	Gamification            GamificationConfig
 }
 
 // Load loads configuration from config file and environment variables using Viper
@@ -71,6 +128,23 @@ func Load(configPath ...string) Config {
 	viper.SetDefault("allow_anon_dashboard", true)
 	viper.SetDefault("title", "Allstar Nexus")
 	viper.SetDefault("subtitle", "")
+
+	// Gamification defaults (low-activity hub configuration)
+	viper.SetDefault("gamification.enabled", false) // Disabled by default
+	viper.SetDefault("gamification.tally_interval_minutes", 30)
+	viper.SetDefault("gamification.rested_bonus.enabled", true)
+	viper.SetDefault("gamification.rested_bonus.accumulation_rate", 1.5)
+	viper.SetDefault("gamification.rested_bonus.max_hours", 336)
+	viper.SetDefault("gamification.rested_bonus.multiplier", 2.0)
+	viper.SetDefault("gamification.diminishing_returns.enabled", true)
+	viper.SetDefault("gamification.kerchunk_detection.enabled", true)
+	viper.SetDefault("gamification.kerchunk_detection.threshold_seconds", 3)
+	viper.SetDefault("gamification.kerchunk_detection.consecutive_window", 30)
+	viper.SetDefault("gamification.xp_caps.enabled", true)
+	viper.SetDefault("gamification.xp_caps.daily_cap_seconds", 1200)
+	viper.SetDefault("gamification.xp_caps.weekly_cap_seconds", 7200)
+	viper.SetDefault("gamification.xp_caps.reset_hour", 0)
+	viper.SetDefault("gamification.xp_caps.week_starts", "sunday")
 
 	// Config file search paths
 	if len(configPath) > 0 && configPath[0] != "" {
@@ -130,6 +204,11 @@ func Load(configPath ...string) Config {
 		AllowAnonDashboard:      viper.GetBool("allow_anon_dashboard"),
 		Title:                   viper.GetString("title"),
 		Subtitle:                viper.GetString("subtitle"),
+	}
+
+	// Load gamification configuration
+	if err := viper.UnmarshalKey("gamification", &cfg.Gamification); err != nil {
+		log.Printf("warning: failed to load gamification config: %v (using defaults)", err)
 	}
 
 	// Load nodes configuration - supports multiple formats:
@@ -241,8 +320,55 @@ ami_retry_interval: 15s
 ami_retry_max: 60s
 
 # Feature Toggles
-disable_link_poller: false
+disable_link_poller: false  # false = hybrid polling enabled (polls XStat/SawStat every 60s for enriched data)
 allow_anon_dashboard: true
+
+# Gamification System (Low-Activity defaults shown)
+gamification:
+	enabled: false            # Set to true to enable the gamification system
+	tally_interval_minutes: 30
+
+	# Rested XP Bonus
+	rested_bonus:
+		enabled: true
+		accumulation_rate: 1.5   # hours of rested per day offline (example)
+		max_hours: 336           # 14 days
+		multiplier: 2.0          # 2x XP while rested
+
+	# Diminishing Returns (tiers in seconds with multipliers)
+	diminishing_returns:
+		enabled: true
+		tiers:
+			- { max_seconds: 1200, multiplier: 1.0 }
+			- { max_seconds: 2400, multiplier: 0.75 }
+			- { max_seconds: 3600, multiplier: 0.5 }
+			- { max_seconds: 999999, multiplier: 0.25 }
+
+	# Kerchunk / spam detection
+	kerchunk_detection:
+		enabled: true
+		threshold_seconds: 3
+		consecutive_window: 30
+		single: 0.5
+		two_to_three: 0.25
+		four_to_five: 0.1
+		six_plus: 0.0
+
+	# Daily/weekly XP caps (seconds of talk time credited)
+	xp_caps:
+		enabled: true
+		daily_cap_seconds: 1200   # 20 minutes/day
+		weekly_cap_seconds: 7200  # 2 hours/week
+		reset_hour: 0
+		week_starts: sunday
+
+	# Optional: Custom level scaling. If omitted, uses low-activity defaults (6 min levels 1-10, logarithmic 11-60 to 255,600s).
+	# level_scale:
+	#   - levels: "1-10"
+	#     xp_per_level: 360
+	#   - levels: "11-60"
+	#     scaling: "logarithmic"
+	#     target_total_seconds: 255600
 `
 	return os.WriteFile(path, []byte(exampleConfig), 0644)
 }

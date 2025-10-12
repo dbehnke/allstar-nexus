@@ -14,8 +14,8 @@
         <span class="value">{{ humanUptime(status) }}</span>
       </div>
       <div class="status-item">
-        <span class="label">Links:</span>
-        <span class="value">{{ status.links?.join(', ') || '—' }}</span>
+        <span class="label">Links (Adj/Total):</span>
+        <span class="value">{{ status.num_alinks || 0 }} / {{ status.num_links || 0 }}</span>
       </div>
       <div class="status-item">
         <span class="label">COS (RX):</span>
@@ -53,6 +53,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import Card from './Card.vue'
+import { logger } from '../utils/logger'
 
 const props = defineProps({
   status: Object
@@ -88,7 +89,7 @@ watch(() => props.status?.node_id, async (nodeId) => {
       nodeInfo.value = data.results[0]
     }
   } catch (e) {
-    console.error('Failed to fetch node info:', e)
+  logger.error('Failed to fetch node info:', e)
   }
 }, { immediate: true })
 

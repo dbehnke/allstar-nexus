@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"sort"
@@ -14,6 +13,7 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 	"github.com/dbehnke/allstar-nexus/internal/ami"
+	"gorm.io/gorm"
 )
 
 type StateManagerInterface interface {
@@ -28,9 +28,12 @@ type API struct {
 	AMIConnector *ami.Connector
 	StateManager StateManagerInterface
 	AstDBPath    string
+	TriggerPoll  func(nodeID int)
+	BuildVersion string
+	BuildTime    string
 }
 
-func New(db *sql.DB, secret string, ttl time.Duration) *API {
+func New(db *gorm.DB, secret string, ttl time.Duration) *API {
 	return &API{
 		Users:        repository.NewUserRepo(db),
 		LinkStats:    repository.NewLinkStatsRepo(db),
@@ -54,6 +57,17 @@ func (a *API) SetAstDBPath(path string) {
 // SetStateManager sets the state manager for talker log access
 func (a *API) SetStateManager(sm StateManagerInterface) {
 	a.StateManager = sm
+}
+
+// SetTriggerPoll configures a function to trigger a server-side poll (optionally for a specific node)
+func (a *API) SetTriggerPoll(fn func(nodeID int)) {
+	a.TriggerPoll = fn
+}
+
+// SetBuildInfo sets the build version and build time
+func (a *API) SetBuildInfo(version, buildTime string) {
+	a.BuildVersion = version
+	a.BuildTime = buildTime
 }
 
 func (a *API) Register(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +203,7 @@ func (a *API) LinkStatsHandler(w http.ResponseWriter, r *http.Request) {
 			ref = t
 		}
 		if !ref.IsZero() {
-			filtered := make([]repository.LinkStat, 0, len(stats))
+			filtered := make([]models.LinkStat, 0, len(stats))
 			for _, s := range stats {
 				if !s.UpdatedAt.Before(ref) {
 					filtered = append(filtered, s)
@@ -211,7 +225,7 @@ func (a *API) LinkStatsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if len(wanted) > 0 {
-			filtered := make([]repository.LinkStat, 0, len(stats))
+			filtered := make([]models.LinkStat, 0, len(stats))
 			for _, s := range stats {
 				if _, ok := wanted[s.Node]; ok {
 					filtered = append(filtered, s)
@@ -259,7 +273,7 @@ func (a *API) TopLinkStatsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// compute rate if requested
 	type row struct {
-		repository.LinkStat
+		models.LinkStat
 		Rate float64
 	}
 	rows := make([]row, 0, len(stats))
@@ -351,6 +365,35 @@ func (a *API) currentUser(r *http.Request) (*repository.SafeUser, int) {
 
 func Health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"status": "ok"})
+}
+
+// Version returns the build version and build time
+func (a *API) Version(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{
+		"version":    a.BuildVersion,
+		"build_time": a.BuildTime,
+	})
+}
+
+// PollNow triggers an immediate poll. Optional query param node specifies a node to poll.
+// Endpoint: POST /api/poll-now?node=XXXX
+func (a *API) PollNow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, 405, "method_not_allowed", "only POST supported")
+		return
+	}
+	if a.TriggerPoll == nil {
+		writeError(w, 503, "poll_unavailable", "polling service not available")
+		return
+	}
+	nodeID := 0
+	if n := r.URL.Query().Get("node"); n != "" {
+		if v, err := strconv.Atoi(n); err == nil {
+			nodeID = v
+		}
+	}
+	a.TriggerPoll(nodeID)
+	writeJSON(w, 200, map[string]any{"ok": true, "node": nodeID})
 }
 
 // DashboardSummary public minimal placeholder.

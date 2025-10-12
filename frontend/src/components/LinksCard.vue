@@ -78,15 +78,9 @@
           </label>
         </div>
         <div v-if="notificationsEnabled" class="setting-row button-row">
-          <button @click="sendTestNotification" class="test-notification-btn">
-            🔔 Test Notification
-          </button>
-          <button v-if="soundEnabled" @click="playNotificationSound" class="test-notification-btn secondary">
-            🔊 Test Sound
-          </button>
-          <button v-if="speechEnabled" @click="testSpeech" class="test-notification-btn secondary">
-            🗣️ Test Speech
-          </button>
+          <button @click="sendTestNotification" class="test-notification-btn">🔔 Test Notification</button>
+          <button v-if="soundEnabled" @click="playNotificationSound" class="test-notification-btn secondary">🔊 Test Sound</button>
+          <button v-if="speechEnabled" @click="testSpeech" class="test-notification-btn secondary">🗣️ Test Speech</button>
         </div>
         <div v-if="notificationsEnabled && cooldownRemaining > 0" class="cooldown-status">
           ⏱️ Cooldown active: {{ formatCooldownTime(cooldownRemaining) }} remaining
@@ -306,12 +300,12 @@ function playNotificationSound() {
         duration = 0.35
     }
     
-    console.log('Played notification sound:', soundType.value, 'at volume:', soundVolume.value, 'duration:', duration)
+  logger.info('Played notification sound:', soundType.value, 'at volume:', soundVolume.value, 'duration:', duration)
     
     // Return duration in milliseconds (with small buffer)
     return Math.ceil(duration * 1000) + 100
   } catch (err) {
-    console.error('Failed to play notification sound:', err)
+  logger.error('Failed to play notification sound:', err)
     return 0
   }
 }
@@ -328,12 +322,12 @@ function speakNotification(text) {
       utterance.volume = soundVolume.value / 100
       
       window.speechSynthesis.speak(utterance)
-      console.log('Speaking:', text)
+  logger.info('Speaking:', text)
     } else {
-      console.error('Speech synthesis not supported')
+  logger.error('Speech synthesis not supported')
     }
   } catch (err) {
-    console.error('Failed to speak notification:', err)
+  logger.error('Failed to speak notification:', err)
   }
 }
 
@@ -433,7 +427,7 @@ const anyLinkTransmitting = computed(() => {
 
 // Request notification permission and update state
 async function onNotificationToggle() {
-  console.log('Notification toggle:', notificationsEnabled.value)
+  logger.info('Notification toggle:', notificationsEnabled.value)
   
   if (notificationsEnabled.value) {
     if (typeof Notification === 'undefined') {
@@ -442,12 +436,12 @@ async function onNotificationToggle() {
       return
     }
     
-    console.log('Current permission:', Notification.permission)
+  logger.info('Current permission:', Notification.permission)
     
     if (Notification.permission === 'default') {
-      console.log('Requesting notification permission...')
+  logger.info('Requesting notification permission...')
       const permission = await Notification.requestPermission()
-      console.log('Permission response:', permission)
+  logger.info('Permission response:', permission)
       notificationPermission.value = permission
       
       if (permission !== 'granted') {
@@ -460,20 +454,20 @@ async function onNotificationToggle() {
       notificationsEnabled.value = false
       return
     } else if (Notification.permission === 'granted') {
-      console.log('Permission already granted')
+  logger.info('Permission already granted')
       // Test notification
       sendTestNotification()
     }
   }
   
   localStorage.setItem('txNotificationsEnabled', notificationsEnabled.value)
-  console.log('Saved notification setting:', notificationsEnabled.value)
+  logger.info('Saved notification setting:', notificationsEnabled.value)
 }
 
 function sendTestNotification() {
-  console.log('Test notification requested')
-  console.log('Notification support:', typeof Notification !== 'undefined')
-  console.log('Permission:', typeof Notification !== 'undefined' ? Notification.permission : 'N/A')
+  logger.info('Test notification requested')
+  logger.info('Notification support:', typeof Notification !== 'undefined')
+  logger.info('Permission:', typeof Notification !== 'undefined' ? Notification.permission : 'N/A')
   
   if (typeof Notification === 'undefined') {
     alert('Notifications are not supported in this browser')
@@ -486,7 +480,7 @@ function sendTestNotification() {
   }
   
   try {
-    console.log('Creating test notification...')
+  logger.info('Creating test notification...')
     const notification = new Notification('✅ Test Notification', {
       body: 'Notifications are working! You will receive TX alerts.',
       icon: '/favicon.ico',
@@ -494,25 +488,25 @@ function sendTestNotification() {
       requireInteraction: false
     })
     
-    console.log('Test notification created successfully')
+  logger.info('Test notification created successfully')
     
     // Set lastNotificationTime to trigger cooldown display
     lastNotificationTime.value = Date.now()
     
     notification.onerror = (err) => {
-      console.error('Notification error event:', err)
+  logger.error('Notification error event:', err)
     }
     
     notification.onshow = () => {
-      console.log('Notification shown successfully')
+  logger.info('Notification shown successfully')
     }
     
     setTimeout(() => {
-      console.log('Closing test notification')
+  logger.info('Closing test notification')
       notification.close()
     }, 5000)
   } catch (err) {
-    console.error('Failed to create test notification:', err)
+  logger.error('Failed to create test notification:', err)
     alert('Failed to create notification: ' + err.message)
   }
 }
@@ -524,9 +518,9 @@ watch(notificationCooldown, (newValue) => {
 
 // Watch for TX state changes and send notifications
 watch(anyLinkTransmitting, (isTransmitting) => {
-  console.log('TX state changed:', isTransmitting, 'Notifications enabled:', notificationsEnabled.value)
-  console.log('Current lastNotificationTime:', lastNotificationTime.value)
-  console.log('Current wasTransmitting:', wasTransmitting.value)
+  logger.info('TX state changed:', isTransmitting, 'Notifications enabled:', notificationsEnabled.value)
+  logger.debug('Current lastNotificationTime:', lastNotificationTime.value)
+  logger.debug('Current wasTransmitting:', wasTransmitting.value)
   
   if (!notificationsEnabled.value) {
     wasTransmitting.value = isTransmitting
@@ -538,56 +532,56 @@ watch(anyLinkTransmitting, (isTransmitting) => {
   
   // TX just started
   if (isTransmitting && !wasTransmitting.value) {
-    console.log('TX started - checking if system was idle long enough')
+  logger.debug('TX started - checking if system was idle long enough')
     
     // Check if system has been idle (no TX) for longer than cooldown period
     const timeSinceLastTxStop = now - lastNotificationTime.value
     
-    console.log('Now:', now)
-    console.log('Last TX stop time:', lastNotificationTime.value)
-    console.log('Time since last TX stop (ms):', timeSinceLastTxStop)
-    console.log('Cooldown period (ms):', cooldownMs)
+  logger.debug('Now:', now)
+  logger.debug('Last TX stop time:', lastNotificationTime.value)
+  logger.debug('Time since last TX stop (ms):', timeSinceLastTxStop)
+  logger.debug('Cooldown period (ms):', cooldownMs)
     
     // Send notification if:
     // 1. Never had TX before (lastNotificationTime === 0), OR
     // 2. System has been idle for longer than cooldown period
     if (lastNotificationTime.value === 0 || timeSinceLastTxStop >= cooldownMs) {
-      console.log('✅ System was idle long enough - sending notification')
+  logger.info('✅ System was idle long enough - sending notification')
       sendTxNotification()
     } else {
       const remainingCooldown = Math.ceil((cooldownMs - timeSinceLastTxStop) / 1000)
-      console.log('❌ System still considered busy (not idle long enough)')
-      console.log('Need to wait', remainingCooldown, 'more seconds after TX stops for system to be "idle"')
+  logger.info('❌ System still considered busy (not idle long enough)')
+  logger.info('Need to wait', remainingCooldown, 'more seconds after TX stops for system to be "idle"')
     }
   }
   
   // TX just stopped - record the stop time to start measuring idle period
   if (!isTransmitting && wasTransmitting.value) {
-    console.log('TX stopped - recording stop time to measure idle period')
+  logger.debug('TX stopped - recording stop time to measure idle period')
     // Record when TX stopped - cooldown period must pass before system is considered "idle"
     lastNotificationTime.value = now
-    console.log('Set lastNotificationTime (TX stop time) to:', lastNotificationTime.value)
-    console.log('System will be considered "idle" in', notificationCooldown.value, 'seconds')
+  logger.debug('Set lastNotificationTime (TX stop time) to:', lastNotificationTime.value)
+  logger.debug('System will be considered "idle" in', notificationCooldown.value, 'seconds')
   }
   
   wasTransmitting.value = isTransmitting
-  console.log('Updated wasTransmitting to:', wasTransmitting.value)
+  logger.debug('Updated wasTransmitting to:', wasTransmitting.value)
 })
 
 function sendTxNotification() {
-  console.log('sendTxNotification called')
-  console.log('Notification available:', typeof Notification !== 'undefined')
-  console.log('Notification permission:', typeof Notification !== 'undefined' ? Notification.permission : 'N/A')
+  logger.debug('sendTxNotification called')
+  logger.debug('Notification available:', typeof Notification !== 'undefined')
+  logger.debug('Notification permission:', typeof Notification !== 'undefined' ? Notification.permission : 'N/A')
   
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
-    console.error('Cannot send notification - permission not granted')
+  logger.error('Cannot send notification - permission not granted')
     return
   }
   
   // Get transmitting node info
   const txLink = props.links.find(link => link.current_tx || link.is_keyed)
   if (!txLink) {
-    console.error('No TX link found')
+  logger.error('No TX link found')
     return
   }
   
@@ -595,7 +589,7 @@ function sendTxNotification() {
   const title = '🔴 TX Active'
   const body = `${nodeName} is now transmitting`
   
-  console.log('Creating notification:', title, body)
+  logger.debug('Creating notification:', title, body)
   
   try {
     const notification = new Notification(title, {
@@ -607,21 +601,21 @@ function sendTxNotification() {
       silent: false
     })
     
-    console.log('Notification created successfully')
+  logger.debug('Notification created successfully')
     
     // Play sound and/or speech based on settings
     // If both are enabled, play sound first, then speech after sound completes
     if (soundEnabled.value && speechEnabled.value) {
-      console.log('Playing sound followed by speech')
+  logger.debug('Playing sound followed by speech')
       const soundDuration = playNotificationSound()
       setTimeout(() => {
         speakNotification(body)
       }, soundDuration)
     } else if (soundEnabled.value) {
-      console.log('Playing notification sound only')
+  logger.debug('Playing notification sound only')
       playNotificationSound()
     } else if (speechEnabled.value) {
-      console.log('Speaking notification only')
+  logger.debug('Speaking notification only')
       speakNotification(body)
     }
     
@@ -634,7 +628,7 @@ function sendTxNotification() {
       notification.close()
     }
   } catch (err) {
-    console.error('Failed to create notification:', err)
+  logger.error('Failed to create notification:', err)
   }
 }
 
@@ -717,11 +711,29 @@ function formatNodeNumber(nodeNum, callsign) {
   return nodeNum
 }
 
+function parseAnyToMs(v) {
+  if (v == null) return NaN
+  if (typeof v === 'number') return v < 1e12 ? v * 1000 : v
+  if (typeof v === 'string') {
+    const s = v.trim()
+    if (/^\d+$/.test(s)) { const n = Number(s); return n < 1e12 ? n * 1000 : n }
+    const hasTZ = /Z|[+\-]\d{2}:?\d{2}/i.test(s)
+    const iso = hasTZ ? s : `${s}Z`
+    const ms = Date.parse(iso)
+    return Number.isFinite(ms) ? ms : NaN
+  }
+  const d = new Date(v).getTime()
+  return Number.isFinite(d) ? d : NaN
+}
+
 function formatSince(ts) {
   if (!ts) return '—'
-  const d = new Date(ts)
-  const diff = (Date.now()-d.getTime())/1000
-  if (diff < 60) return Math.floor(diff)+ 's ago'
+  const now = Date.now()
+  let t = parseAnyToMs(ts)
+  if (!Number.isFinite(t)) return '—'
+  if (t > now) t = now
+  const diff = Math.floor((now - t) / 1000)
+  if (diff < 60) return diff + 's ago'
   if (diff < 3600) return Math.floor(diff/60)+ 'm ago'
   if (diff < 86400) return Math.floor(diff/3600)+ 'h ago'
   return Math.floor(diff/86400)+'d ago'
