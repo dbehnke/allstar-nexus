@@ -1036,6 +1036,21 @@ func (sm *StateManager) ApplyCombinedStatus(combined *ami.CombinedNodeStatus) {
 		}
 		li.UpdateTx(isCurrentlyKeyed, now)
 
+		// Enrich with node lookup data (callsign, description, location)
+		if sm.nodeLookup != nil {
+			sm.nodeLookup.EnrichLinkInfo(&li)
+		} else if li.Node < 0 {
+			// Enrich text nodes even without nodeLookup service
+			if name, found := getTextNodeName(li.Node); found {
+				li.NodeCallsign = name
+				li.NodeDescription = "VOIP Client"
+			} else if name, found := ami.GetTextNodeFromAMI(li.Node); found {
+				// Fallback to AMI registry
+				li.NodeCallsign = name
+				li.NodeDescription = "VOIP Client"
+			}
+		}
+
 		newDetails = append(newDetails, li)
 
 		// Track if this is a new connection
