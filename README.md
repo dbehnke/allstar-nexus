@@ -1,13 +1,14 @@
 
 # Allstar Nexus
 
-Allstar Nexus is a full-stack application: a Go backend that serves APIs and an embedded frontend built with Vue 3 + Vite. The project is distributed as a single binary that embeds the compiled frontend assets for simple deployment.
+Allstar Nexus is a full-stack application: a Go backend that serves APIs and an embedded frontend built with Vue 3 + Vite. It was built as the Dashboard / Admin interface for Allstar Link (ASL) 3 nodes and serves as the monitoring Dashboard for the Who Cares Allstar Hub (WC8MI) site. The project is distributed as a single binary that embeds the compiled frontend assets for simple deployment.
 
 ## At a glance
 
 - Backend: Go (HTTP API, gamification logic, repository layer)
 - Frontend: Vue 3 + Vite (single-page app in `/frontend`)
 - Single-binary distribution: frontend static files are built and embedded into the Go binary
+ - Purpose: Dashboard / Admin for Allstar Link (ASL) 3 nodes; serves as a monitoring dashboard for the Who Cares site at https://asl3.whocaresradio.com
 
 ## Quickstart
 
