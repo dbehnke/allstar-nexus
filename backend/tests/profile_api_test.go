@@ -107,7 +107,7 @@ func TestProfileAPI_ReturnsAccurateAggregates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("http get: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("status: %d", resp.StatusCode)
 	}

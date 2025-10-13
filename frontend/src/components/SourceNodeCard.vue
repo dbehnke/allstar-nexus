@@ -159,12 +159,16 @@
           <tbody>
             <tr v-for="node in adjacentList" :key="node.NodeID" :class="{ transmitting: node.IsTransmitting, stale: node._stale, 'newly-connected': node.IsNew }">
               <td>
-                <a :href="`https://stats.allstarlink.org/stats/${node.NodeID}`"
+                <a v-if="node.NodeID >= 0"
+                   :href="`https://stats.allstarlink.org/stats/${node.NodeID}`"
                    target="_blank"
                    rel="noopener noreferrer"
                    class="node-link">
                   {{ node.NodeID }}
                 </a>
+                <span v-else class="text-node">
+                  {{ node.Callsign || node.NodeID }}
+                </span>
               </td>
               <td>
                 <a v-if="node.Callsign"
@@ -750,7 +754,7 @@ function parseAnyToMs(v) {
     return v < 1e12 ? v * 1000 : v
   }
   if (typeof v === 'string') {
-    const s = v.trim()
+    let s = v.trim()
     // Pure digits => epoch seconds/ms
     if (/^\d+$/.test(s)) {
       const n = Number(s)
@@ -758,7 +762,15 @@ function parseAnyToMs(v) {
     }
     // Append Z if naive ISO-like string (treat as UTC)
     const hasTZ = /Z|[+\-]\d{2}:?\d{2}/i.test(s)
-    const iso = hasTZ ? s : `${s}Z`
+    let iso = hasTZ ? s : `${s}Z`
+    // Normalize fractional seconds longer than milliseconds to 3 digits
+    // Go backend returns timestamps with microsecond precision (6 digits after decimal)
+    // but JavaScript Date.parse() can have issues with non-standard precision in some browsers.
+    // This normalizes to standard millisecond precision (3 digits).
+    // Examples:
+    //   2025-10-12T22:12:14.822791-04:00 -> 2025-10-12T22:12:14.822-04:00
+    //   2025-10-12T22:12:14.822791Z -> 2025-10-12T22:12:14.822Z
+    iso = iso.replace(/(\.\d{3})\d+([Zz]|[+\-]\d{2}:?\d{2})$/, '$1$2')
     const ms = Date.parse(iso)
     return Number.isFinite(ms) ? ms : NaN
   }
@@ -833,7 +845,8 @@ function formatDuration(startTime) {
   if (!startTime) return '-'
   const nowRef = nodeStore.nowTick
   const now = (typeof nowRef === 'number') ? nowRef : ((nowRef && nowRef.value) || Date.now())
-  const start = new Date(startTime).getTime()
+  const start = parseAnyToMs(startTime)
+  if (!Number.isFinite(start)) return '-'
   const diffSec = Math.floor((now - start) / 1000)
 
   if (diffSec < 60) return `${diffSec}s`

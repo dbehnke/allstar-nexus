@@ -44,22 +44,22 @@ func TestWebsocketTallyBroadcastIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("websocket dial failed: %v (resp=%v)", err, resp)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// connect admin
 	adminConn, resp2, err := dialer.Dial(wsAdminURL, nil)
 	if err != nil {
 		t.Fatalf("websocket dial to admin failed: %v (resp=%v)", err, resp2)
 	}
-	defer adminConn.Close()
+	defer func() { _ = adminConn.Close() }()
 
 	// Read initial STATUS_UPDATE from both clients
-	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, nonAdminMsg, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("failed to read initial message for non-admin: %v", err)
 	}
-	adminConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_ = adminConn.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, adminMsg, err := adminConn.ReadMessage()
 	if err != nil {
 		t.Fatalf("failed to read initial message for admin: %v", err)
@@ -125,7 +125,7 @@ func TestWebsocketTallyBroadcastIntegration(t *testing.T) {
 			}
 			return
 		default:
-			conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+			_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 			_, data, err := conn.ReadMessage()
 			if err != nil {
 				// continue loop until timeout
@@ -145,7 +145,6 @@ func TestWebsocketTallyBroadcastIntegration(t *testing.T) {
 				if _, ok := d["scoreboard"]; !ok {
 					t.Fatalf("expected scoreboard in payload, got: %v", d)
 				}
-				found = true
 				return
 			}
 		}

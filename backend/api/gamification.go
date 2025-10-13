@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -98,10 +99,12 @@ func (g *GamificationAPI) Scoreboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"scoreboard": entries,
 		"enabled":    true,
-	})
+	}); err != nil {
+		log.Printf("Failed to encode scoreboard response: %v", err)
+	}
 }
 
 // Profile returns detailed profile for a specific callsign
@@ -159,7 +162,7 @@ func (g *GamificationAPI) Profile(w http.ResponseWriter, r *http.Request) {
 	breakdown, _ := g.activityRepo.GetDailyBreakdown(ctx, callsign, 7)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"callsign":                profile.Callsign,
 		"level":                   profile.Level,
 		"experience_points":       profile.ExperiencePoints,
@@ -172,7 +175,9 @@ func (g *GamificationAPI) Profile(w http.ResponseWriter, r *http.Request) {
 		"weekly_xp":               weeklyXP,
 		"daily_xp":                dailyXP,
 		"daily_breakdown":         breakdown,
-	})
+	}); err != nil {
+		log.Printf("Failed to encode profile response: %v", err)
+	}
 }
 
 // RecentTransmissions returns paginated recent transmissions
@@ -220,10 +225,12 @@ func (g *GamificationAPI) RecentTransmissions(w http.ResponseWriter, r *http.Req
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"transmissions": entries,
 		"limit":         limit,
-	})
+	}); err != nil {
+		log.Printf("Failed to encode transmissions response: %v", err)
+	}
 }
 
 // LevelConfig returns the level configuration (XP requirements per level)
@@ -243,7 +250,9 @@ func (g *GamificationAPI) LevelConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"config": levelConfig,
-	})
+	}); err != nil {
+		log.Printf("Failed to encode level config response: %v", err)
+	}
 }

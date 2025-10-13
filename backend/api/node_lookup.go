@@ -54,7 +54,7 @@ func (a *API) searchAstDB(query string) ([]NodeRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var results []NodeRecord
 	scanner := bufio.NewScanner(file)
@@ -125,11 +125,11 @@ func (a *API) searchAstDB(query string) ([]NodeRecord, error) {
 				// This is a hashed text node ID - look up original name
 				if name, found := core.GetTextNodeName(nodeID); found {
 					callsign = name
-					desc = "VOIP Node"
+					desc = "VOIP Client"
 				} else {
 					// Fallback if not in map
 					callsign = strings.ToUpper(query)
-					desc = "VOIP Node (hash)"
+					desc = "VOIP Client (hash)"
 				}
 				results = append(results, NodeRecord{
 					Node:        nodeID,
@@ -142,7 +142,7 @@ func (a *API) searchAstDB(query string) ([]NodeRecord, error) {
 				results = append(results, NodeRecord{
 					Node:        0,
 					Callsign:    strings.ToUpper(query),
-					Description: "VOIP Node",
+					Description: "VOIP Client",
 					Location:    "",
 				})
 			}
@@ -159,7 +159,7 @@ func (a *API) LookupNodeByID(nodeID int) *NodeRecord {
 	if err != nil {
 		return nil
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	targetStr := strconv.Itoa(nodeID)

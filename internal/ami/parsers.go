@@ -2,8 +2,10 @@ package ami
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,9 +50,10 @@ func ParseXStat(node int, response string) (*XStatResult, error) {
 				result.Variables[key] = value
 
 				// Extract common variables
-				if key == "RPT_RXKEYED" {
+				switch key {
+				case "RPT_RXKEYED":
 					result.RxKeyed = value == "1"
-				} else if key == "RPT_TXKEYED" {
+				case "RPT_TXKEYED":
 					result.TxKeyed = value == "1"
 				}
 			}
@@ -75,10 +78,14 @@ func parseConnLine(line string) (Connection, error) {
 		Timestamp: time.Now(),
 	}
 
-	// Parse node number
+	// Parse node number (can be numeric or text-based callsign)
 	nodeNum, err := strconv.Atoi(fields[0])
 	if err != nil {
-		return Connection{}, fmt.Errorf("invalid node number: %w", err)
+		// Not a numeric node ID - treat as text node (callsign)
+		// We'll use a placeholder value for now since the Connection struct expects int
+		// The text will be passed through and processed by state manager
+		// For now, skip these - they should come through LinkedNodes instead
+		return Connection{}, fmt.Errorf("text node in Conn line (will be processed via LinkedNodes): %s", fields[0])
 	}
 	conn.Node = nodeNum
 
@@ -138,7 +145,13 @@ func parseLinkedNodes(line string) []LinkedNode {
 
 		nodeNum, err := strconv.Atoi(nodeStr)
 		if err != nil {
-			continue
+			// Not a numeric node - it's a text node (callsign)
+			// Hash it to a negative integer and register the mapping
+			// This is done in the AMI layer so CombinedNodeStatus can include these nodes
+			callsign := strings.ToUpper(strings.TrimSpace(nodeStr))
+			nodeNum = hashTextNodeToInt(callsign)
+			registerTextNodeInAMI(nodeNum, callsign)
+			log.Printf("[AMI] Registered text node: %s -> %d", callsign, nodeNum)
 		}
 
 		nodes = append(nodes, LinkedNode{
@@ -252,8 +265,13 @@ func CombineXStatSawStat(xstat *XStatResult, sawstat *SawStatResult) *CombinedNo
 		modes[ln.Node] = ln.Mode
 	}
 
+	// Track which nodes we've seen in Connections to identify LinkedNodes without Connections
+	seenNodes := make(map[int]bool)
+
 	// Merge connections with keying info
 	for _, conn := range xstat.Connections {
+		seenNodes[conn.Node] = true
+
 		cwh := ConnectionWithHistory{
 			Connection: conn,
 		}
@@ -272,6 +290,31 @@ func CombineXStatSawStat(xstat *XStatResult, sawstat *SawStatResult) *CombinedNo
 		}
 
 		combined.Connections = append(combined.Connections, cwh)
+	}
+
+	// Add LinkedNodes that don't have a corresponding Connection entry
+	// This handles text nodes (callsigns) that couldn't be parsed in Conn: lines
+	for _, ln := range xstat.LinkedNodes {
+		if !seenNodes[ln.Node] {
+			// Create synthetic connection for this linked node
+			cwh := ConnectionWithHistory{
+				Connection: Connection{
+					Node:      ln.Node,
+					Timestamp: time.Now(),
+				},
+				Mode: ln.Mode,
+			}
+
+			// Add keying info if available
+			if sawstat != nil {
+				if ki, ok := sawstat.Nodes[ln.Node]; ok {
+					cwh.KeyingInfo = ki
+					cwh.LastHeard = FormatLastHeard(ki)
+				}
+			}
+
+			combined.Connections = append(combined.Connections, cwh)
+		}
 	}
 
 	return combined
@@ -358,4 +401,49 @@ func parseVoterLine(line string) VoterReceiver {
 	}
 
 	return rx
+}
+
+// hashTextNodeToInt converts a text node (callsign) to a stable negative integer
+// Uses FNV-1a hash to ensure consistent hashing
+func hashTextNodeToInt(s string) int {
+	s = strings.ToUpper(s) // Normalize to uppercase
+	hash := uint32(2166136261)
+	for i := 0; i < len(s); i++ {
+		hash ^= uint32(s[i])
+		hash *= 16777619
+	}
+	// Convert to negative number to distinguish from numeric AllStar nodes
+	// Use lower 30 bits to keep values reasonable
+	return -int(hash & 0x3FFFFFFF)
+}
+
+// AMI-layer text node registry
+// This allows the AMI layer to register text nodes when parsing LinkedNodes
+// The core layer will also register them when processing RPT_ALINKS
+var (
+	amiTextNodeRegistry = make(map[int]string)
+	amiRegistryMu       sync.RWMutex
+)
+
+func registerTextNodeInAMI(nodeID int, text string) {
+	amiRegistryMu.Lock()
+	defer amiRegistryMu.Unlock()
+
+	upperText := strings.ToUpper(text)
+
+	// Check for hash collisions
+	if existing, exists := amiTextNodeRegistry[nodeID]; exists && existing != upperText {
+		log.Printf("WARNING: Hash collision detected! Callsigns %s and %s both hash to %d",
+			existing, upperText, nodeID)
+	}
+
+	amiTextNodeRegistry[nodeID] = upperText
+}
+
+// GetTextNodeFromAMI retrieves a text node name from the AMI-layer registry
+func GetTextNodeFromAMI(nodeID int) (string, bool) {
+	amiRegistryMu.RLock()
+	defer amiRegistryMu.RUnlock()
+	text, ok := amiTextNodeRegistry[nodeID]
+	return text, ok
 }

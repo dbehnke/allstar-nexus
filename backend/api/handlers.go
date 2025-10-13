@@ -13,11 +13,13 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 	"github.com/dbehnke/allstar-nexus/internal/ami"
+	"github.com/dbehnke/allstar-nexus/internal/core"
 	"gorm.io/gorm"
 )
 
 type StateManagerInterface interface {
 	TalkerLogSnapshot() any
+	Snapshot() core.NodeState
 }
 
 type API struct {
@@ -444,4 +446,18 @@ func (a *API) TalkerLog(w http.ResponseWriter, r *http.Request) {
 		"ok":     true,
 		"events": events,
 	})
+}
+
+// Status returns the full current NodeState snapshot (GET /api/status)
+func (a *API) Status(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, 405, "method_not_allowed", "only GET supported")
+		return
+	}
+	if a.StateManager == nil {
+		writeJSON(w, 200, map[string]any{"ok": true, "state": core.NodeState{}})
+		return
+	}
+	snap := a.StateManager.Snapshot()
+	writeJSON(w, 200, map[string]any{"ok": true, "state": snap})
 }

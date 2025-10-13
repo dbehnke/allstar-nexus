@@ -28,12 +28,6 @@ func seedLinkStats(t *testing.T, repo *repository.LinkStatsRepo, items []models.
 	}
 }
 
-type linkStatsResp struct {
-	Stats []struct {
-		Node int `json:"node"`
-	} `json:"stats"`
-}
-
 func TestLinkStatsSinceFiltering(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")

@@ -65,12 +65,31 @@ export function useNodeLookup(links) {
     // Enrich each link with node information
     const enriched = await Promise.all(
       linksList.map(async (link) => {
-        const nodeInfo = await lookupNode(link.node)
+        // Prefer existing backend-provided values; only lookup missing pieces
+        const hasCallsign = !!(link && typeof link.node_callsign === 'string' && link.node_callsign.trim().length > 0)
+        const hasDesc = !!(link && typeof link.node_description === 'string' && link.node_description.trim().length > 0)
+        const hasLoc = !!(link && typeof link.node_location === 'string' && link.node_location.trim().length > 0)
+
+        let nodeInfo = null
+        if (!hasCallsign || !hasDesc || !hasLoc) {
+          try {
+            nodeInfo = await lookupNode(link.node)
+          } catch (e) {
+            // ignore lookup errors; keep existing data
+          }
+        }
+
+        const prefer = (a, b) => {
+          if (typeof a === 'string' && a.trim().length > 0) return a
+          if (a != null && a !== '') return a
+          return b
+        }
+
         return {
           ...link,
-          node_callsign: nodeInfo?.callsign || '',
-          node_description: nodeInfo?.description || '',
-          node_location: nodeInfo?.location || ''
+          node_callsign: prefer(link.node_callsign, nodeInfo?.callsign || ''),
+          node_description: prefer(link.node_description, nodeInfo?.description || ''),
+          node_location: prefer(link.node_location, nodeInfo?.location || '')
         }
       })
     )

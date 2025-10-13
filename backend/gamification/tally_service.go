@@ -2,6 +2,7 @@ package gamification
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/models"
@@ -325,7 +326,11 @@ func (s *TallyService) ProcessTally() error {
 
 	if s.OnTallyComplete != nil {
 		go func(cb func(TallySummary), sum TallySummary) {
-			defer func() { recover() }()
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Recovered from panic in OnTallyComplete callback: %v", r)
+				}
+			}()
 			cb(sum)
 		}(s.OnTallyComplete, summary)
 	}

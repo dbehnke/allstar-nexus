@@ -79,7 +79,7 @@ func (h *Hub) HandleWS(sm *core.StateManager, authValidator func(r *http.Request
 		if r.Header.Get("Connection") == "" || r.Header.Get("Upgrade") == "" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUpgradeRequired)
-			w.Write([]byte(`{"ok":false,"error":"websocket_upgrade_required"}`))
+			_, _ = w.Write([]byte(`{"ok":false,"error":"websocket_upgrade_required"}`))
 			return
 		}
 		var allowed, isAdmin bool
@@ -104,7 +104,12 @@ func (h *Hub) HandleWS(sm *core.StateManager, authValidator func(r *http.Request
 		h.mu.Unlock()
 		log.Printf("[WS] client connected (total=%d)", clientCount)
 		go func() {
-			defer func() { h.mu.Lock(); delete(h.clients, c); h.mu.Unlock(); c.Close(websocket.StatusNormalClosure, "") }()
+			defer func() {
+				h.mu.Lock()
+				delete(h.clients, c)
+				h.mu.Unlock()
+				_ = c.Close(websocket.StatusNormalClosure, "")
+			}()
 			for { // discard inbound
 				if _, _, err := c.Read(context.Background()); err != nil {
 					return
@@ -166,9 +171,13 @@ func (h *Hub) BroadcastLoop(updates <-chan core.NodeState) {
 		h.mu.RLock()
 		for c, info := range h.clients {
 			if info.isAdmin {
-				go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, adminPayload)
+				go func(conn *websocket.Conn, p []byte) {
+					_ = conn.Write(context.Background(), websocket.MessageText, p)
+				}(c, adminPayload)
 			} else {
-				go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, maskedPayload)
+				go func(conn *websocket.Conn, p []byte) {
+					_ = conn.Write(context.Background(), websocket.MessageText, p)
+				}(c, maskedPayload)
 			}
 		}
 		h.mu.RUnlock()
@@ -182,7 +191,9 @@ func (h *Hub) TalkerLoop(events <-chan core.TalkerEvent) {
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
 		for c := range h.clients {
-			go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, payload)
+			go func(conn *websocket.Conn, p []byte) {
+			_ = conn.Write(context.Background(), websocket.MessageText, p)
+		}(c, payload)
 		}
 		h.mu.RUnlock()
 	}
@@ -204,9 +215,13 @@ func (h *Hub) LinkUpdateLoop(updates <-chan []core.LinkInfo) {
 		h.mu.RLock()
 		for c, info := range h.clients {
 			if info.isAdmin {
-				go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, adminPayload)
+				go func(conn *websocket.Conn, p []byte) {
+					_ = conn.Write(context.Background(), websocket.MessageText, p)
+				}(c, adminPayload)
 			} else {
-				go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, maskedPayload)
+				go func(conn *websocket.Conn, p []byte) {
+					_ = conn.Write(context.Background(), websocket.MessageText, p)
+				}(c, maskedPayload)
 			}
 		}
 		h.mu.RUnlock()
@@ -222,7 +237,9 @@ func (h *Hub) LinkRemovalLoop(removals <-chan []int) {
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
 		for c := range h.clients {
-			go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, payload)
+			go func(conn *websocket.Conn, p []byte) {
+			_ = conn.Write(context.Background(), websocket.MessageText, p)
+		}(c, payload)
 		}
 		h.mu.RUnlock()
 		// Trigger a debounced poll after link removals to confirm state and enrich details.
@@ -237,7 +254,9 @@ func (h *Hub) LinkTxLoop(events <-chan core.LinkTxEvent) {
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
 		for c := range h.clients {
-			go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, payload)
+			go func(conn *websocket.Conn, p []byte) {
+			_ = conn.Write(context.Background(), websocket.MessageText, p)
+		}(c, payload)
 		}
 		h.mu.RUnlock()
 	}
@@ -258,7 +277,9 @@ func (h *Hub) LinkTxBatchLoop(events <-chan core.LinkTxEvent, window time.Durati
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
 		for c := range h.clients {
-			go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, payload)
+			go func(conn *websocket.Conn, p []byte) {
+			_ = conn.Write(context.Background(), websocket.MessageText, p)
+		}(c, payload)
 		}
 		h.mu.RUnlock()
 		buf = buf[:0]
@@ -316,9 +337,13 @@ func (h *Hub) HeartbeatLoop(sm *core.StateManager, interval time.Duration) {
 		h.mu.RLock()
 		for c, info := range h.clients {
 			if info.isAdmin {
-				go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, adminPayload)
+				go func(conn *websocket.Conn, p []byte) {
+					_ = conn.Write(context.Background(), websocket.MessageText, p)
+				}(c, adminPayload)
 			} else {
-				go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, maskedPayload)
+				go func(conn *websocket.Conn, p []byte) {
+					_ = conn.Write(context.Background(), websocket.MessageText, p)
+				}(c, maskedPayload)
 			}
 		}
 		h.mu.RUnlock()
@@ -339,7 +364,9 @@ func (h *Hub) TalkerLogRefreshLoop(sm *core.StateManager, interval time.Duration
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
 		for c := range h.clients {
-			go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, payload)
+			go func(conn *websocket.Conn, p []byte) {
+			_ = conn.Write(context.Background(), websocket.MessageText, p)
+		}(c, payload)
 		}
 		h.mu.RUnlock()
 	}
@@ -358,9 +385,13 @@ func (h *Hub) SourceNodeKeyingLoop(updates <-chan core.SourceNodeKeyingUpdate) {
 		h.mu.RLock()
 		for c, info := range h.clients {
 			if info.isAdmin {
-				go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, adminPayload)
+				go func(conn *websocket.Conn, p []byte) {
+					_ = conn.Write(context.Background(), websocket.MessageText, p)
+				}(c, adminPayload)
 			} else {
-				go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, maskedPayload)
+				go func(conn *websocket.Conn, p []byte) {
+					_ = conn.Write(context.Background(), websocket.MessageText, p)
+				}(c, maskedPayload)
 			}
 		}
 		h.mu.RUnlock()
@@ -374,7 +405,9 @@ func (h *Hub) SourceNodeKeyingEventLoop(events <-chan core.SourceNodeKeyingEvent
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
 		for c := range h.clients {
-			go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, payload)
+			go func(conn *websocket.Conn, p []byte) {
+			_ = conn.Write(context.Background(), websocket.MessageText, p)
+		}(c, payload)
 		}
 		h.mu.RUnlock()
 	}
@@ -386,7 +419,9 @@ func (h *Hub) BroadcastTallyCompleted(summary interface{}) {
 	payload, _ := json.Marshal(env)
 	h.mu.RLock()
 	for c := range h.clients {
-		go func(conn *websocket.Conn, p []byte) { conn.Write(context.Background(), websocket.MessageText, p) }(c, payload)
+		go func(conn *websocket.Conn, p []byte) {
+			_ = conn.Write(context.Background(), websocket.MessageText, p)
+		}(c, payload)
 	}
 	h.mu.RUnlock()
 }

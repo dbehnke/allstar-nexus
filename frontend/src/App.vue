@@ -169,7 +169,9 @@ onMounted(() => {
   // Dynamically import dev-only test helpers in development builds. This keeps the
   // helper module out of production bundles.
   try {
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV) {
+    const isDev = typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV
+    const isTestMode = typeof window !== 'undefined' && window.__NEXUS_CONFIG__ && window.__NEXUS_CONFIG__.TEST_MODE
+    if (isDev || isTestMode) {
       import('./dev/test-helpers.js').then(m => { try { m && m.default && m.default() } catch (e) {} }).catch(() => {})
     }
   } catch (e) {}
