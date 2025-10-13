@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -20,13 +21,17 @@ type envelope struct {
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(envelope{OK: true, Data: data})
+	if err := json.NewEncoder(w).Encode(envelope{OK: true, Data: data}); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 func writeError(w http.ResponseWriter, status int, code, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(envelope{OK: false, Error: &errorBody{Code: code, Message: msg}})
+	if err := json.NewEncoder(w).Encode(envelope{OK: false, Error: &errorBody{Code: code, Message: msg}}); err != nil {
+		log.Printf("Failed to encode error response: %v", err)
+	}
 }
 
 // validatePassword enforces minimal password rules.

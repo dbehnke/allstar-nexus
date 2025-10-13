@@ -30,7 +30,11 @@ func TestStatus_IncludesNodeCallsignForHashedNodes(t *testing.T) {
 	api.Status(w, req)
 
 	res := w.Result()
-	defer res.Body.Close()
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			t.Logf("Failed to close response body: %v", err)
+		}
+	}()
 
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d", res.StatusCode)

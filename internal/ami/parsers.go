@@ -50,9 +50,10 @@ func ParseXStat(node int, response string) (*XStatResult, error) {
 				result.Variables[key] = value
 
 				// Extract common variables
-				if key == "RPT_RXKEYED" {
+				switch key {
+				case "RPT_RXKEYED":
 					result.RxKeyed = value == "1"
-				} else if key == "RPT_TXKEYED" {
+				case "RPT_TXKEYED":
 					result.TxKeyed = value == "1"
 				}
 			}

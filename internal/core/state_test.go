@@ -58,7 +58,7 @@ func TestLinkAddRemoveDiffs(t *testing.T) {
 	// Expect added 3000, removed 2000
 	var sawAdd, sawRem bool
 	timeout := time.After(500 * time.Millisecond)
-	for !(sawAdd && sawRem) {
+	for !sawAdd || !sawRem {
 		select {
 		case add := <-sm.LinkUpdates():
 			if len(add) == 1 && add[0].Node == 3000 {

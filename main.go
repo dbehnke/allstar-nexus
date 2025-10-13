@@ -46,7 +46,7 @@ func main() {
 
 	// Initialize logger (simple for now)
 	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
 	// Initialize GORM database with modernc.org/sqlite (pure Go, no CGO)
 	gormDB, err := gorm.Open(sqlite.New(sqlite.Config{
@@ -580,7 +580,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to init zap: %v", err)
 	}
-	defer zapLogger.Sync()
+	defer func() { _ = zapLogger.Sync() }()
 	loggingMW := middleware.Logging(zapLogger)
 	srv := &http.Server{Addr: addr, Handler: loggingMW(mux), ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second}
 

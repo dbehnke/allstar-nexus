@@ -54,7 +54,7 @@ func (a *API) searchAstDB(query string) ([]NodeRecord, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var results []NodeRecord
 	scanner := bufio.NewScanner(file)
@@ -159,7 +159,7 @@ func (a *API) LookupNodeByID(nodeID int) *NodeRecord {
 	if err != nil {
 		return nil
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	targetStr := strconv.Itoa(nodeID)

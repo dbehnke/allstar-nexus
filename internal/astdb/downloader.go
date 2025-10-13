@@ -64,8 +64,8 @@ func (d *Downloader) Download() error {
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
-	defer tmpFile.Close()
-	defer os.Remove(tmpPath) // Clean up temp file if we error
+	defer func() { _ = tmpFile.Close() }()
+	defer func() { _ = os.Remove(tmpPath) }() // Clean up temp file if we error
 
 	// Download the file
 	client := &http.Client{
@@ -75,7 +75,7 @@ func (d *Downloader) Download() error {
 	if err != nil {
 		return fmt.Errorf("http get: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("http status: %d", resp.StatusCode)
@@ -91,7 +91,9 @@ func (d *Downloader) Download() error {
 		zap.Int64("bytes", written))
 
 	// Close temp file before rename
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
 
 	// Ensure directory exists
 	dir := filepath.Dir(d.FilePath)
@@ -139,7 +141,7 @@ func (d *Downloader) ImportToDatabase() error {
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	now := time.Now()
 	nodes := make([]models.NodeInfo, 0, 1000) // Batch buffer
@@ -344,7 +346,7 @@ func (d *Downloader) GetNodeCount() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	count := 0
 	scanner := bufio.NewScanner(file)
@@ -364,7 +366,7 @@ func (d *Downloader) ValidateFile() error {
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	lineCount := 0

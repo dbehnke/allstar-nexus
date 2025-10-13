@@ -21,7 +21,7 @@ func TestAuthNegativeCases(t *testing.T) {
 	postJSON(t, client, srv.URL+"/api/auth/register", map[string]string{"email": "neg@example.com", "password": "Password!1"})
 	_, loginEnv := postJSON(t, client, srv.URL+"/api/auth/login", map[string]string{"email": "neg@example.com", "password": "Password!1"})
 	var loginData map[string]string
-	json.Unmarshal(loginEnv.Data, &loginData)
+	_ = json.Unmarshal(loginEnv.Data, &loginData)
 	tok := loginData["token"]
 
 	// Malformed token (truncate)

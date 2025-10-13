@@ -50,7 +50,11 @@ func TestCountUsers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
 	}
-	defer db.CloseSafe()
+	defer func() {
+		if err := db.CloseSafe(); err != nil {
+			t.Logf("Failed to close database: %v", err)
+		}
+	}()
 
 	// Create users table using a named type
 	type User struct {
