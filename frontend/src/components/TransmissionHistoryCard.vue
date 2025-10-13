@@ -22,7 +22,10 @@
                 <span v-else class="muted">—</span>
               </td>
               <td>
-                <a v-if="t.node" :href="`https://stats.allstarlink.org/stats/${t.node}`" target="_blank" rel="noopener noreferrer">{{ t.node }}</a>
+                <template v-if="t.node != null && t.node !== ''">
+                  <a v-if="Number(t.node) >= 0" :href="`https://stats.allstarlink.org/stats/${t.node}`" target="_blank" rel="noopener noreferrer">{{ t.node }}</a>
+                  <span v-else class="muted">{{ t.callsign }}</span>
+                </template>
                 <span v-else class="muted">—</span>
               </td>
               <td>{{ formatDuration(getDuration(t)) }}</td>

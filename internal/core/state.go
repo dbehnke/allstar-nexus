@@ -338,8 +338,28 @@ func (sm *StateManager) apply(m ami.Message) {
 			// Enrich tracker nodes with lookup data
 			if sm.nodeLookup != nil {
 				for _, nodeID := range ids {
-					if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
-						tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+					if nodeID > 0 {
+						if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
+							tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+						}
+					} else if nodeID < 0 {
+						// Handle hashed/text nodes by resolving to original name
+						if name, ok := getTextNodeName(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						}
+					}
+				}
+			} else {
+				// Even without nodeLookup, attempt to enrich negative nodes from registries
+				for _, nodeID := range ids {
+					if nodeID < 0 {
+						if name, ok := getTextNodeName(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						}
 					}
 				}
 			}
@@ -393,8 +413,27 @@ func (sm *StateManager) apply(m ami.Message) {
 				// Enrich tracker nodes with lookup data
 				if sm.nodeLookup != nil {
 					for _, nodeID := range ids {
-						if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
-							tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+						if nodeID > 0 {
+							if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
+								tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+							}
+						} else if nodeID < 0 {
+							if name, ok := getTextNodeName(nodeID); ok {
+								tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+							} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+								tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+							}
+						}
+					}
+				} else {
+					// Without lookup, still enrich negative nodes from registries
+					for _, nodeID := range ids {
+						if nodeID < 0 {
+							if name, ok := getTextNodeName(nodeID); ok {
+								tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+							} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+								tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+							}
 						}
 					}
 				}
@@ -1039,15 +1078,20 @@ func (sm *StateManager) ApplyCombinedStatus(combined *ami.CombinedNodeStatus) {
 		// Enrich with node lookup data (callsign, description, location)
 		if sm.nodeLookup != nil {
 			sm.nodeLookup.EnrichLinkInfo(&li)
+			log.Printf("[STATE DEBUG] Enriched node %d via nodeLookup: callsign=%s, desc=%s", li.Node, li.NodeCallsign, li.NodeDescription)
 		} else if li.Node < 0 {
 			// Enrich text nodes even without nodeLookup service
 			if name, found := getTextNodeName(li.Node); found {
 				li.NodeCallsign = name
 				li.NodeDescription = "VOIP Client"
+				log.Printf("[STATE DEBUG] Enriched negative node %d from core registry: %s", li.Node, name)
 			} else if name, found := ami.GetTextNodeFromAMI(li.Node); found {
 				// Fallback to AMI registry
 				li.NodeCallsign = name
 				li.NodeDescription = "VOIP Client"
+				log.Printf("[STATE DEBUG] Enriched negative node %d from AMI registry: %s", li.Node, name)
+			} else {
+				log.Printf("[STATE DEBUG] Failed to enrich negative node %d - not found in any registry", li.Node)
 			}
 		}
 

@@ -148,6 +148,7 @@ func parseLinkedNodes(line string) []LinkedNode {
 			callsign := strings.ToUpper(strings.TrimSpace(nodeStr))
 			nodeNum = hashTextNodeToInt(callsign)
 			registerTextNodeInAMI(nodeNum, callsign)
+			fmt.Printf("[AMI DEBUG] Registered text node: %s -> %d\n", callsign, nodeNum)
 		}
 
 		nodes = append(nodes, LinkedNode{

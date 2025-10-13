@@ -93,6 +93,47 @@ export const useNodeStore = defineStore('node', () => {
             }
           } catch (e) {}
 
+          // Opportunistic enrichment: if adjacent entries are missing Callsign/Description,
+          // fill from the latest STATUS_UPDATE links_detailed when available.
+          try {
+            const map = snapshot.adjacentNodes
+            const st = (status && status.value) ? status.value : {}
+            const ld = Array.isArray(st.links_detailed) ? st.links_detailed : []
+            if (map && ld && ld.length > 0) {
+              // Build a lookup by node id from links_detailed
+              const byId = {}
+              for (const li of ld) {
+                const nid = Number(li.Node || li.node || li.node_id || li.NodeID)
+                if (!isNaN(nid)) {
+                  byId[nid] = li
+                }
+              }
+              for (const k of Object.keys(map)) {
+                const entry = map[k]
+                const nid = Number(entry.NodeID || k)
+                const link = byId[nid]
+                if (link) {
+                  // Preserve any existing values; only set when missing/empty
+                  const cs = entry.Callsign || entry.callsign
+                  const desc = entry.Description || entry.description
+                  const loc = entry.Location || entry.location
+                  if (!cs) {
+                    const fromLD = link.NodeCallsign || link.node_callsign || link.callsign
+                    if (fromLD) entry.Callsign = fromLD
+                  }
+                  if (!desc) {
+                    const fromLD = link.NodeDescription || link.node_description || link.description
+                    if (fromLD) entry.Description = fromLD
+                  }
+                  if (!loc) {
+                    const fromLD = link.NodeLocation || link.node_location || link.location
+                    if (fromLD) entry.Location = fromLD
+                  }
+                }
+              }
+            }
+          } catch (e) { logger.debug('adjacent enrichment from status failed', e) }
+
           // assign in an immutable way so reactivity picks up the change
           sourceNodes.value = Object.assign({}, sourceNodes.value, { [id]: snapshot })
         }

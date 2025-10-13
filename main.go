@@ -117,6 +117,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", api.Health)
 	mux.HandleFunc("/api/version", apiLayer.Version)
+	mux.HandleFunc("/api/status", apiLayer.Status)
 	mux.HandleFunc("/api/dashboard/summary", apiLayer.DashboardSummary)
 	limiter := middleware.RateLimiter(cfg.AuthRateLimitRPM)
 	mux.Handle("/api/auth/register", limiter(http.HandlerFunc(apiLayer.Register)))

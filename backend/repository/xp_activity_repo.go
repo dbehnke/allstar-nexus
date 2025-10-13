@@ -27,8 +27,9 @@ func (r *XPActivityRepo) LogActivity(
 	kerchunkPenalty float64,
 ) error {
 	log := models.XPActivityLog{
-		Callsign:         callsign,
-		HourBucket:       time.Now().Truncate(time.Hour),
+		Callsign: callsign,
+		// Normalize to UTC to avoid timezone edge cases when querying daily/weekly XP
+		HourBucket:       time.Now().UTC().Truncate(time.Hour),
 		RawXP:            rawXP,
 		AwardedXP:        awardedXP,
 		RestedMultiplier: restedMultiplier,
@@ -65,7 +66,7 @@ func (r *XPActivityRepo) GetDailyXP(ctx context.Context, callsign string) (int, 
 // GetLast24Hours returns all activity logs for a callsign in last 24 hours
 // Used for calculating diminishing returns
 func (r *XPActivityRepo) GetLast24Hours(ctx context.Context, callsign string) ([]models.XPActivityLog, error) {
-	cutoff := time.Now().Add(-24 * time.Hour)
+	cutoff := time.Now().UTC().Add(-24 * time.Hour)
 	var logs []models.XPActivityLog
 	err := r.db.WithContext(ctx).
 		Where("callsign = ? AND created_at >= ?", callsign, cutoff).
@@ -76,7 +77,7 @@ func (r *XPActivityRepo) GetLast24Hours(ctx context.Context, callsign string) ([
 
 // GetDailyBreakdown returns activity breakdown for last N days
 func (r *XPActivityRepo) GetDailyBreakdown(ctx context.Context, callsign string, days int) ([]DailyActivity, error) {
-	cutoff := time.Now().AddDate(0, 0, -days).Truncate(24 * time.Hour)
+	cutoff := time.Now().UTC().AddDate(0, 0, -days).Truncate(24 * time.Hour)
 
 	type Result struct {
 		Date            string
