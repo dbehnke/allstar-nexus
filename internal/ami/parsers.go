@@ -2,8 +2,10 @@ package ami
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -148,7 +150,7 @@ func parseLinkedNodes(line string) []LinkedNode {
 			callsign := strings.ToUpper(strings.TrimSpace(nodeStr))
 			nodeNum = hashTextNodeToInt(callsign)
 			registerTextNodeInAMI(nodeNum, callsign)
-			fmt.Printf("[AMI DEBUG] Registered text node: %s -> %d\n", callsign, nodeNum)
+			log.Printf("[AMI] Registered text node: %s -> %d", callsign, nodeNum)
 		}
 
 		nodes = append(nodes, LinkedNode{
@@ -417,14 +419,30 @@ func hashTextNodeToInt(s string) int {
 // AMI-layer text node registry
 // This allows the AMI layer to register text nodes when parsing LinkedNodes
 // The core layer will also register them when processing RPT_ALINKS
-var amiTextNodeRegistry = make(map[int]string)
+var (
+	amiTextNodeRegistry = make(map[int]string)
+	amiRegistryMu       sync.RWMutex
+)
 
 func registerTextNodeInAMI(nodeID int, text string) {
-	amiTextNodeRegistry[nodeID] = strings.ToUpper(text)
+	amiRegistryMu.Lock()
+	defer amiRegistryMu.Unlock()
+
+	upperText := strings.ToUpper(text)
+
+	// Check for hash collisions
+	if existing, exists := amiTextNodeRegistry[nodeID]; exists && existing != upperText {
+		log.Printf("WARNING: Hash collision detected! Callsigns %s and %s both hash to %d",
+			existing, upperText, nodeID)
+	}
+
+	amiTextNodeRegistry[nodeID] = upperText
 }
 
 // GetTextNodeFromAMI retrieves a text node name from the AMI-layer registry
 func GetTextNodeFromAMI(nodeID int) (string, bool) {
+	amiRegistryMu.RLock()
+	defer amiRegistryMu.RUnlock()
 	text, ok := amiTextNodeRegistry[nodeID]
 	return text, ok
 }

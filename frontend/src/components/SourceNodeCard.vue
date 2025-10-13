@@ -764,9 +764,12 @@ function parseAnyToMs(v) {
     const hasTZ = /Z|[+\-]\d{2}:?\d{2}/i.test(s)
     let iso = hasTZ ? s : `${s}Z`
     // Normalize fractional seconds longer than milliseconds to 3 digits
+    // Go backend returns timestamps with microsecond precision (6 digits after decimal)
+    // but JavaScript Date.parse() can have issues with non-standard precision in some browsers.
+    // This normalizes to standard millisecond precision (3 digits).
     // Examples:
-    // 2025-10-12T22:12:14.822791-04:00 -> 2025-10-12T22:12:14.822-04:00
-    // 2025-10-12T22:12:14.822791Z -> 2025-10-12T22:12:14.822Z
+    //   2025-10-12T22:12:14.822791-04:00 -> 2025-10-12T22:12:14.822-04:00
+    //   2025-10-12T22:12:14.822791Z -> 2025-10-12T22:12:14.822Z
     iso = iso.replace(/(\.\d{3})\d+([Zz]|[+\-]\d{2}:?\d{2})$/, '$1$2')
     const ms = Date.parse(iso)
     return Number.isFinite(ms) ? ms : NaN
