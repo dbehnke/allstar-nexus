@@ -193,7 +193,9 @@ func (c *Connector) connectAndServe(ctx context.Context) error {
 	// Log successful TCP connection so it's visible in server logs
 	log.Printf("[AMI] connected to %s", addr)
 	if err := c.sendLogin(); err != nil {
-		conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			log.Printf("Failed to close AMI connection: %v", closeErr)
+		}
 		return err
 	}
 

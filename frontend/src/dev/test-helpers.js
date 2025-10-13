@@ -5,56 +5,54 @@ import { useNodeStore } from '../stores/node'
 
 function installHelpers() {
   try {
-    const nodeStore = useNodeStore()
-    // initialize queue
+    // initialize queue and a basic queuing sender immediately
     window.__NEXUS_TEST_QUEUE__ = window.__NEXUS_TEST_QUEUE__ || []
-
     if (!window.__TEST_SEND_WS) {
-      window.__TEST_SEND_WS = (env) => {
-        try {
-          if (nodeStore && typeof nodeStore.handleWSMessage === 'function') {
-            try { nodeStore.handleWSMessage(env) } catch (e) {}
-            return true
-          }
-        } catch (e) {}
-        window.__NEXUS_TEST_QUEUE__.push(env)
-        return false
-      }
+      window.__TEST_SEND_WS = (env) => { window.__NEXUS_TEST_QUEUE__.push(env); return false }
     }
 
-    window.__TEST_READ_STORE = () => {
+    // Poll for Pinia + store readiness, then wire through and expose helpers
+    const start = Date.now()
+    const poll = setInterval(() => {
       try {
-        const sn = nodeStore.sourceNodes && (nodeStore.sourceNodes.value || nodeStore.sourceNodes) || {}
-        const sb = (nodeStore.scoreboard && (nodeStore.scoreboard.value || nodeStore.scoreboard)) || []
-        return { sourceNodes: sn, scoreboard: sb }
-      } catch (e) { return null }
-    }
+        const store = useNodeStore()
+        if (!store || typeof store.handleWSMessage !== 'function') throw new Error('store not ready')
 
-    window.__TEST_HAS_ADJ = (id) => {
-      try {
-        const sn = nodeStore.sourceNodes && (nodeStore.sourceNodes.value || nodeStore.sourceNodes) || {}
-        const entry = sn[id] || null
-        return !!(entry && (entry.adjacentNodes || entry.adjacent_nodes))
-      } catch (e) { return false }
-    }
+        // Replace sender to call store directly
+        window.__TEST_SEND_WS = (env) => { try { store.handleWSMessage(env) } catch (e) {}; return true }
 
-    window.__TEST_HAS_SCOREBOARD = () => {
-      try { const sb = (nodeStore.scoreboard && (nodeStore.scoreboard.value || nodeStore.scoreboard)) || []; return Array.isArray(sb) && sb.length > 0 } catch (e) { return false }
-    }
+        // Helper readers
+        window.__TEST_READ_STORE = () => {
+          try {
+            const sn = store.sourceNodes && (store.sourceNodes.value || store.sourceNodes) || {}
+            const sb = (store.scoreboard && (store.scoreboard.value || store.scoreboard)) || []
+            return { sourceNodes: sn, scoreboard: sb }
+          } catch (e) { return null }
+        }
+        window.__TEST_HAS_ADJ = (id) => {
+          try {
+            const sn = store.sourceNodes && (store.sourceNodes.value || store.sourceNodes) || {}
+            const entry = sn[id] || null
+            return !!(entry && (entry.adjacentNodes || entry.adjacent_nodes))
+          } catch (e) { return false }
+        }
+        window.__TEST_HAS_SCOREBOARD = () => {
+          try { const sb = (store.scoreboard && (store.scoreboard.value || store.scoreboard)) || []; return Array.isArray(sb) && sb.length > 0 } catch (e) { return false }
+        }
 
-    // Flush any queued envelopes after a short delay to allow the store to initialize
-    setTimeout(() => {
-      try {
+        // Flush any queued envelopes
         const q = window.__NEXUS_TEST_QUEUE__ || []
-        if (Array.isArray(q) && q.length > 0 && nodeStore && typeof nodeStore.handleWSMessage === 'function') {
-          for (const e of q) {
-            try { nodeStore.handleWSMessage(e) } catch (err) {}
-          }
+        if (Array.isArray(q) && q.length) {
+          for (const env of q) { try { store.handleWSMessage(env) } catch (e) {} }
           window.__NEXUS_TEST_QUEUE__ = []
         }
-      } catch (e) {}
-    }, 200)
 
+        clearInterval(poll)
+      } catch (e) {
+        // keep polling for up to ~5s
+        if (Date.now() - start > 5000) clearInterval(poll)
+      }
+    }, 50)
   } catch (e) {
     // ignore in dev-time failures
   }

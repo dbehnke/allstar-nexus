@@ -12,6 +12,8 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	_ "modernc.org/sqlite"
 )
 
 // helper to seed link stats directly
@@ -26,16 +28,13 @@ func seedLinkStats(t *testing.T, repo *repository.LinkStatsRepo, items []models.
 	}
 }
 
-type linkStatsResp struct {
-	Stats []struct {
-		Node int `json:"node"`
-	} `json:"stats"`
-}
-
 func TestLinkStatsSinceFiltering(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	gdb, err := gorm.Open(sqlite.New(sqlite.Config{
+		DriverName: "sqlite",
+		DSN:        dbPath,
+	}), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open gorm sqlite: %v", err)
 	}

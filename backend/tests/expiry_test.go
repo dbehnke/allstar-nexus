@@ -13,6 +13,8 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	_ "modernc.org/sqlite"
 )
 
 // Helper to create API/server with custom TTL
@@ -20,7 +22,10 @@ func newServerWithTTL(t *testing.T, ttl time.Duration) (*httptest.Server, func()
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "ttl.db")
-	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	gdb, err := gorm.Open(sqlite.New(sqlite.Config{
+		DriverName: "sqlite",
+		DSN:        dbPath,
+	}), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open gorm sqlite: %v", err)
 	}
@@ -47,13 +52,13 @@ func TestShortTTLExpiry(t *testing.T) {
 	defer cleanup()
 	client := srv.Client()
 	// register
-	client.Post(srv.URL+"/api/auth/register", "application/json", bytesReader(`{"email":"e@x","password":"Password!1"}`))
+	_, _ = client.Post(srv.URL+"/api/auth/register", "application/json", bytesReader(`{"email":"e@x","password":"Password!1"}`))
 	// login
 	resp, _ := client.Post(srv.URL+"/api/auth/login", "application/json", bytesReader(`{"email":"e@x","password":"Password!1"}`))
 	var e env
 	decode(resp, &e)
 	var payload map[string]string
-	json.Unmarshal(e.Data, &payload)
+	_ = json.Unmarshal(e.Data, &payload)
 	tok := payload["token"]
 	// immediate /api/me should pass
 	rMe1, _ := getWithToken(client, srv.URL+"/api/me", tok)
@@ -71,8 +76,8 @@ func TestShortTTLExpiry(t *testing.T) {
 // local helpers
 func bytesReader(s string) *bytes.Reader { return bytes.NewReader([]byte(s)) }
 func decode(resp *http.Response, v any) {
-	defer resp.Body.Close()
-	json.NewDecoder(resp.Body).Decode(v)
+	defer func() { _ = resp.Body.Close() }()
+	_ = json.NewDecoder(resp.Body).Decode(v)
 }
 func getWithToken(c *http.Client, url, tok string) (*http.Response, env) {
 	req, _ := http.NewRequest("GET", url, nil)
@@ -81,7 +86,7 @@ func getWithToken(c *http.Client, url, tok string) (*http.Response, env) {
 	}
 	resp, _ := c.Do(req)
 	var e env
-	json.NewDecoder(resp.Body).Decode(&e)
-	resp.Body.Close()
+	_ = json.NewDecoder(resp.Body).Decode(&e)
+	_ = resp.Body.Close()
 	return resp, e
 }

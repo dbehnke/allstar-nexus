@@ -16,6 +16,8 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	_ "modernc.org/sqlite"
 )
 
 type envelope struct {
@@ -44,7 +46,10 @@ func newTestServer(t *testing.T) (*httptest.Server, func()) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
-	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	gdb, err := gorm.Open(sqlite.New(sqlite.Config{
+		DriverName: "sqlite",
+		DSN:        dbPath,
+	}), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open gorm sqlite: %v", err)
 	}
@@ -57,7 +62,7 @@ func newTestServer(t *testing.T) (*httptest.Server, func()) {
 	cleanup := func() {
 		srv.Close()
 		// nothing to close for gorm/sqlite file; remove temp dir
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir)
 	}
 	return srv, cleanup
 }
@@ -71,7 +76,7 @@ func postJSON(t *testing.T, client *http.Client, url string, body any) (*http.Re
 	}
 	var env envelope
 	data, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	_ = json.Unmarshal(data, &env)
 	return resp, env
 }
@@ -88,7 +93,7 @@ func getAuth(t *testing.T, client *http.Client, url, token string) (*http.Respon
 	}
 	var env envelope
 	data, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	_ = json.Unmarshal(data, &env)
 	return resp, env
 }
@@ -109,7 +114,7 @@ func TestHandlersBootstrapAndRoles(t *testing.T) {
 		Role  string `json:"role"`
 	}
 	var u1 user
-	json.Unmarshal(env1.Data, &u1)
+	_ = json.Unmarshal(env1.Data, &u1)
 	if u1.Role != "superadmin" {
 		t.Fatalf("first user role = %s want superadmin", u1.Role)
 	}
@@ -123,7 +128,7 @@ func TestHandlersBootstrapAndRoles(t *testing.T) {
 		t.Fatalf("expected 201 second user got %d", r2.StatusCode)
 	}
 	var u2 user
-	json.Unmarshal(env2.Data, &u2)
+	_ = json.Unmarshal(env2.Data, &u2)
 	if u2.Role != "admin" {
 		t.Fatalf("second user should be admin got %s", u2.Role)
 	}
@@ -134,7 +139,7 @@ func TestHandlersBootstrapAndRoles(t *testing.T) {
 		t.Fatalf("expected 201 third user got %d", r3.StatusCode)
 	}
 	var u3 user
-	json.Unmarshal(env3.Data, &u3)
+	_ = json.Unmarshal(env3.Data, &u3)
 	if u3.Role != "user" {
 		t.Fatalf("third user expected role user got %s", u3.Role)
 	}
@@ -145,7 +150,7 @@ func TestHandlersBootstrapAndRoles(t *testing.T) {
 		t.Fatalf("login superadmin failed: %+v", login1)
 	}
 	var loginData1 map[string]string
-	json.Unmarshal(login1.Data, &loginData1)
+	_ = json.Unmarshal(login1.Data, &loginData1)
 	tokenSuper := loginData1["token"]
 
 	// Login normal user
@@ -154,7 +159,7 @@ func TestHandlersBootstrapAndRoles(t *testing.T) {
 		t.Fatalf("login third user failed")
 	}
 	var loginData3 map[string]string
-	json.Unmarshal(login3.Data, &loginData3)
+	_ = json.Unmarshal(login3.Data, &loginData3)
 	tokenUser := loginData3["token"]
 
 	// /api/me with superadmin token
@@ -209,13 +214,13 @@ func TestDuplicateEmailAndDashboard(t *testing.T) {
 	}
 	var dashEnv envelope
 	bDash, _ := io.ReadAll(respDash.Body)
-	respDash.Body.Close()
-	json.Unmarshal(bDash, &dashEnv)
+	_ = respDash.Body.Close()
+	_ = json.Unmarshal(bDash, &dashEnv)
 	if !dashEnv.OK {
 		t.Fatalf("dashboard not ok env=%+v", dashEnv)
 	}
 	var dashData map[string]any
-	json.Unmarshal(dashEnv.Data, &dashData)
+	_ = json.Unmarshal(dashEnv.Data, &dashData)
 	if _, ok := dashData["total_users"]; !ok {
 		t.Fatalf("missing total_users")
 	}
@@ -232,7 +237,7 @@ func TestTokenExpiry(t *testing.T) {
 	postJSON(t, client, srv.URL+"/api/auth/register", map[string]string{"email": "x@example.com", "password": "Password!1"})
 	_, login := postJSON(t, client, srv.URL+"/api/auth/login", map[string]string{"email": "x@example.com", "password": "Password!1"})
 	var loginData map[string]string
-	json.Unmarshal(login.Data, &loginData)
+	_ = json.Unmarshal(login.Data, &loginData)
 	token := loginData["token"]
 	// Simulate expiry by parsing token then waiting past 1s if we reissued with shorter TTL (not available here). Instead directly check /api/me works now.
 	rm, _ := getAuth(t, client, srv.URL+"/api/me", token)

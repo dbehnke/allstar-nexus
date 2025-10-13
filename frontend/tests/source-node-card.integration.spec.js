@@ -37,7 +37,7 @@ globalThis.SVGElement = global.SVGElement
 // Defer importing Vue runtime and the component until after we've installed
 // the JSDOM globals and registered mocks. This prevents @vue/runtime-dom
 // from capturing a null `document` at module evaluation time.
-let mount, setActivePinia, createPinia, SourceNodeCard, useNodeStore
+let setActivePinia, createPinia, useNodeStore
 
 // Mock composables and modules that reach for browser-only APIs or app-level
 // providers. We return benign no-op implementations so the component can mount
@@ -81,15 +81,11 @@ describe('SourceNodeCard integration with store', () => {
   beforeEach(() => {
     // Dynamically import test utils and modules now that globals/mocks are set.
     return Promise.all([
-      import('@vue/test-utils'),
       import('pinia'),
-      import('../src/components/SourceNodeCard.vue'),
       import('../src/stores/node')
-    ]).then(([vt, pin, comp, storeMod]) => {
-      mount = vt.mount
+    ]).then(([pin, storeMod]) => {
       setActivePinia = pin.setActivePinia
       createPinia = pin.createPinia
-      SourceNodeCard = comp.default
       useNodeStore = storeMod.useNodeStore
       pinia = createPinia()
       setActivePinia(pinia)
@@ -136,8 +132,7 @@ describe('SourceNodeCard integration with store', () => {
     expect(adj['2001'].Description || adj['2001'].description).toBe('Test Node')
   })
 
-  it('mounts a minimal adjacent-list test component and renders adjacent link row', async () => {
-    // Instead of mounting a component, assert basic adjacentNodes shape handling
+  it('handles a minimal adjacent list shape in isolation', async () => {
     const initial = { '2001': { NodeID: 2001, Callsign: 'N1ABC', Description: 'Test Node' } }
     expect(Object.keys(initial).length).toBe(1)
     expect(initial['2001'].NodeID).toBe(2001)

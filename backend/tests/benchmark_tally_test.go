@@ -12,12 +12,17 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	_ "modernc.org/sqlite"
 )
 
 func BenchmarkProcessTally_ManyLogs(b *testing.B) {
 	dir := b.TempDir()
 	dbPath := filepath.Join(dir, "bench_tally.db")
-	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	gdb, err := gorm.Open(sqlite.New(sqlite.Config{
+		DriverName: "sqlite",
+		DSN:        dbPath,
+	}), &gorm.Config{})
 	if err != nil {
 		b.Fatalf("open gorm sqlite: %v", err)
 	}

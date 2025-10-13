@@ -16,7 +16,6 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/auth"
 	"github.com/dbehnke/allstar-nexus/backend/config"
 	cfgpkg "github.com/dbehnke/allstar-nexus/backend/config"
-	"github.com/dbehnke/allstar-nexus/backend/database"
 	"github.com/dbehnke/allstar-nexus/backend/gamification"
 	"github.com/dbehnke/allstar-nexus/backend/middleware"
 	"github.com/dbehnke/allstar-nexus/backend/models"
@@ -29,6 +28,8 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	_ "modernc.org/sqlite"
 )
 
 //go:embed all:frontend/dist
@@ -46,22 +47,27 @@ func main() {
 
 	// Initialize logger (simple for now)
 	logger, _ := zap.NewProduction()
-	defer logger.Sync()
+	defer func() { _ = logger.Sync() }()
 
-	// Open DB
-	db, err := database.Open(cfg.DBPath)
-	if err != nil {
-		log.Fatalf("database open error: %v", err)
-	}
-	defer db.CloseSafe()
-	if err := db.Migrate(); err != nil {
-		log.Fatalf("migrate error: %v", err)
-	}
-
-	// Initialize GORM database for all models
-	gormDB, err := gorm.Open(sqlite.Open(cfg.DBPath), &gorm.Config{})
+	// Initialize GORM database with modernc.org/sqlite (pure Go, no CGO)
+	gormDB, err := gorm.Open(sqlite.New(sqlite.Config{
+		DriverName: "sqlite",
+		DSN:        cfg.DBPath,
+	}), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("GORM database open error: %v", err)
+	}
+
+	// Set PRAGMA settings for optimized write performance
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		log.Fatalf("failed to get sql.DB from GORM: %v", err)
+	}
+	if _, err := sqlDB.Exec("PRAGMA journal_mode=WAL;"); err != nil {
+		logger.Warn("failed to set journal_mode=WAL", zap.Error(err))
+	}
+	if _, err := sqlDB.Exec("PRAGMA synchronous=NORMAL;"); err != nil {
+		logger.Warn("failed to set synchronous=NORMAL", zap.Error(err))
 	}
 	if err := gormDB.AutoMigrate(
 		&models.User{},
@@ -112,6 +118,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", api.Health)
 	mux.HandleFunc("/api/version", apiLayer.Version)
+	mux.HandleFunc("/api/status", apiLayer.Status)
 	mux.HandleFunc("/api/dashboard/summary", apiLayer.DashboardSummary)
 	limiter := middleware.RateLimiter(cfg.AuthRateLimitRPM)
 	mux.Handle("/api/auth/register", limiter(http.HandlerFunc(apiLayer.Register)))
@@ -588,7 +595,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to init zap: %v", err)
 	}
-	defer zapLogger.Sync()
+	defer func() { _ = zapLogger.Sync() }()
 	loggingMW := middleware.Logging(zapLogger)
 	srv := &http.Server{Addr: addr, Handler: loggingMW(mux), ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second}
 

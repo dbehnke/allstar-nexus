@@ -232,7 +232,7 @@ func (sm *StateManager) enrichTalkerSnapshot(events []TalkerEvent) []TalkerEvent
 			// Handle text nodes
 			if name, ok := getTextNodeName(evt.Node); ok {
 				enriched[i].Callsign = name
-				enriched[i].Description = "VOIP Node"
+				enriched[i].Description = "VOIP Client"
 			}
 		}
 	}
@@ -338,8 +338,28 @@ func (sm *StateManager) apply(m ami.Message) {
 			// Enrich tracker nodes with lookup data
 			if sm.nodeLookup != nil {
 				for _, nodeID := range ids {
-					if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
-						tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+					if nodeID > 0 {
+						if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
+							tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+						}
+					} else if nodeID < 0 {
+						// Handle hashed/text nodes by resolving to original name
+						if name, ok := getTextNodeName(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						}
+					}
+				}
+			} else {
+				// Even without nodeLookup, attempt to enrich negative nodes from registries
+				for _, nodeID := range ids {
+					if nodeID < 0 {
+						if name, ok := getTextNodeName(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						}
 					}
 				}
 			}
@@ -393,8 +413,27 @@ func (sm *StateManager) apply(m ami.Message) {
 				// Enrich tracker nodes with lookup data
 				if sm.nodeLookup != nil {
 					for _, nodeID := range ids {
-						if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
-							tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+						if nodeID > 0 {
+							if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
+								tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+							}
+						} else if nodeID < 0 {
+							if name, ok := getTextNodeName(nodeID); ok {
+								tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+							} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+								tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+							}
+						}
+					}
+				} else {
+					// Without lookup, still enrich negative nodes from registries
+					for _, nodeID := range ids {
+						if nodeID < 0 {
+							if name, ok := getTextNodeName(nodeID); ok {
+								tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+							} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+								tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+							}
 						}
 					}
 				}
@@ -478,6 +517,16 @@ func (sm *StateManager) apply(m ami.Message) {
 				// Enrich with node lookup data
 				if sm.nodeLookup != nil {
 					sm.nodeLookup.EnrichLinkInfo(&ni)
+				} else if id < 0 {
+					// Enrich text nodes even without nodeLookup service
+					if name, found := getTextNodeName(id); found {
+						ni.NodeCallsign = name
+						ni.NodeDescription = "VOIP Client"
+					} else if name, found := ami.GetTextNodeFromAMI(id); found {
+						// Fallback to AMI registry
+						ni.NodeCallsign = name
+						ni.NodeDescription = "VOIP Client"
+					}
 				}
 				newDetails = append(newDetails, ni)
 				added = append(added, ni)
@@ -634,7 +683,7 @@ func (sm *StateManager) emitTalker(kind string, node int) {
 		if evt.Callsign == "" && node < 0 {
 			if name, found := getTextNodeName(node); found {
 				evt.Callsign = name
-				evt.Description = "VOIP Node"
+				evt.Description = "VOIP Client"
 			}
 		}
 	}
@@ -680,7 +729,7 @@ func (sm *StateManager) emitTalkerFromLink(kind string, link *LinkInfo) {
 	if evt.Callsign == "" && link.Node < 0 {
 		if name, found := getTextNodeName(link.Node); found {
 			evt.Callsign = name
-			evt.Description = "VOIP Node"
+			evt.Description = "VOIP Client"
 		}
 	}
 
@@ -1026,6 +1075,26 @@ func (sm *StateManager) ApplyCombinedStatus(combined *ami.CombinedNodeStatus) {
 		}
 		li.UpdateTx(isCurrentlyKeyed, now)
 
+		// Enrich with node lookup data (callsign, description, location)
+		if sm.nodeLookup != nil {
+			sm.nodeLookup.EnrichLinkInfo(&li)
+			log.Printf("[STATE DEBUG] Enriched node %d via nodeLookup: callsign=%s, desc=%s", li.Node, li.NodeCallsign, li.NodeDescription)
+		} else if li.Node < 0 {
+			// Enrich text nodes even without nodeLookup service
+			if name, found := getTextNodeName(li.Node); found {
+				li.NodeCallsign = name
+				li.NodeDescription = "VOIP Client"
+				log.Printf("[STATE DEBUG] Enriched negative node %d from core registry: %s", li.Node, name)
+			} else if name, found := ami.GetTextNodeFromAMI(li.Node); found {
+				// Fallback to AMI registry
+				li.NodeCallsign = name
+				li.NodeDescription = "VOIP Client"
+				log.Printf("[STATE DEBUG] Enriched negative node %d from AMI registry: %s", li.Node, name)
+			} else {
+				log.Printf("[STATE DEBUG] Failed to enrich negative node %d - not found in any registry", li.Node)
+			}
+		}
+
 		newDetails = append(newDetails, li)
 
 		// Track if this is a new connection
@@ -1178,7 +1247,17 @@ func parseLinkIDs(payload string) []int {
 			continue
 		}
 
-		// Try to find embedded digits first (handles T588841, 588841TU, etc.)
+		// First try to parse as a plain integer (handles negative node IDs from internal fabrication)
+		// This needs to match node IDs that are at least 3 digits or less than -999
+		if n, err := strconv.Atoi(tk); err == nil && (n < -999 || n >= 1000) {
+			if _, dup := seen[n]; !dup {
+				out = append(out, n)
+				seen[n] = struct{}{}
+			}
+			continue
+		}
+
+		// Try to find embedded digits (handles T588841, 588841TU, etc.)
 		m := digitRe.FindStringSubmatch(tk)
 		if len(m) > 1 {
 			if n, err := strconv.Atoi(m[1]); err == nil {
@@ -1199,13 +1278,12 @@ func parseLinkIDs(payload string) []int {
 			cleaned = cleaned[1:]
 		}
 
-		// Strip status suffixes (TU, TK, TR, TC, TM, U, K, R, C, M)
+		// Strip status suffixes (TU, TK, TR, TC, TM)
 		cleaned = strings.TrimSuffix(cleaned, "TU")
 		cleaned = strings.TrimSuffix(cleaned, "TK")
 		cleaned = strings.TrimSuffix(cleaned, "TR")
 		cleaned = strings.TrimSuffix(cleaned, "TC")
 		cleaned = strings.TrimSuffix(cleaned, "TM")
-		cleaned = strings.TrimRight(cleaned, "URKRCM")
 
 		if cleaned == "" {
 			continue
@@ -1308,13 +1386,12 @@ func parseALinks(payload string) (ids []int, keyed map[int]bool) {
 			cleaned = cleaned[1:]
 		}
 
-		// Strip status suffixes
+		// Strip status suffixes (TU, TK, TR, TC, TM)
 		cleaned = strings.TrimSuffix(cleaned, "TU")
 		cleaned = strings.TrimSuffix(cleaned, "TK")
 		cleaned = strings.TrimSuffix(cleaned, "TR")
 		cleaned = strings.TrimSuffix(cleaned, "TC")
 		cleaned = strings.TrimSuffix(cleaned, "TM")
-		cleaned = strings.TrimRight(cleaned, "URKRCM")
 
 		if cleaned == "" {
 			continue

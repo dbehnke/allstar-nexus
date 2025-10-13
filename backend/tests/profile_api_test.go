@@ -15,6 +15,8 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	_ "modernc.org/sqlite"
 )
 
 // setupDBForProfileTest initializes a sqlite DB with required migrations and repos
@@ -22,7 +24,10 @@ func setupDBForProfileTest(t *testing.T) (*gorm.DB, *repository.LevelConfigRepo,
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "profile_api_test.db")
-	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	gdb, err := gorm.Open(sqlite.New(sqlite.Config{
+		DriverName: "sqlite",
+		DSN:        dbPath,
+	}), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open gorm sqlite: %v", err)
 	}
@@ -102,7 +107,7 @@ func TestProfileAPI_ReturnsAccurateAggregates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("http get: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("status: %d", resp.StatusCode)
 	}

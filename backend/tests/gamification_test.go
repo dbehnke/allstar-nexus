@@ -15,6 +15,8 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	_ "modernc.org/sqlite"
 )
 
 // testGamificationServer spins up minimal HTTP mux exposing gamification endpoints backed by GORM sqlite temp DB.
@@ -22,7 +24,10 @@ func testGamificationServer(t *testing.T) (*httptest.Server, *gorm.DB, func()) {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test_gamification.db")
-	gdb, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	gdb, err := gorm.Open(sqlite.New(sqlite.Config{
+		DriverName: "sqlite",
+		DSN:        dbPath,
+	}), &gorm.Config{})
 	if err != nil {
 		t.Fatalf("open gorm sqlite: %v", err)
 	}
@@ -69,7 +74,7 @@ func TestLevelConfigEndpoint_ReturnsConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("http get: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
@@ -109,7 +114,7 @@ func TestScoreboardOrdering_ByRenownLevelThenLevelThenXP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("http get: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
@@ -153,7 +158,7 @@ func TestRecentTransmissions_ReturnsLimitedList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("http get: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
