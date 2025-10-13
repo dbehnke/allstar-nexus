@@ -2,7 +2,7 @@
   <div class="card">
     <div class="card-header">
       <div class="header-left">
-        <h3>Scoreboard</h3>
+        <h3>Achievements</h3>
       </div>
       <div class="header-right">
         <button class="btn-secondary" @click="$emit('refresh')">Refresh</button>
@@ -13,7 +13,7 @@
         <div v-for="(p, i) in scoreboard" :key="p.callsign || i" class="entry" :class="rankClass(i)">
           <div class="badge-container">
             <div v-if="(p.renown_level || 0) > 0" class="group-badge renown-badge">⭐</div>
-            <div v-else-if="p.grouping" class="group-badge" :style="{ background: p.grouping.color || '#64748b' }">
+            <div v-else-if="p.grouping" class="group-badge" :style="{ borderColor: p.grouping.color || '#64748b' }">
               {{ p.grouping.badge || '📻' }}
             </div>
             <div v-else class="group-badge">{{ i + 1 }}</div>
@@ -74,13 +74,20 @@ function rankClass(index) {
 .card-header { padding: 0.75rem 1rem; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
 .card-body { padding: 0.75rem 1rem; }
 
-.scoreboard-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 540px; overflow: auto; }
+.scoreboard-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; max-height: 540px; overflow: auto; }
 .entry { display: grid; grid-template-columns: 56px 1fr; gap: 0.75rem; align-items: center; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-tertiary); }
+
+/* Mobile: single column */
+@media (max-width: 1024px) {
+  .scoreboard-list {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* Badge container and styles */
 .badge-container { width: 56px; display: flex; justify-content: center; }
-.group-badge { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.3rem; color: #fff; background: linear-gradient(135deg, #64748b, #334155); box-shadow: 0 2px 8px var(--shadow); }
-.group-badge.renown-badge { background: linear-gradient(135deg, #f59e0b, #b45309); font-size: 1.5rem; }
+.group-badge { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.6rem; background: transparent; border: 3px solid var(--border-color); box-shadow: 0 2px 8px var(--shadow); }
+.group-badge.renown-badge { border-color: #f59e0b; font-size: 1.7rem; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3); }
 
 /* Top 3 rank styling (gold/silver/bronze borders) */
 .entry.gold { border-color: #f59e0b; border-width: 2px; }

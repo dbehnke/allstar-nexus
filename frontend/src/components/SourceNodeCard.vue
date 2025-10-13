@@ -177,6 +177,7 @@
                    rel="noopener noreferrer"
                    class="callsign-link">
                   {{ node.Callsign }}
+                  <span v-if="getCallsignGrouping(node.Callsign)" class="callsign-badge">{{ getCallsignGrouping(node.Callsign).badge }}</span>
                 </a>
                 <span v-else class="no-data">-</span>
               </td>
@@ -883,6 +884,28 @@ function getStatusText(node) {
   if (node.IsTransmitting) return 'Keyed'
   return 'Idle'
 }
+
+// Create a map of callsign -> grouping for quick lookups
+const callsignGroupings = ref({})
+
+// Get grouping info for a callsign from the scoreboard
+function getCallsignGrouping(callsign) {
+  if (!callsign) return null
+  const normalized = callsign.toUpperCase()
+  return callsignGroupings.value[normalized] || null
+}
+
+// Watch scoreboard and build callsign -> grouping map
+watch(() => nodeStore.scoreboard, (newScoreboard) => {
+  if (!newScoreboard || !Array.isArray(newScoreboard)) return
+  const map = {}
+  for (const entry of newScoreboard) {
+    if (entry.callsign && entry.grouping) {
+      map[entry.callsign.toUpperCase()] = entry.grouping
+    }
+  }
+  callsignGroupings.value = map
+}, { immediate: true, deep: true })
 </script>
 
 <style scoped>
@@ -1025,12 +1048,21 @@ td {
   text-decoration: none;
   font-weight: 500;
   transition: color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
 .node-link:hover,
 .callsign-link:hover {
   color: var(--accent-hover);
   text-decoration: underline;
+}
+
+.callsign-badge {
+  font-size: 1.1rem;
+  line-height: 1;
+  display: inline-block;
 }
 
 .status-badge {
