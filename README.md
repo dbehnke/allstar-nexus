@@ -1,23 +1,24 @@
+
 # Allstar Nexus
 
-A full-stack application with a Next.js frontend and Go backend, delivered as a single binary.
+Allstar Nexus is a full-stack application: a Go backend that serves APIs and an embedded frontend built with Vue 3 + Vite. The project is distributed as a single binary that embeds the compiled frontend assets for simple deployment.
 
-## Directory Structure
+## At a glance
 
-*   `/frontend`: Contains the Next.js frontend application (TypeScript, Tailwind CSS)
-*   `/backend`: Contains Go backend packages and utilities
-*   `main.go`: Main application entry point that embeds and serves the frontend
+- Backend: Go (HTTP API, gamification logic, repository layer)
+- Frontend: Vue 3 + Vite (single-page app in `/frontend`)
+- Single-binary distribution: frontend static files are built and embedded into the Go binary
 
-## Getting Started
+## Quickstart
 
-### Prerequisites
+Prerequisites
 
-- Node.js and npm (for frontend development)
-- Go 1.16+ (for backend development and building)
+- Go (1.18+ recommended)
+- Node.js (for frontend development) and npm or pnpm
 
-### Development
+Run locally (development)
 
-#### Frontend Development
+1. Install frontend dependencies and start the dev server (frontend only):
 
 ```bash
 cd frontend
@@ -25,44 +26,51 @@ npm install
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:3000`.
-
-#### Building the Frontend
+2. Run the backend (serves API only in dev mode):
 
 ```bash
-cd frontend
-npm run build
+# from repository root
+go run .
 ```
 
-This generates static files in `frontend/out/` which are embedded into the Go binary.
-
-#### Running the Full Stack
+Build and run the full application (production-like)
 
 ```bash
-# From the root directory
-go run main.go
-```
-
-The server will start on `http://localhost:8080` and serve both the frontend and API.
-
-#### Building for Production
-
-```bash
-# Build the frontend first
+# build frontend
 cd frontend && npm run build && cd ..
 
-# Build the Go binary (includes embedded frontend)
+# build Go binary (frontend is embedded when built/packaged)
 go build -o allstar-nexus main.go
 
-# Run the binary
-./allstar-nexus
+# run the binary
+./allstar-nexus --config ./config.yaml
 ```
 
-## Features
+Useful developer tasks
 
-- ✅ Single binary deployment (frontend embedded in Go)
-- ✅ Next.js with TypeScript and Tailwind CSS
-- ✅ Go backend for API endpoints
-- ✅ Hot reload for frontend development
-- ✅ Static export for optimal performance
+- Run backend tests:
+
+```bash
+go test ./backend/...
+```
+
+- Run frontend unit tests and e2e (from `frontend`):
+
+```bash
+npm run test
+npm run test:e2e
+```
+
+## Project layout (high level)
+
+- `/frontend` — Vue 3 + Vite app (dev scripts, builds, tests)
+- `/backend` — Go packages: api, repository, models, gamification, middleware, tests
+- `main.go` — application entrypoint; embeds/serves frontend
+
+## Notes
+
+- The frontend package.json indicates a Vite + Vue 3 stack (not Next.js). The README was updated to reflect the actual stack.
+- See `/backend/README.md` for backend-specific development notes and the various `Makefile` / `tasks` present in the repo.
+
+If you want I can also update the repository description on GitHub using the `gh` CLI.
 
