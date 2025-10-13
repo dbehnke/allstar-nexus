@@ -39,7 +39,7 @@ test:
 
 # Run end-to-end Playwright tests separately (Chromium by default)
 test-e2e:
-	cd $(FRONTEND_DIR) && npx playwright install --with-deps chromium && npm run test:e2e
+	cd $(FRONTEND_DIR) && npm run build && npx playwright install --with-deps chromium && npm run test:e2e
 
 lint:
 	@echo "(placeholder) add golangci-lint or staticcheck here"
