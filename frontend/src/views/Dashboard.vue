@@ -5,25 +5,24 @@
     <div class="dashboard-grid">
       <!-- Render SourceNodeCard for each source node so E2E WS tests can observe cards -->
       <div class="grid-item full-width">
-        <h3>Source Nodes</h3>
         <div v-if="Object.keys(nodeStore.sourceNodes || {}).length === 0" class="no-data">No source nodes</div>
         <div v-for="(entry, key) in nodeStore.sourceNodes" :key="key" class="source-node-wrapper">
           <SourceNodeCard :source-node-id="Number(key)" :data="entry" />
         </div>
       </div>
 
-      <!-- Scoreboard + Transmission History (reordered: scoreboard left) -->
-      <div class="grid-item">
-        <ScoreboardCard :scoreboard="nodeStore.scoreboard" :level-config="nodeStore.levelConfig" @refresh="nodeStore.fetchScoreboard" />
-      </div>
-
-      <div class="grid-item">
+      <!-- Recent Transmissions (left, 1/3) + Scoreboard (right, 2/3) -->
+      <div class="grid-item transmission-history">
         <TransmissionHistoryCard
           :transmissions="nodeStore.recentTransmissions"
           :currentPage="currentPage"
           :totalPages="totalPages"
           @page-change="handlePageChange"
         />
+      </div>
+
+      <div class="grid-item scoreboard">
+        <ScoreboardCard :scoreboard="nodeStore.scoreboard" :level-config="nodeStore.levelConfig" @refresh="nodeStore.fetchScoreboard" />
       </div>
     </div>
   </div>
@@ -181,12 +180,32 @@ onUnmounted(() => {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: 1fr 2fr;
   gap: 1rem;
 }
 
 .grid-item.full-width {
   grid-column: 1 / -1;
+}
+
+.grid-item.transmission-history {
+  grid-column: 1;
+}
+
+.grid-item.scoreboard {
+  grid-column: 2;
+}
+
+/* Mobile: stack vertically with single column */
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-item.transmission-history,
+  .grid-item.scoreboard {
+    grid-column: 1;
+  }
 }
 
 .talker-log {

@@ -9,14 +9,17 @@ import (
 	"strings"
 	"time"
 
+	cfgpkg "github.com/dbehnke/allstar-nexus/backend/config"
+	"github.com/dbehnke/allstar-nexus/backend/gamification"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 )
 
 type GamificationAPI struct {
-	profileRepo  *repository.CallsignProfileRepo
-	txLogRepo    *repository.TransmissionLogRepository
-	levelRepo    *repository.LevelConfigRepo
-	activityRepo *repository.XPActivityRepo
+	profileRepo    *repository.CallsignProfileRepo
+	txLogRepo      *repository.TransmissionLogRepository
+	levelRepo      *repository.LevelConfigRepo
+	activityRepo   *repository.XPActivityRepo
+	levelGroupings []cfgpkg.LevelGrouping
 }
 
 func NewGamificationAPI(
@@ -24,12 +27,14 @@ func NewGamificationAPI(
 	txLogRepo *repository.TransmissionLogRepository,
 	levelRepo *repository.LevelConfigRepo,
 	activityRepo *repository.XPActivityRepo,
+	levelGroupings []cfgpkg.LevelGrouping,
 ) *GamificationAPI {
 	return &GamificationAPI{
-		profileRepo:  profileRepo,
-		txLogRepo:    txLogRepo,
-		levelRepo:    levelRepo,
-		activityRepo: activityRepo,
+		profileRepo:    profileRepo,
+		txLogRepo:      txLogRepo,
+		levelRepo:      levelRepo,
+		activityRepo:   activityRepo,
+		levelGroupings: levelGroupings,
 	}
 }
 
@@ -68,13 +73,14 @@ func (g *GamificationAPI) Scoreboard(w http.ResponseWriter, r *http.Request) {
 
 	// Build response with rank and next level XP
 	type ScoreboardEntry struct {
-		Rank             int    `json:"rank"`
-		Callsign         string `json:"callsign"`
-		Level            int    `json:"level"`
-		ExperiencePoints int    `json:"experience_points"`
-		RenownLevel      int    `json:"renown_level"`
-		NextLevelXP      int    `json:"next_level_xp"`
-		TotalTalkTime    int    `json:"total_talk_time_seconds,omitempty"`
+		Rank             int                         `json:"rank"`
+		Callsign         string                      `json:"callsign"`
+		Level            int                         `json:"level"`
+		ExperiencePoints int                         `json:"experience_points"`
+		RenownLevel      int                         `json:"renown_level"`
+		NextLevelXP      int                         `json:"next_level_xp"`
+		TotalTalkTime    int                         `json:"total_talk_time_seconds,omitempty"`
+		Grouping         *gamification.GroupingInfo  `json:"grouping,omitempty"`
 	}
 
 	var entries []ScoreboardEntry
@@ -87,6 +93,12 @@ func (g *GamificationAPI) Scoreboard(w http.ResponseWriter, r *http.Request) {
 		// Get total talk time for this callsign
 		totalTime, _ := g.txLogRepo.GetTotalTransmissionTime(profile.Callsign)
 
+		// Get grouping for this level (if renown is 0)
+		var grouping *gamification.GroupingInfo
+		if profile.RenownLevel == 0 {
+			grouping = gamification.GetGroupingForLevel(profile.Level, g.levelGroupings)
+		}
+
 		entries = append(entries, ScoreboardEntry{
 			Rank:             i + 1,
 			Callsign:         profile.Callsign,
@@ -95,6 +107,7 @@ func (g *GamificationAPI) Scoreboard(w http.ResponseWriter, r *http.Request) {
 			RenownLevel:      profile.RenownLevel,
 			NextLevelXP:      nextLevelXP,
 			TotalTalkTime:    totalTime,
+			Grouping:         grouping,
 		})
 	}
 
@@ -249,9 +262,13 @@ func (g *GamificationAPI) LevelConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Build groupings map for quick lookup
+	groupingsMap := gamification.BuildGroupingsMap(g.levelGroupings)
+
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"config": levelConfig,
+		"config":    levelConfig,
+		"groupings": groupingsMap,
 	}); err != nil {
 		log.Printf("Failed to encode level config response: %v", err)
 	}

@@ -95,3 +95,35 @@ gamification:
 	#   - levels: "11-60"
 	#     scaling: logarithmic
 	#     target_total_seconds: 255600
+
+	# Level groupings (badges and titles for level ranges)
+	# If omitted, uses sensible defaults
+	# level_groupings:
+	#   - levels: "1-9"
+	#     title: "Novice"
+	#     badge: "🌱"
+	#     color: "#10b981"
+	#   - levels: "11-19"
+	#     title: "Technician"
+	#     badge: "🔧"
+	#     color: "#3b82f6"
+	#   - levels: "21-29"
+	#     title: "General"
+	#     badge: "📡"
+	#     color: "#8b5cf6"
+	#   - levels: "30-39"
+	#     title: "Advanced"
+	#     badge: "🎯"
+	#     color: "#f59e0b"
+	#   - levels: "40-49"
+	#     title: "Extra"
+	#     badge: "💎"
+	#     color: "#ef4444"
+	#   - levels: "50-55"
+	#     title: "Elmer"
+	#     badge: "🧙"
+	#     color: "#ec4899"
+	#   - levels: "56-60"
+	#     title: "Professor"
+	#     badge: "🎓"
+	#     color: "#6366f1"
