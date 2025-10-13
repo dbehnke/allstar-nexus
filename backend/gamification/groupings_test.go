@@ -125,7 +125,7 @@ func TestDefaultLevelGroupings(t *testing.T) {
 		titles[g.Title] = true
 	}
 
-	expected := []string{"Novice", "General", "Extra", "Elmer", "Ambassador", "Master", "Professor"}
+	expected := []string{"Novice", "Technician", "General", "Advanced", "Extra", "Elmer", "Professor"}
 	for _, exp := range expected {
 		if !titles[exp] {
 			t.Errorf("expected default grouping %q not found", exp)

@@ -1,7 +1,7 @@
 # Level Groupings and Badges - Implementation Summary
 
 ## Overview
-This implementation adds configurable level groupings with badges to the gamification system. Users are now organized into achievement tiers (Novice, General, Extra, Elmer, Ambassador, Master, Professor) with distinctive badges and colors for quick visual identification.
+This implementation adds configurable level groupings with badges to the gamification system. Users are now organized into achievement tiers (Novice, Technician, General, Advanced, Extra, Elmer, Professor) with distinctive badges and colors for quick visual identification.
 
 ## Changes Made
 
@@ -15,12 +15,12 @@ This implementation adds configurable level groupings with badges to the gamific
 #### 2. Grouping Logic (`backend/gamification/groupings.go`)
 - `DefaultLevelGroupings()` - Returns default grouping configuration:
   - Novice (1-9) 🌱 Green
-  - General (11-19) 📻 Blue
-  - Extra (21-29) ⚡ Purple
-  - Elmer (30-39) 🎓 Amber
-  - Ambassador (40-49) 🏆 Red
-  - Master (50-55) 👑 Pink
-  - Professor (56-60) 🎖️ Indigo
+  - Technician (11-19) 🔧 Blue
+  - General (21-29) 📡 Purple
+  - Advanced (30-39) 🎯 Amber
+  - Extra (40-49) 💎 Red
+  - Elmer (50-55) 🧙 Pink
+  - Professor (56-60) 🎓 Indigo
 - `ValidateGroupings()` - Ensures no overlapping level ranges
 - `GetGroupingForLevel()` - Retrieves grouping info for a given level
 - `BuildGroupingsMap()` - Creates efficient lookup map
@@ -90,8 +90,8 @@ gamification:
       "experience_points": 50000,
       "renown_level": 0,
       "grouping": {
-        "title": "Ambassador",
-        "badge": "🏆",
+        "title": "Extra",
+        "badge": "💎",
         "color": "#ef4444",
         "min_level": 40,
         "max_level": 49

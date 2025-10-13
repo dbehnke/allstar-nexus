@@ -21,12 +21,12 @@ type GroupingInfo struct {
 func DefaultLevelGroupings() []cfgpkg.LevelGrouping {
 	return []cfgpkg.LevelGrouping{
 		{Levels: "1-9", Title: "Novice", Badge: "🌱", Color: "#10b981"},
-		{Levels: "11-19", Title: "General", Badge: "📻", Color: "#3b82f6"},
-		{Levels: "21-29", Title: "Extra", Badge: "⚡", Color: "#8b5cf6"},
-		{Levels: "30-39", Title: "Elmer", Badge: "🎓", Color: "#f59e0b"},
-		{Levels: "40-49", Title: "Ambassador", Badge: "🏆", Color: "#ef4444"},
-		{Levels: "50-55", Title: "Master", Badge: "👑", Color: "#ec4899"},
-		{Levels: "56-60", Title: "Professor", Badge: "🎖️", Color: "#6366f1"},
+		{Levels: "11-19", Title: "Technician", Badge: "🔧", Color: "#3b82f6"},
+		{Levels: "21-29", Title: "General", Badge: "📡", Color: "#8b5cf6"},
+		{Levels: "30-39", Title: "Advanced", Badge: "🎯", Color: "#f59e0b"},
+		{Levels: "40-49", Title: "Extra", Badge: "💎", Color: "#ef4444"},
+		{Levels: "50-55", Title: "Elmer", Badge: "🧙", Color: "#ec4899"},
+		{Levels: "56-60", Title: "Professor", Badge: "🎓", Color: "#6366f1"},
 	}
 }
 
