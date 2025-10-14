@@ -1,6 +1,9 @@
 package config
 
 import (
+	"bufio"
+	"bytes"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -25,6 +28,7 @@ type GamificationConfig struct {
 	XPCaps               XPCapsConfig             `mapstructure:"xp_caps" yaml:"xp_caps"`
 	LevelScale           []LevelScaleConfig       `mapstructure:"level_scale" yaml:"level_scale"`
 	LevelGroupings       []LevelGrouping          `mapstructure:"level_groupings" yaml:"level_groupings"`
+	Renown               RenownConfig             `mapstructure:"renown" yaml:"renown"`
 }
 
 type RestedBonusConfig struct {
@@ -32,6 +36,7 @@ type RestedBonusConfig struct {
 	AccumulationRate float64 `mapstructure:"accumulation_rate" yaml:"accumulation_rate"`
 	MaxHours         int     `mapstructure:"max_hours" yaml:"max_hours"`
 	Multiplier       float64 `mapstructure:"multiplier" yaml:"multiplier"`
+	IdleThresholdSec int     `mapstructure:"idle_threshold_seconds" yaml:"idle_threshold_seconds"`
 }
 
 type DiminishingReturnsConfig struct {
@@ -74,10 +79,15 @@ type LevelScaleConfig struct {
 
 // LevelGrouping defines a level range with a title and badge
 type LevelGrouping struct {
-	Levels string `mapstructure:"levels" yaml:"levels"`       // e.g., "1-9", "11-19"
-	Title  string `mapstructure:"title" yaml:"title"`         // e.g., "Novice", "General"
-	Badge  string `mapstructure:"badge" yaml:"badge"`         // e.g., "🌱", "📻"
-	Color  string `mapstructure:"color" yaml:"color"`         // e.g., "#10b981", "#3b82f6"
+	Levels string `mapstructure:"levels" yaml:"levels"` // e.g., "1-9", "11-19"
+	Title  string `mapstructure:"title" yaml:"title"`   // e.g., "Novice", "General"
+	Badge  string `mapstructure:"badge" yaml:"badge"`   // e.g., "🌱", "📻"
+	Color  string `mapstructure:"color" yaml:"color"`   // e.g., "#10b981", "#3b82f6"
+}
+
+type RenownConfig struct {
+	Enabled    bool `mapstructure:"enabled" yaml:"enabled"`
+	XPPerLevel int  `mapstructure:"xp_per_level" yaml:"xp_per_level"`
 }
 
 // Config holds runtime configuration values.
@@ -145,6 +155,8 @@ func Load(configPath ...string) Config {
 	viper.SetDefault("gamification.rested_bonus.accumulation_rate", 1.5)
 	viper.SetDefault("gamification.rested_bonus.max_hours", 336)
 	viper.SetDefault("gamification.rested_bonus.multiplier", 2.0)
+	// Begin accruing rested after this idle duration; default 5 minutes
+	viper.SetDefault("gamification.rested_bonus.idle_threshold_seconds", 300)
 	viper.SetDefault("gamification.diminishing_returns.enabled", true)
 	viper.SetDefault("gamification.kerchunk_detection.enabled", true)
 	viper.SetDefault("gamification.kerchunk_detection.threshold_seconds", 3)
@@ -154,6 +166,10 @@ func Load(configPath ...string) Config {
 	viper.SetDefault("gamification.xp_caps.weekly_cap_seconds", 7200)
 	viper.SetDefault("gamification.xp_caps.reset_hour", 0)
 	viper.SetDefault("gamification.xp_caps.week_starts", "sunday")
+	// Renown (prestige) defaults
+	// By default renown is enabled and each renown level requires 36,000 seconds (10 hours) of XP
+	viper.SetDefault("gamification.renown.enabled", true)
+	viper.SetDefault("gamification.renown.xp_per_level", 36000)
 
 	// Config file search paths
 	if len(configPath) > 0 && configPath[0] != "" {
@@ -186,6 +202,21 @@ func Load(configPath ...string) Config {
 	viper.SetEnvPrefix("") // No prefix to match existing env vars
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// Diagnostic: warn if AMI-related environment variables are present (they will override file values)
+	// Do not log secrets; just indicate presence and current effective values (masked for password).
+	if _, ok := os.LookupEnv("AMI_HOST"); ok {
+		log.Printf("ENV override detected: AMI_HOST=%s (overrides ami_host from config file)", viper.GetString("ami_host"))
+	}
+	if _, ok := os.LookupEnv("AMI_PORT"); ok {
+		log.Printf("ENV override detected: AMI_PORT=%d (overrides ami_port from config file)", viper.GetInt("ami_port"))
+	}
+	if _, ok := os.LookupEnv("AMI_USERNAME"); ok {
+		log.Printf("ENV override detected: AMI_USERNAME=%s (overrides ami_username from config file)", viper.GetString("ami_username"))
+	}
+	if _, ok := os.LookupEnv("AMI_PASSWORD"); ok {
+		log.Printf("ENV override detected: AMI_PASSWORD is set (value masked) and will override ami_password from config file")
+	}
 
 	// Build config struct
 	cfg := Config{
@@ -279,6 +310,101 @@ func dirOf(path string) string {
 	return "."
 }
 
+// Validate checks that a config file can be parsed and has no YAML tab-indentation issues.
+// If configPath is empty, it searches the default locations (./config.yaml, data/, $HOME/.allstar-nexus, /etc/allstar-nexus).
+// Returns nil if the file is valid; otherwise returns an error with details.
+func Validate(configPath ...string) error {
+	v := viper.New()
+
+	// Configure file path(s)
+	if len(configPath) > 0 && configPath[0] != "" {
+		v.SetConfigFile(configPath[0])
+	} else {
+		v.SetConfigName("config")
+		v.SetConfigType("yaml")
+		v.AddConfigPath(".")
+		v.AddConfigPath("data")
+		v.AddConfigPath("$HOME/.allstar-nexus")
+		v.AddConfigPath("/etc/allstar-nexus")
+	}
+
+	if err := v.ReadInConfig(); err != nil {
+		// Propagate YAML parse errors and file-not-found clearly
+		return fmt.Errorf("failed to read config: %w", err)
+	}
+
+	// Extra lint: detect tabs used for indentation (YAML forbids tab indentation)
+	used := v.ConfigFileUsed()
+	if used == "" {
+		return fmt.Errorf("unexpected: viper did not report a ConfigFileUsed after successful read")
+	}
+	data, err := os.ReadFile(used)
+	if err != nil {
+		return fmt.Errorf("unable to read config file for linting: %w", err)
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+		// Extract leading whitespace
+		i := 0
+		for i < len(line) {
+			if line[i] == ' ' || line[i] == '\t' {
+				i++
+				continue
+			}
+			break
+		}
+		if i > 0 {
+			// If any of the leading whitespace characters are tabs, flag as error
+			if strings.Contains(line[:i], "\t") {
+				// Show a short preview of the offending line (without tabs)
+				preview := strings.ReplaceAll(line, "\t", "[TAB]")
+				if len(preview) > 120 {
+					preview = preview[:120] + "…"
+				}
+				return fmt.Errorf("invalid YAML indentation: tabs detected at line %d. YAML requires spaces for indentation. Offending line: %q", lineNum, preview)
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("error scanning config file: %w", err)
+	}
+
+	// Basic structural checks: attempt to unmarshal known sections
+	var _gam GamificationConfig
+	if err := v.UnmarshalKey("gamification", &_gam); err != nil {
+		return fmt.Errorf("failed to parse gamification section: %w", err)
+	}
+	// If nodes key is present, ensure it's an array (sequence) not a mapping.
+	// Viper may silently coerce some shapes; catch common malformed cases early.
+	if v.IsSet("nodes") {
+		raw := v.Get("nodes")
+		switch raw.(type) {
+		case []interface{}:
+			// expected: either []int or []map[string]any
+		default:
+			return fmt.Errorf("nodes must be a YAML sequence (e.g. [43732] or - node_id: 43732), but got %T", raw)
+		}
+	}
+	// Nodes can be either []int or []NodeConfig; accept either, but ensure YAML is well-formed
+	var ints []int
+	if err := v.UnmarshalKey("nodes", &ints); err != nil {
+		// Try as objects slice (ignore error if both forms absent)
+		var objs []NodeConfig
+		if err2 := v.UnmarshalKey("nodes", &objs); err2 != nil {
+			// If both fail, it's likely a shape/typing issue in nodes
+			// Do not fail if nodes are completely omitted; only fail when a nodes key exists but is malformed
+			if v.IsSet("nodes") {
+				return fmt.Errorf("failed to parse nodes section: %v; %v", err, err2)
+			}
+		}
+	}
+
+	return nil
+}
+
 // SaveExampleConfig creates an example config.yaml file
 func SaveExampleConfig(path string) error {
 	exampleConfig := `# Allstar Nexus Configuration File
@@ -340,7 +466,8 @@ gamification:
 	# Rested XP Bonus
 	rested_bonus:
 		enabled: true
-		accumulation_rate: 1.5   # hours of rested per day offline (example)
+		accumulation_rate: 1.5   # hours of rested per day idle (example)
+		idle_threshold_seconds: 300 # start accruing after 5 minutes idle
 		max_hours: 336           # 14 days
 		multiplier: 2.0          # 2x XP while rested
 
@@ -386,11 +513,11 @@ gamification:
 	#     title: "Novice"
 	#     badge: "🌱"
 	#     color: "#10b981"
-	#   - levels: "11-19"
+	#   - levels: "10-19"
 	#     title: "Technician"
 	#     badge: "🔧"
 	#     color: "#3b82f6"
-	#   - levels: "21-29"
+	#   - levels: "20-29"
 	#     title: "General"
 	#     badge: "📡"
 	#     color: "#8b5cf6"

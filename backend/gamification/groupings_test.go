@@ -9,8 +9,8 @@ import (
 func TestValidateGroupings_NoOverlap(t *testing.T) {
 	groupings := []cfgpkg.LevelGrouping{
 		{Levels: "1-9", Title: "Novice", Badge: "🌱"},
-		{Levels: "11-19", Title: "General", Badge: "📻"},
-		{Levels: "21-29", Title: "Extra", Badge: "⚡"},
+		{Levels: "11-19", Title: "Technician", Badge: "📻"},
+		{Levels: "21-29", Title: "General", Badge: "⚡"},
 	}
 
 	err := ValidateGroupings(groupings)
@@ -52,7 +52,8 @@ func TestValidateGroupings_InvalidRange(t *testing.T) {
 func TestGetGroupingForLevel(t *testing.T) {
 	groupings := []cfgpkg.LevelGrouping{
 		{Levels: "1-9", Title: "Novice", Badge: "🌱", Color: "#10b981"},
-		{Levels: "11-19", Title: "General", Badge: "📻", Color: "#3b82f6"},
+		{Levels: "10-19", Title: "Technician", Badge: "📻", Color: "#3b82f6"},
+		{Levels: "20-29", Title: "General", Badge: "📡", Color: "#8b5cf6"},
 	}
 
 	tests := []struct {
@@ -61,10 +62,10 @@ func TestGetGroupingForLevel(t *testing.T) {
 	}{
 		{5, stringPtr("Novice")},
 		{9, stringPtr("Novice")},
-		{10, nil}, // gap
-		{11, stringPtr("General")},
-		{15, stringPtr("General")},
-		{20, nil}, // outside range
+		{10, stringPtr("Technician")},
+		{11, stringPtr("Technician")},
+		{15, stringPtr("Technician")},
+		{20, stringPtr("General")},
 	}
 
 	for _, tc := range tests {

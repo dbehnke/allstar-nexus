@@ -15,11 +15,22 @@ import (
 )
 
 type GamificationAPI struct {
-	profileRepo    *repository.CallsignProfileRepo
-	txLogRepo      *repository.TransmissionLogRepository
-	levelRepo      *repository.LevelConfigRepo
-	activityRepo   *repository.XPActivityRepo
-	levelGroupings []cfgpkg.LevelGrouping
+	profileRepo      *repository.CallsignProfileRepo
+	txLogRepo        *repository.TransmissionLogRepository
+	levelRepo        *repository.LevelConfigRepo
+	activityRepo     *repository.XPActivityRepo
+	levelGroupings   []cfgpkg.LevelGrouping
+	renownEnabled    bool
+	renownXPPerLevel int
+	// Rested server config values (read-only)
+	restedEnabled          bool
+	restedAccumulationRate float64
+	restedMaxHours         int
+	restedMultiplier       float64
+	restedIdleThresholdSec int
+	weeklyCapSeconds       int
+	dailyCapSeconds        int
+	drTiers                []cfgpkg.DRTier
 }
 
 func NewGamificationAPI(
@@ -28,13 +39,33 @@ func NewGamificationAPI(
 	levelRepo *repository.LevelConfigRepo,
 	activityRepo *repository.XPActivityRepo,
 	levelGroupings []cfgpkg.LevelGrouping,
+	renownEnabled bool,
+	renownXPPerLevel int,
+	restedEnabled bool,
+	restedAccumulationRate float64,
+	restedMaxHours int,
+	restedMultiplier float64,
+	restedIdleThresholdSec int,
+	weeklyCapSeconds int,
+	dailyCapSeconds int,
+	drTiers []cfgpkg.DRTier,
 ) *GamificationAPI {
 	return &GamificationAPI{
-		profileRepo:    profileRepo,
-		txLogRepo:      txLogRepo,
-		levelRepo:      levelRepo,
-		activityRepo:   activityRepo,
-		levelGroupings: levelGroupings,
+		profileRepo:            profileRepo,
+		txLogRepo:              txLogRepo,
+		levelRepo:              levelRepo,
+		activityRepo:           activityRepo,
+		levelGroupings:         levelGroupings,
+		renownEnabled:          renownEnabled,
+		renownXPPerLevel:       renownXPPerLevel,
+		restedEnabled:          restedEnabled,
+		restedAccumulationRate: restedAccumulationRate,
+		restedMaxHours:         restedMaxHours,
+		restedMultiplier:       restedMultiplier,
+		restedIdleThresholdSec: restedIdleThresholdSec,
+		weeklyCapSeconds:       weeklyCapSeconds,
+		dailyCapSeconds:        dailyCapSeconds,
+		drTiers:                drTiers,
 	}
 }
 
@@ -73,14 +104,15 @@ func (g *GamificationAPI) Scoreboard(w http.ResponseWriter, r *http.Request) {
 
 	// Build response with rank and next level XP
 	type ScoreboardEntry struct {
-		Rank             int                         `json:"rank"`
-		Callsign         string                      `json:"callsign"`
-		Level            int                         `json:"level"`
-		ExperiencePoints int                         `json:"experience_points"`
-		RenownLevel      int                         `json:"renown_level"`
-		NextLevelXP      int                         `json:"next_level_xp"`
-		TotalTalkTime    int                         `json:"total_talk_time_seconds,omitempty"`
-		Grouping         *gamification.GroupingInfo  `json:"grouping,omitempty"`
+		Rank               int                        `json:"rank"`
+		Callsign           string                     `json:"callsign"`
+		Level              int                        `json:"level"`
+		ExperiencePoints   int                        `json:"experience_points"`
+		RenownLevel        int                        `json:"renown_level"`
+		NextLevelXP        int                        `json:"next_level_xp"`
+		TotalTalkTime      int                        `json:"total_talk_time_seconds,omitempty"`
+		Grouping           *gamification.GroupingInfo `json:"grouping,omitempty"`
+		RestedBonusSeconds int                        `json:"rested_bonus_seconds"`
 	}
 
 	var entries []ScoreboardEntry
@@ -100,21 +132,34 @@ func (g *GamificationAPI) Scoreboard(w http.ResponseWriter, r *http.Request) {
 		}
 
 		entries = append(entries, ScoreboardEntry{
-			Rank:             i + 1,
-			Callsign:         profile.Callsign,
-			Level:            profile.Level,
-			ExperiencePoints: profile.ExperiencePoints,
-			RenownLevel:      profile.RenownLevel,
-			NextLevelXP:      nextLevelXP,
-			TotalTalkTime:    totalTime,
-			Grouping:         grouping,
+			Rank:               i + 1,
+			Callsign:           profile.Callsign,
+			Level:              profile.Level,
+			ExperiencePoints:   profile.ExperiencePoints,
+			RenownLevel:        profile.RenownLevel,
+			NextLevelXP:        nextLevelXP,
+			TotalTalkTime:      totalTime,
+			Grouping:           grouping,
+			RestedBonusSeconds: profile.RestedBonusSeconds,
 		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"scoreboard": entries,
-		"enabled":    true,
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"scoreboard":          entries,
+		"enabled":             true,
+		"renown_enabled":      g.renownEnabled,
+		"renown_xp_per_level": g.renownXPPerLevel,
+		// Rested server config values for UI display
+		"rested_enabled":                g.restedEnabled,
+		"rested_accumulation_rate":      g.restedAccumulationRate,
+		"rested_max_hours":              g.restedMaxHours,
+		"rested_multiplier":             g.restedMultiplier,
+		"rested_idle_threshold_seconds": g.restedIdleThresholdSec,
+		// XP cap and DR config for UI
+		"daily_cap_seconds":  g.dailyCapSeconds,
+		"weekly_cap_seconds": g.weeklyCapSeconds,
+		"dr_tiers":           g.drTiers,
 	}); err != nil {
 		log.Printf("Failed to encode scoreboard response: %v", err)
 	}
@@ -175,7 +220,7 @@ func (g *GamificationAPI) Profile(w http.ResponseWriter, r *http.Request) {
 	breakdown, _ := g.activityRepo.GetDailyBreakdown(ctx, callsign, 7)
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"callsign":                profile.Callsign,
 		"level":                   profile.Level,
 		"experience_points":       profile.ExperiencePoints,
@@ -238,7 +283,7 @@ func (g *GamificationAPI) RecentTransmissions(w http.ResponseWriter, r *http.Req
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"transmissions": entries,
 		"limit":         limit,
 	}); err != nil {
@@ -266,9 +311,21 @@ func (g *GamificationAPI) LevelConfig(w http.ResponseWriter, r *http.Request) {
 	groupingsMap := gamification.BuildGroupingsMap(g.levelGroupings)
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]interface{}{
-		"config":    levelConfig,
-		"groupings": groupingsMap,
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"config":              levelConfig,
+		"groupings":           groupingsMap,
+		"renown_enabled":      g.renownEnabled,
+		"renown_xp_per_level": g.renownXPPerLevel,
+		"weekly_cap_seconds":  g.weeklyCapSeconds,
+		"daily_cap_seconds":   g.dailyCapSeconds,
+		// Rested server config values for UI
+		"rested_enabled":                g.restedEnabled,
+		"rested_accumulation_rate":      g.restedAccumulationRate,
+		"rested_max_hours":              g.restedMaxHours,
+		"rested_multiplier":             g.restedMultiplier,
+		"rested_idle_threshold_seconds": g.restedIdleThresholdSec,
+		// DR config for UI
+		"dr_tiers": g.drTiers,
 	}); err != nil {
 		log.Printf("Failed to encode level config response: %v", err)
 	}

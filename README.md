@@ -47,6 +47,26 @@ go build -o allstar-nexus main.go
 ./allstar-nexus --config ./config.yaml
 ```
 
+Config validation
+-----------------
+
+Before starting the server, you can lint and validate your YAML to catch common mistakes (for example, accidental tab indentation which YAML does not allow):
+
+```bash
+# validate the default or provided config file
+./allstar-nexus config validate --config ./config.yaml
+```
+
+If validation fails you can either fix the config or bypass validation at your own risk using `--force` when starting the server:
+
+```bash
+# start server even if validation fails
+./allstar-nexus --config ./config.yaml --force
+```
+
+Using `--force` will allow the server to continue startup even if linting/parsing detects issues; this is intended for temporary debugging only.
+
+
 Useful developer tasks
 
 - Run backend tests:

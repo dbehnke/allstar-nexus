@@ -66,47 +66,47 @@ func TestWebsocketTallyBroadcastIntegration(t *testing.T) {
 	}
 
 	// Verify masking for non-admin: the IP should be masked
-	var nonEnv map[string]interface{}
+	var nonEnv map[string]any
 	if err := json.Unmarshal(nonAdminMsg, &nonEnv); err != nil {
 		t.Fatalf("failed to unmarshal non-admin env: %v", err)
 	}
 	if mt, _ := nonEnv["messageType"].(string); mt != "STATUS_UPDATE" {
 		t.Fatalf("expected STATUS_UPDATE as first non-admin message, got %v", mt)
 	}
-	data, _ := nonEnv["data"].(map[string]interface{})
-	links, _ := data["links_detailed"].([]interface{})
+	data, _ := nonEnv["data"].(map[string]any)
+	links, _ := data["links_detailed"].([]any)
 	if len(links) == 0 {
 		t.Fatalf("expected links_detailed in non-admin snapshot")
 	}
-	first, _ := links[0].(map[string]interface{})
+	first, _ := links[0].(map[string]any)
 	ip, _ := first["ip"].(string)
 	if !strings.HasSuffix(ip, ".*.*") {
 		t.Fatalf("expected masked IP for non-admin, got %s", ip)
 	}
 
 	// Verify admin receives unmasked IP
-	var adminEnv map[string]interface{}
+	var adminEnv map[string]any
 	if err := json.Unmarshal(adminMsg, &adminEnv); err != nil {
 		t.Fatalf("failed to unmarshal admin env: %v", err)
 	}
 	if mt, _ := adminEnv["messageType"].(string); mt != "STATUS_UPDATE" {
 		t.Fatalf("expected STATUS_UPDATE as first admin message, got %v", mt)
 	}
-	adata, _ := adminEnv["data"].(map[string]interface{})
-	alinks, _ := adata["links_detailed"].([]interface{})
+	adata, _ := adminEnv["data"].(map[string]any)
+	alinks, _ := adata["links_detailed"].([]any)
 	if len(alinks) == 0 {
 		t.Fatalf("expected links_detailed in admin snapshot")
 	}
-	afirst, _ := alinks[0].(map[string]interface{})
+	afirst, _ := alinks[0].(map[string]any)
 	aip, _ := afirst["ip"].(string)
 	if strings.HasSuffix(aip, ".*.*") {
 		t.Fatalf("expected unmasked IP for admin, got %s", aip)
 	}
 
 	// Prepare broadcast payload including scoreboard
-	payload := map[string]interface{}{
-		"summary":    map[string]interface{}{"rows_processed": 1},
-		"scoreboard": []map[string]interface{}{{"callsign": "ABC", "experience_points": 10}},
+	payload := map[string]any{
+		"summary":    map[string]any{"rows_processed": 1},
+		"scoreboard": []map[string]any{{"callsign": "ABC", "experience_points": 10}},
 	}
 
 	// Broadcast to connected clients
@@ -131,14 +131,14 @@ func TestWebsocketTallyBroadcastIntegration(t *testing.T) {
 				// continue loop until timeout
 				continue
 			}
-			var env map[string]interface{}
+			var env map[string]any
 			if err := json.Unmarshal(data, &env); err != nil {
 				t.Fatalf("failed to unmarshal ws envelope: %v", err)
 			}
 			mt, _ := env["messageType"].(string)
 			if mt == "GAMIFICATION_TALLY_COMPLETED" {
 				// verify scoreboard exists
-				d, ok := env["data"].(map[string]interface{})
+				d, ok := env["data"].(map[string]any)
 				if !ok {
 					t.Fatalf("unexpected data shape in envelope: %v", env["data"])
 				}

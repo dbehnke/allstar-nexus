@@ -61,6 +61,18 @@
 				"$go"
 			],
 			"group": "build"
+		},
+		{
+			"label": "rebuild-and-run-local",
+			"type": "shell",
+			"command": "make build && ./allstar-nexus --config ./config.yaml",
+			"group": "build"
+		},
+		{
+			"label": "re-run backend tests after fix",
+			"type": "shell",
+			"command": "go test ./backend/... -count=1",
+			"group": "build"
 		}
 	]
 }

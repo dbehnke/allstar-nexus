@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/api"
+	"github.com/dbehnke/allstar-nexus/backend/config"
 	"github.com/dbehnke/allstar-nexus/backend/gamification"
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
@@ -97,7 +98,7 @@ func TestProfileAPI_ReturnsAccurateAggregates(t *testing.T) {
 	}
 
 	// Build API with profile route and query it
-	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings())
+	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings(), true, 36000, false, 0, 0, 1.0, 300, 7200, 1200, []config.DRTier{})
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/gamification/profile/", gapi.Profile)
 	srv := httptest.NewServer(mux)

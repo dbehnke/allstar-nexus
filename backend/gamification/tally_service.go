@@ -14,10 +14,11 @@ import (
 // Config holds anti-cheating and XP configuration
 type Config struct {
 	// Rested Bonus
-	RestedEnabled          bool
-	RestedAccumulationRate float64 // hours bonus per hour offline (1.5 = generous)
-	RestedMaxSeconds       int     // max rested bonus cap (336 hours = 14 days)
-	RestedMultiplier       float64 // XP multiplier when rested (2.0 = double XP)
+	RestedEnabled              bool
+	RestedAccumulationRate     float64 // hours bonus per hour idle (1.5 = generous)
+	RestedMaxSeconds           int     // max rested bonus cap (336 hours = 14 days)
+	RestedMultiplier           float64 // XP multiplier when rested (2.0 = double XP)
+	RestedIdleThresholdSeconds int     // begin accruing after this many seconds idle (default 5 minutes)
 
 	// Diminishing Returns
 	DREnabled bool
@@ -36,6 +37,10 @@ type Config struct {
 	CapsEnabled      bool
 	DailyCapSeconds  int // 1,200 = 20 minutes/day for low-activity hub
 	WeeklyCapSeconds int // 7,200 = 2 hours/week for low-activity hub
+
+	// Renown (prestige)
+	RenownEnabled    bool
+	RenownXPPerLevel int // fixed XP required per renown-level (applies after level 60)
 }
 
 type DRTier struct {
@@ -342,14 +347,20 @@ func (s *TallyService) updateRestedBonus(profile *models.CallsignProfile) {
 	if !s.config.RestedEnabled {
 		return
 	}
-
-	hoursOffline := time.Since(profile.LastTransmissionAt).Hours()
-	if hoursOffline >= 24 {
-		// Accumulate rested bonus: 1 hour offline = 1.5 hours bonus (generous!)
-		bonusHours := hoursOffline * s.config.RestedAccumulationRate
+	// Determine idle time and apply threshold before accruing
+	idleSince := time.Since(profile.LastTransmissionAt)
+	threshold := time.Duration(s.config.RestedIdleThresholdSeconds) * time.Second
+	if threshold <= 0 {
+		// Default threshold to 5 minutes if not provided
+		threshold = 5 * time.Minute
+	}
+	if idleSince >= threshold {
+		// Accumulate rested bonus: per-hour idle scaled by accumulation rate
+		hoursIdle := idleSince.Hours()
+		bonusHours := hoursIdle * s.config.RestedAccumulationRate
 		profile.RestedBonusSeconds += int(bonusHours * 3600)
 
-		// Cap at maximum (14 days worth)
+		// Cap at maximum (e.g., 14 days worth)
 		if profile.RestedBonusSeconds > s.config.RestedMaxSeconds {
 			profile.RestedBonusSeconds = s.config.RestedMaxSeconds
 		}
@@ -444,11 +455,23 @@ func (s *TallyService) processLevelUps(profile *models.CallsignProfile) bool {
 	// Loop to handle multiple level-ups at once
 	for {
 		nextLevel := profile.Level + 1
-		if nextLevel > 60 {
-			nextLevel = 61 // Renown reset
+
+		var requiredXP int
+		var ok bool
+
+		if nextLevel <= 60 {
+			requiredXP, ok = s.levelRequirements[nextLevel]
+		} else {
+			// Renown levels beyond 60 use fixed XP-per-level when enabled
+			if s.config.RenownEnabled && s.config.RenownXPPerLevel > 0 {
+				requiredXP = s.config.RenownXPPerLevel
+				ok = true
+			} else {
+				// No renown configured; don't allow leveling beyond 60
+				ok = false
+			}
 		}
 
-		requiredXP, ok := s.levelRequirements[nextLevel]
 		if !ok || profile.ExperiencePoints < requiredXP {
 			break // Not enough XP for next level
 		}
@@ -458,14 +481,19 @@ func (s *TallyService) processLevelUps(profile *models.CallsignProfile) bool {
 		profile.Level++
 		leveledUp = true
 
-		// Check for renown (prestige) at level 60
+		// If we've reached level 60 (i.e., reached renown threshold), award renown
 		if profile.Level >= 60 {
 			profile.RenownLevel++
 			profile.Level = 1
-			profile.ExperiencePoints = 0
+			// Preserve carryover XP for the new renown cycle (leftover after subtracting requiredXP)
+			// Example: If profile.ExperiencePoints = 2500 and requiredXP = 2000,
+			// after leveling up, profile.ExperiencePoints = 2500 - 2000 = 500.
+			// When renown is gained, the leftover XP (500) is preserved for the next renown cycle.
+			// profile.ExperiencePoints already contains the leftover at this point.
 			s.logger.Info("Renown gained!",
 				zap.String("callsign", profile.Callsign),
 				zap.Int("renown", profile.RenownLevel),
+				zap.Int("carryover_xp", profile.ExperiencePoints),
 			)
 			break // Stop after renown to avoid infinite loop
 		}

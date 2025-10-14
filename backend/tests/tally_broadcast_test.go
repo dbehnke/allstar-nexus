@@ -27,14 +27,14 @@ func TestTallyBroadcastPayloadIncludesScoreboard(t *testing.T) {
 	getTotalTalkTime := func(callsign string) (int64, error) { return 0, nil }
 
 	// Build entries similar to main.go
-	entries := make([]map[string]interface{}, 0, len(profiles))
+	entries := make([]map[string]any, 0, len(profiles))
 	for _, p := range profiles {
 		nextXP := 0
 		if xp, ok := levelCfg[p.Level+1]; ok {
 			nextXP = xp
 		}
 		totalTime, _ := getTotalTalkTime(p.Callsign)
-		entries = append(entries, map[string]interface{}{
+		entries = append(entries, map[string]any{
 			"callsign":                p.Callsign,
 			"level":                   p.Level,
 			"experience_points":       p.ExperiencePoints,
@@ -44,7 +44,7 @@ func TestTallyBroadcastPayloadIncludesScoreboard(t *testing.T) {
 		})
 	}
 
-	payload := map[string]interface{}{"summary": map[string]interface{}{"rows_processed": 2}, "scoreboard": entries}
+	payload := map[string]any{"summary": map[string]any{"rows_processed": 2}, "scoreboard": entries}
 
 	b, err := json.Marshal(payload)
 	if err != nil {
@@ -52,7 +52,7 @@ func TestTallyBroadcastPayloadIncludesScoreboard(t *testing.T) {
 	}
 
 	// Ensure the JSON contains the scoreboard marker and a known callsign
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(b, &decoded); err != nil {
 		t.Fatalf("failed to unmarshal payload: %v", err)
 	}
@@ -60,11 +60,11 @@ func TestTallyBroadcastPayloadIncludesScoreboard(t *testing.T) {
 		t.Fatalf("expected scoreboard field in payload")
 	}
 	// Inspect scoreboard array contents
-	sc, ok := decoded["scoreboard"].([]interface{})
+	sc, ok := decoded["scoreboard"].([]any)
 	if !ok || len(sc) != 2 {
 		t.Fatalf("expected scoreboard array of length 2, got %v", decoded["scoreboard"])
 	}
-	first, ok := sc[0].(map[string]interface{})
+	first, ok := sc[0].(map[string]any)
 	if !ok {
 		t.Fatalf("unexpected scoreboard entry shape")
 	}

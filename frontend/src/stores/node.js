@@ -10,6 +10,18 @@ export const useNodeStore = defineStore('node', () => {
   const recentTransmissions = ref([])
   const levelConfig = ref({})
   const gamificationEnabled = ref(false)
+  const renownEnabled = ref(false)
+  const renownXPPerLevel = ref(36000)
+  const weeklyCapSeconds = ref(null)
+  // Rested server config values (from API)
+  const restedEnabled = ref(false)
+  const restedAccumulationRate = ref(0) // hours bonus per hour idle
+  const restedMaxHours = ref(0)
+  const restedMultiplier = ref(1.0)
+  const restedIdleThresholdSeconds = ref(null)
+  // XP cap and DR config
+  const dailyCapSeconds = ref(1200)
+  const drTiers = ref([])
 
   // Restored shape expected by the Dashboard and other components
   const links = ref([]) // array of link objects { node, current_tx, node_callsign, ... }
@@ -191,6 +203,14 @@ export const useNodeStore = defineStore('node', () => {
     return null
   }
 
+  // Helper to safely read numeric/boolean values from API payloads without throwing
+  function safeSet(targetRef, getter) {
+    try {
+      const v = getter()
+      if (v !== undefined) targetRef.value = v
+    } catch (e) {}
+  }
+
   async function fetchScoreboard(limit = 50) {
     try {
       let headers = {}
@@ -199,6 +219,21 @@ export const useNodeStore = defineStore('node', () => {
       const data = await res.json().catch(() => ({}))
       scoreboard.value = (data && (data.scoreboard || data.data || data.results)) || []
       gamificationEnabled.value = !!(data && (data.enabled || data.ok))
+      // Capture renown metadata if present
+      safeSet(renownEnabled, () => !!data.renown_enabled)
+      safeSet(renownXPPerLevel, () => Number(data.renown_xp_per_level) || renownXPPerLevel.value)
+
+      // Capture rested server config if present
+      safeSet(restedEnabled, () => !!data.rested_enabled)
+      safeSet(restedAccumulationRate, () => Number(data.rested_accumulation_rate) || restedAccumulationRate.value)
+      safeSet(restedMaxHours, () => Number(data.rested_max_hours) || restedMaxHours.value)
+      safeSet(restedMultiplier, () => Number(data.rested_multiplier) || restedMultiplier.value)
+      safeSet(restedIdleThresholdSeconds, () => (data.rested_idle_threshold_seconds != null) ? Number(data.rested_idle_threshold_seconds) : restedIdleThresholdSeconds.value)
+
+      // Capture XP cap and DR config if present
+      safeSet(dailyCapSeconds, () => (data.daily_cap_seconds != null) ? Number(data.daily_cap_seconds) : dailyCapSeconds.value)
+      safeSet(weeklyCapSeconds, () => (data.weekly_cap_seconds != null) ? Number(data.weekly_cap_seconds) : weeklyCapSeconds.value)
+      safeSet(drTiers, () => Array.isArray(data.dr_tiers) ? data.dr_tiers : drTiers.value)
     } catch (e) { logger.debug('fetchScoreboard failed', e) }
   }
 
@@ -257,6 +292,19 @@ export const useNodeStore = defineStore('node', () => {
       const res = await fetch('/api/gamification/level-config', { headers })
       const data = await res.json()
       levelConfig.value = (data && (data.config || data.data)) || {}
+      // Capture renown metadata if present in level config response
+      safeSet(renownEnabled, () => !!data.renown_enabled)
+      safeSet(renownXPPerLevel, () => Number(data.renown_xp_per_level) || renownXPPerLevel.value)
+      safeSet(weeklyCapSeconds, () => (data.weekly_cap_seconds != null) ? Number(data.weekly_cap_seconds) : (data.weeklyCapSeconds != null ? Number(data.weeklyCapSeconds) : weeklyCapSeconds.value))
+      // Capture rested server config from level-config if present
+      safeSet(restedEnabled, () => !!data.rested_enabled)
+      safeSet(restedAccumulationRate, () => Number(data.rested_accumulation_rate) || restedAccumulationRate.value)
+      safeSet(restedMaxHours, () => Number(data.rested_max_hours) || restedMaxHours.value)
+      safeSet(restedMultiplier, () => Number(data.rested_multiplier) || restedMultiplier.value)
+      safeSet(restedIdleThresholdSeconds, () => (data.rested_idle_threshold_seconds != null) ? Number(data.rested_idle_threshold_seconds) : restedIdleThresholdSeconds.value)
+      // Capture XP cap and DR config from level-config if present
+      safeSet(dailyCapSeconds, () => (data.daily_cap_seconds != null) ? Number(data.daily_cap_seconds) : dailyCapSeconds.value)
+      safeSet(drTiers, () => Array.isArray(data.dr_tiers) ? data.dr_tiers : drTiers.value)
     } catch (e) { logger.debug('fetchLevelConfig failed', e) }
   }
 
@@ -279,6 +327,16 @@ export const useNodeStore = defineStore('node', () => {
     triggerRecentTxRefresh,
     fetchRecentTransmissions,
     fetchLevelConfig,
+  renownEnabled,
+  renownXPPerLevel,
+  weeklyCapSeconds,
+  dailyCapSeconds,
+  restedEnabled,
+  restedAccumulationRate,
+  restedMaxHours,
+  restedMultiplier,
+  restedIdleThresholdSeconds,
+  drTiers,
     // restored helpers
     setTopLinks,
     loadTalkerHistory,

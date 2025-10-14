@@ -1005,7 +1005,7 @@ Notes:
 - Total: 3,600 XP = **Level 10** (completed newbie tier!)
 
 **Week 2-4:** (Taking a 2-week break)
-- Rested bonus accumulates: 14 days offline = 21 hours of 2.0x XP bonus available
+- Rested bonus accumulates: 14 days idle = 21 hours of 2.0x XP bonus available
 - Returns Week 4 with massive bonus ready
 
 **Week 4:**

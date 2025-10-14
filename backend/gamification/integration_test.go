@@ -47,12 +47,12 @@ func TestIntegration_DefaultGroupings(t *testing.T) {
 		}
 	}
 
-	// Check gaps (levels 10 and 20 should not be assigned)
-	if info := GetGroupingForLevel(10, groupings); info != nil {
-		t.Errorf("level 10 should not have a grouping (gap), got %+v", info)
+	// Levels 10 and 20 should now be assigned to Technician and General respectively
+	if info := GetGroupingForLevel(10, groupings); info == nil || info.Title != "Technician" {
+		t.Errorf("level 10 should be Technician, got %+v", info)
 	}
-	if info := GetGroupingForLevel(20, groupings); info != nil {
-		t.Errorf("level 20 should not have a grouping (gap), got %+v", info)
+	if info := GetGroupingForLevel(20, groupings); info == nil || info.Title != "General" {
+		t.Errorf("level 20 should be General, got %+v", info)
 	}
 }
 

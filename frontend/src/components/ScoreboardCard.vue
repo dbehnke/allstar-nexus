@@ -4,13 +4,17 @@
       <div class="header-left">
         <h3>Achievements</h3>
       </div>
-      <div class="header-right">
-        <button class="btn-secondary" @click="$emit('refresh')">Refresh</button>
-      </div>
+        <div class="header-right">
+          <div v-if="props.renownEnabled" class="renown-indicator" title="Renown enabled on this server">
+            ⭐ Renown: {{ Math.round(props.renownXP/3600) }}h
+          </div>
+          <button class="btn-secondary" @click="$emit('refresh')">Refresh</button>
+          <button class="btn-secondary" @click="showHelp = true" title="How leveling works">?</button>
+        </div>
     </div>
     <div class="card-body">
       <div v-if="(scoreboard || []).length" class="scoreboard-list">
-        <div v-for="(p, i) in scoreboard" :key="p.callsign || i" class="entry" :class="rankClass(i)">
+        <div v-for="(p, i) in scoreboard" :key="p.callsign || i" class="entry" :class="rankClass(i)" @click="openDetailsModal(p.callsign)">
           <div class="badge-container">
             <div v-if="(p.renown_level || 0) > 0" class="group-badge renown-badge">⭐</div>
             <div v-else-if="p.grouping" class="group-badge" :style="{ borderColor: p.grouping.color || '#64748b' }">
@@ -20,7 +24,7 @@
           </div>
           <div class="info">
             <div class="line-1">
-              <a v-if="p.callsign" class="callsign" :href="`https://www.qrz.com/db/${(p.callsign||'').toUpperCase()}`" target="_blank" rel="noopener noreferrer">{{ p.callsign }}</a>
+              <a v-if="p.callsign" class="callsign" :href="`https://www.qrz.com/db/${p.callsign.toUpperCase()}`" target="_blank" rel="noopener noreferrer" @click.stop>{{ p.callsign }}</a>
               <span v-else class="callsign">Unknown</span>
               <span v-if="(p.renown_level || 0) > 0" class="level-badge renown">⭐ Renown {{ p.renown_level }}</span>
               <span v-else-if="p.grouping" class="level-badge" :style="{ borderColor: p.grouping.color || '#64748b', color: p.grouping.color || '#64748b' }">
@@ -41,15 +45,82 @@
       <div v-else class="empty">No profiles yet</div>
     </div>
   </div>
+  <LevelingHelpModal
+    :visible="showHelp"
+  :levelConfig="levelConfig"
+  :renownXP="renownXP"
+  :renownEnabled="renownEnabled"
+  :weeklyCapSeconds="nodeStore.weeklyCapSeconds"
+  :restedEnabled="restedEnabled"
+  :restedAccumulationRate="restedAccumulationRate"
+  :restedMaxHours="restedMaxHours"
+  :restedMultiplier="restedMultiplier"
+  :restedIdleThresholdSeconds="nodeStore.restedIdleThresholdSeconds"
+    @close="showHelp = false"
+  />
+  <CallsignDetailsModal
+    :visible="showDetailsModal"
+    :callsign="selectedCallsign"
+    :daily-cap-seconds="dailyCapSeconds"
+    :weekly-cap-seconds="weeklyCapSeconds"
+    :dr-tiers="drTiers"
+    @close="showDetailsModal = false"
+  />
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
+import { useNodeStore } from '../stores/node'
 import LevelProgressBar from './LevelProgressBar.vue'
+import LevelingHelpModal from './LevelingHelpModal.vue'
+import CallsignDetailsModal from './CallsignDetailsModal.vue'
 
 const props = defineProps({
   scoreboard: { type: Array, default: () => [] },
-  levelConfig: { type: Object, default: () => ({}) }
+  levelConfig: { type: Object, default: () => ({}) },
+  renownXP: { type: Number, default: 36000 },
+  renownEnabled: { type: Boolean, default: false }
 })
+
+// Simple ref is sufficient; no need for computed wrapper
+const showHelp = ref(false)
+
+// Details modal state
+const showDetailsModal = ref(false)
+const selectedCallsign = ref('')
+
+// Read server-provided rested/renown metadata from the node store so the modal
+// displays the authoritative values (fixes issue where modal showed "rested disabled"
+// because the parent wasn't passing the store values).
+const nodeStore = useNodeStore()
+const restedEnabled = computed(() => nodeStore.restedEnabled)
+const restedAccumulationRate = computed(() => nodeStore.restedAccumulationRate)
+const restedMaxHours = computed(() => nodeStore.restedMaxHours)
+const restedMultiplier = computed(() => nodeStore.restedMultiplier)
+
+// Cap and DR settings from node store
+const dailyCapSeconds = computed(() => nodeStore.dailyCapSeconds || 1200)
+const weeklyCapSeconds = computed(() => nodeStore.weeklyCapSeconds || 7200)
+const drTiers = computed(() => nodeStore.drTiers || [])
+
+function openDetailsModal(callsign) {
+  if (!callsign) return
+  selectedCallsign.value = callsign
+  showDetailsModal.value = true
+}
+
+function formatTime(seconds) {
+  if (seconds == null) return '-'
+  const s = Number(seconds)
+  if (isNaN(s)) return '-'
+  if (s < 60) return `${s} second${s === 1 ? '' : 's'}`
+  if (s < 3600) {
+    const m = Math.round(s / 60)
+    return `${m} minute${m === 1 ? '' : 's'}`
+  }
+  const h = s / 3600
+  return `${h.toFixed(1)} hour${h.toFixed(1) === '1.0' ? '' : 's'}`
+}
 
 function requiredXP(level) {
   // levelConfig may be a map of string keys -> int
@@ -75,7 +146,8 @@ function rankClass(index) {
 .card-body { padding: 0.75rem 1rem; }
 
 .scoreboard-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; max-height: 540px; overflow: auto; }
-.entry { display: grid; grid-template-columns: 56px 1fr; gap: 0.75rem; align-items: center; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-tertiary); }
+.entry { display: grid; grid-template-columns: 56px 1fr; gap: 0.75rem; align-items: center; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-tertiary); cursor: pointer; transition: all 0.2s ease; }
+.entry:hover { background: var(--bg-hover); border-color: var(--accent-primary); transform: translateY(-2px); box-shadow: 0 4px 12px var(--shadow); }
 
 /* Mobile: single column */
 @media (max-width: 1024px) {
