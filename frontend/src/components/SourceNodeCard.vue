@@ -228,6 +228,7 @@
     :restedAccumulationRate="nodeStore.restedAccumulationRate"
     :restedMaxHours="nodeStore.restedMaxHours"
     :restedMultiplier="nodeStore.restedMultiplier"
+    :restedIdleThresholdSeconds="nodeStore.restedIdleThresholdSeconds"
     @close="showHelp = false"
   />
 </template>

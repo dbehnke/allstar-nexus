@@ -213,21 +213,22 @@ func main() {
 
 		// Build gamification config for TallyService
 		gameCfg := &gamification.Config{
-			RestedEnabled:          cfg.Gamification.RestedBonus.Enabled,
-			RestedAccumulationRate: cfg.Gamification.RestedBonus.AccumulationRate,
-			RestedMaxSeconds:       cfg.Gamification.RestedBonus.MaxHours * 3600,
-			RestedMultiplier:       cfg.Gamification.RestedBonus.Multiplier,
-			DREnabled:              cfg.Gamification.DiminishingReturns.Enabled,
-			KerchunkEnabled:        cfg.Gamification.KerchunkDetection.Enabled,
-			KerchunkThreshold:      cfg.Gamification.KerchunkDetection.ThresholdSec,
-			KerchunkWindow:         cfg.Gamification.KerchunkDetection.WindowSec,
-			KerchunkSinglePenalty:  cfg.Gamification.KerchunkDetection.SinglePenalty,
-			Kerchunk2to3Penalty:    cfg.Gamification.KerchunkDetection.TwoThree,
-			Kerchunk4to5Penalty:    cfg.Gamification.KerchunkDetection.FourFive,
-			Kerchunk6PlusPenalty:   cfg.Gamification.KerchunkDetection.SixPlus,
-			CapsEnabled:            cfg.Gamification.XPCaps.Enabled,
-			DailyCapSeconds:        cfg.Gamification.XPCaps.DailyCap,
-			WeeklyCapSeconds:       cfg.Gamification.XPCaps.WeeklyCap,
+			RestedEnabled:              cfg.Gamification.RestedBonus.Enabled,
+			RestedAccumulationRate:     cfg.Gamification.RestedBonus.AccumulationRate,
+			RestedMaxSeconds:           cfg.Gamification.RestedBonus.MaxHours * 3600,
+			RestedMultiplier:           cfg.Gamification.RestedBonus.Multiplier,
+			RestedIdleThresholdSeconds: cfg.Gamification.RestedBonus.IdleThresholdSec,
+			DREnabled:                  cfg.Gamification.DiminishingReturns.Enabled,
+			KerchunkEnabled:            cfg.Gamification.KerchunkDetection.Enabled,
+			KerchunkThreshold:          cfg.Gamification.KerchunkDetection.ThresholdSec,
+			KerchunkWindow:             cfg.Gamification.KerchunkDetection.WindowSec,
+			KerchunkSinglePenalty:      cfg.Gamification.KerchunkDetection.SinglePenalty,
+			Kerchunk2to3Penalty:        cfg.Gamification.KerchunkDetection.TwoThree,
+			Kerchunk4to5Penalty:        cfg.Gamification.KerchunkDetection.FourFive,
+			Kerchunk6PlusPenalty:       cfg.Gamification.KerchunkDetection.SixPlus,
+			CapsEnabled:                cfg.Gamification.XPCaps.Enabled,
+			DailyCapSeconds:            cfg.Gamification.XPCaps.DailyCap,
+			WeeklyCapSeconds:           cfg.Gamification.XPCaps.WeeklyCap,
 			// Renown settings
 			RenownEnabled:    cfg.Gamification.Renown.Enabled,
 			RenownXPPerLevel: cfg.Gamification.Renown.XPPerLevel,
@@ -290,6 +291,8 @@ func main() {
 			cfg.Gamification.RestedBonus.AccumulationRate,
 			cfg.Gamification.RestedBonus.MaxHours,
 			cfg.Gamification.RestedBonus.Multiplier,
+			cfg.Gamification.RestedBonus.IdleThresholdSec,
+			cfg.Gamification.XPCaps.WeeklyCap,
 		)
 
 		if cfg.AllowAnonDashboard {

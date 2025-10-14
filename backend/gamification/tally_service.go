@@ -14,10 +14,11 @@ import (
 // Config holds anti-cheating and XP configuration
 type Config struct {
 	// Rested Bonus
-	RestedEnabled          bool
-	RestedAccumulationRate float64 // hours bonus per hour idle (1.5 = generous)
-	RestedMaxSeconds       int     // max rested bonus cap (336 hours = 14 days)
-	RestedMultiplier       float64 // XP multiplier when rested (2.0 = double XP)
+	RestedEnabled              bool
+	RestedAccumulationRate     float64 // hours bonus per hour idle (1.5 = generous)
+	RestedMaxSeconds           int     // max rested bonus cap (336 hours = 14 days)
+	RestedMultiplier           float64 // XP multiplier when rested (2.0 = double XP)
+	RestedIdleThresholdSeconds int     // begin accruing after this many seconds idle (default 5 minutes)
 
 	// Diminishing Returns
 	DREnabled bool
@@ -346,14 +347,20 @@ func (s *TallyService) updateRestedBonus(profile *models.CallsignProfile) {
 	if !s.config.RestedEnabled {
 		return
 	}
-
-	hoursOffline := time.Since(profile.LastTransmissionAt).Hours()
-	if hoursOffline >= 24 {
-		// Accumulate rested bonus: 1 hour idle = 1.5 hours bonus (generous!)
-		bonusHours := hoursOffline * s.config.RestedAccumulationRate
+	// Determine idle time and apply threshold before accruing
+	idleSince := time.Since(profile.LastTransmissionAt)
+	threshold := time.Duration(s.config.RestedIdleThresholdSeconds) * time.Second
+	if threshold <= 0 {
+		// Default threshold to 5 minutes if not provided
+		threshold = 5 * time.Minute
+	}
+	if idleSince >= threshold {
+		// Accumulate rested bonus: per-hour idle scaled by accumulation rate
+		hoursIdle := idleSince.Hours()
+		bonusHours := hoursIdle * s.config.RestedAccumulationRate
 		profile.RestedBonusSeconds += int(bonusHours * 3600)
 
-		// Cap at maximum (14 days worth)
+		// Cap at maximum (e.g., 14 days worth)
 		if profile.RestedBonusSeconds > s.config.RestedMaxSeconds {
 			profile.RestedBonusSeconds = s.config.RestedMaxSeconds
 		}

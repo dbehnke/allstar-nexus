@@ -18,6 +18,7 @@ export const useNodeStore = defineStore('node', () => {
   const restedAccumulationRate = ref(0) // hours bonus per hour idle
   const restedMaxHours = ref(0)
   const restedMultiplier = ref(1.0)
+  const restedIdleThresholdSeconds = ref(null)
 
   // Restored shape expected by the Dashboard and other components
   const links = ref([]) // array of link objects { node, current_tx, node_callsign, ... }
@@ -215,6 +216,7 @@ export const useNodeStore = defineStore('node', () => {
   try { restedAccumulationRate.value = Number(data.rested_accumulation_rate) || restedAccumulationRate.value } catch (e) {}
   try { restedMaxHours.value = Number(data.rested_max_hours) || restedMaxHours.value } catch (e) {}
   try { restedMultiplier.value = Number(data.rested_multiplier) || restedMultiplier.value } catch (e) {}
+  try { restedIdleThresholdSeconds.value = (data.rested_idle_threshold_seconds != null) ? Number(data.rested_idle_threshold_seconds) : restedIdleThresholdSeconds.value } catch (e) {}
     } catch (e) { logger.debug('fetchScoreboard failed', e) }
   }
 
@@ -282,6 +284,7 @@ export const useNodeStore = defineStore('node', () => {
   try { restedAccumulationRate.value = Number(data.rested_accumulation_rate) || restedAccumulationRate.value } catch (e) {}
   try { restedMaxHours.value = Number(data.rested_max_hours) || restedMaxHours.value } catch (e) {}
   try { restedMultiplier.value = Number(data.rested_multiplier) || restedMultiplier.value } catch (e) {}
+  try { restedIdleThresholdSeconds.value = (data.rested_idle_threshold_seconds != null) ? Number(data.rested_idle_threshold_seconds) : restedIdleThresholdSeconds.value } catch (e) {}
     } catch (e) { logger.debug('fetchLevelConfig failed', e) }
   }
 
@@ -311,6 +314,7 @@ export const useNodeStore = defineStore('node', () => {
   restedAccumulationRate,
   restedMaxHours,
   restedMultiplier,
+  restedIdleThresholdSeconds,
     // restored helpers
     setTopLinks,
     loadTalkerHistory,

@@ -52,7 +52,7 @@ func testGamificationServer(t *testing.T) (*httptest.Server, *gorm.DB, func()) {
 		t.Fatalf("seed level config: %v", err)
 	}
 
-	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings(), true, 36000, true, 1.5, 336, 2.0)
+	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings(), true, 36000, true, 1.5, 336, 2.0, 300, 7200)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/gamification/scoreboard", gapi.Scoreboard)

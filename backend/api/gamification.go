@@ -27,6 +27,8 @@ type GamificationAPI struct {
 	restedAccumulationRate float64
 	restedMaxHours         int
 	restedMultiplier       float64
+	restedIdleThresholdSec int
+	weeklyCapSeconds       int
 }
 
 func NewGamificationAPI(
@@ -41,6 +43,8 @@ func NewGamificationAPI(
 	restedAccumulationRate float64,
 	restedMaxHours int,
 	restedMultiplier float64,
+	restedIdleThresholdSec int,
+	weeklyCapSeconds int,
 ) *GamificationAPI {
 	return &GamificationAPI{
 		profileRepo:            profileRepo,
@@ -54,6 +58,8 @@ func NewGamificationAPI(
 		restedAccumulationRate: restedAccumulationRate,
 		restedMaxHours:         restedMaxHours,
 		restedMultiplier:       restedMultiplier,
+		restedIdleThresholdSec: restedIdleThresholdSec,
+		weeklyCapSeconds:       weeklyCapSeconds,
 	}
 }
 
@@ -137,10 +143,11 @@ func (g *GamificationAPI) Scoreboard(w http.ResponseWriter, r *http.Request) {
 		"renown_enabled":      g.renownEnabled,
 		"renown_xp_per_level": g.renownXPPerLevel,
 		// Rested server config values for UI display
-		"rested_enabled":           g.restedEnabled,
-		"rested_accumulation_rate": g.restedAccumulationRate,
-		"rested_max_hours":         g.restedMaxHours,
-		"rested_multiplier":        g.restedMultiplier,
+		"rested_enabled":                g.restedEnabled,
+		"rested_accumulation_rate":      g.restedAccumulationRate,
+		"rested_max_hours":              g.restedMaxHours,
+		"rested_multiplier":             g.restedMultiplier,
+		"rested_idle_threshold_seconds": g.restedIdleThresholdSec,
 	}); err != nil {
 		log.Printf("Failed to encode scoreboard response: %v", err)
 	}
@@ -297,11 +304,13 @@ func (g *GamificationAPI) LevelConfig(w http.ResponseWriter, r *http.Request) {
 		"groupings":           groupingsMap,
 		"renown_enabled":      g.renownEnabled,
 		"renown_xp_per_level": g.renownXPPerLevel,
+		"weekly_cap_seconds":  g.weeklyCapSeconds,
 		// Rested server config values for UI
-		"rested_enabled":           g.restedEnabled,
-		"rested_accumulation_rate": g.restedAccumulationRate,
-		"rested_max_hours":         g.restedMaxHours,
-		"rested_multiplier":        g.restedMultiplier,
+		"rested_enabled":                g.restedEnabled,
+		"rested_accumulation_rate":      g.restedAccumulationRate,
+		"rested_max_hours":              g.restedMaxHours,
+		"rested_multiplier":             g.restedMultiplier,
+		"rested_idle_threshold_seconds": g.restedIdleThresholdSec,
 	}); err != nil {
 		log.Printf("Failed to encode level config response: %v", err)
 	}

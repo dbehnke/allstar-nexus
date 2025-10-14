@@ -35,6 +35,7 @@
 
         <section class="section">
           <h4>Rested XP</h4>
+          <p v-if="weeklyCapSeconds != null" class="muted"><strong>Weekly level cap:</strong> {{ weeklyCapSeconds }} seconds (~{{ formatTime(weeklyCapSeconds) }})</p>
           <div v-if="!restedEnabled">
             <p>Rested XP is currently disabled on this server.</p>
           </div>
@@ -42,6 +43,7 @@
             <p>Rested XP awards a multiplier for time spent after being inactive. The server accumulates a rested bonus which is consumed on next session(s).</p>
             <ul>
               <li><strong>Accumulation rate:</strong> {{ restedAccumulationRate }} hours bonus per hour idle</li>
+              <li v-if="restedIdleThresholdSeconds != null"><strong>Idle threshold:</strong> {{ restedIdleThresholdSeconds }} seconds (~{{ formatTime(restedIdleThresholdSeconds) }})</li>
               <li><strong>Maximum cap:</strong> {{ restedMaxHours }} hours</li>
               <li><strong>Multiplier when rested:</strong> {{ formatMultiplier(restedMultiplier) }}</li>
             </ul>
@@ -81,6 +83,7 @@ const props = defineProps({
   restedAccumulationRate: { type: Number, default: 0 },
   restedMaxHours: { type: Number, default: 0 },
   restedMultiplier: { type: Number, default: 1.0 },
+  restedIdleThresholdSeconds: { type: Number, default: null },
 })
 const emits = defineEmits(['close'])
 

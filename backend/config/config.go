@@ -33,6 +33,7 @@ type RestedBonusConfig struct {
 	AccumulationRate float64 `mapstructure:"accumulation_rate" yaml:"accumulation_rate"`
 	MaxHours         int     `mapstructure:"max_hours" yaml:"max_hours"`
 	Multiplier       float64 `mapstructure:"multiplier" yaml:"multiplier"`
+	IdleThresholdSec int     `mapstructure:"idle_threshold_seconds" yaml:"idle_threshold_seconds"`
 }
 
 type DiminishingReturnsConfig struct {
@@ -151,6 +152,8 @@ func Load(configPath ...string) Config {
 	viper.SetDefault("gamification.rested_bonus.accumulation_rate", 1.5)
 	viper.SetDefault("gamification.rested_bonus.max_hours", 336)
 	viper.SetDefault("gamification.rested_bonus.multiplier", 2.0)
+	// Begin accruing rested after this idle duration; default 5 minutes
+	viper.SetDefault("gamification.rested_bonus.idle_threshold_seconds", 300)
 	viper.SetDefault("gamification.diminishing_returns.enabled", true)
 	viper.SetDefault("gamification.kerchunk_detection.enabled", true)
 	viper.SetDefault("gamification.kerchunk_detection.threshold_seconds", 3)
@@ -351,8 +354,9 @@ gamification:
 		rested_bonus:
 			enabled: true
 			accumulation_rate: 1.5   # hours of rested per day idle (example)
-		max_hours: 336           # 14 days
-		multiplier: 2.0          # 2x XP while rested
+			idle_threshold_seconds: 300 # start accruing after 5 minutes idle
+			max_hours: 336           # 14 days
+			multiplier: 2.0          # 2x XP while rested
 
 	# Diminishing Returns (tiers in seconds with multipliers)
 	diminishing_returns:
