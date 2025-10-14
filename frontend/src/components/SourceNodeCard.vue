@@ -40,6 +40,7 @@
             <button v-if="txNotif.notificationsEnabled.value && (txNotif.soundEnabled.value || txNotif.speechEnabled.value) && txNotif.audioSuspended.value" @click="txNotif.openAudio()" class="cta-btn audio-cta" title="Enable sound and speech">
               🔊 Enable Sound & Speech
             </button>
+            <button class="btn-secondary" @click="showHelp = true" title="How leveling works">?</button>
           </div>
         </div>
       </div>
@@ -217,10 +218,23 @@
       </div>
     </div>
   </Card>
+  <LevelingHelpModal
+    :visible="showHelp"
+    :levelConfig="nodeStore.levelConfig"
+    :renownXP="nodeStore.renownXPPerLevel"
+    :renownEnabled="nodeStore.renownEnabled"
+    :weeklyCapSeconds="nodeStore.weeklyCapSeconds"
+    :restedEnabled="nodeStore.restedEnabled"
+    :restedAccumulationRate="nodeStore.restedAccumulationRate"
+    :restedMaxHours="nodeStore.restedMaxHours"
+    :restedMultiplier="nodeStore.restedMultiplier"
+    @close="showHelp = false"
+  />
 </template>
 
 <script setup>
 import { computed, watch, reactive, ref, onMounted, onUnmounted } from 'vue'
+import LevelingHelpModal from './LevelingHelpModal.vue'
 import Card from './Card.vue'
 import { useNodeStore } from '../stores/node'
 import { useTxNotifications } from '../composables/useTxNotifications'
@@ -257,6 +271,8 @@ logger.debug('[SourceNodeCard] Component loaded, props:', {
 
 // Prefer an injected nodeStore for tests; otherwise use the canonical Pinia store
 const nodeStore = props.nodeStore || useNodeStore()
+
+const showHelp = ref(false)
 
 // Get the actual source node ID from props or data
 const actualSourceNodeID = computed(() => {
@@ -569,6 +585,9 @@ const adjacentList = computed(() => {
 
   return normalized
 })
+
+// render LevelingHelpModal with authoritative server values
+// (placed after the computed block so setup above is available)
 
 // Watch for removed nodes and keep them visible in recentRemoved
 try {
