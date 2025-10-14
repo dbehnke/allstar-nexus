@@ -15,7 +15,7 @@ export const useNodeStore = defineStore('node', () => {
   const weeklyCapSeconds = ref(null)
   // Rested server config values (from API)
   const restedEnabled = ref(false)
-  const restedAccumulationRate = ref(0) // hours bonus per hour offline
+  const restedAccumulationRate = ref(0) // hours bonus per hour idle
   const restedMaxHours = ref(0)
   const restedMultiplier = ref(1.0)
 

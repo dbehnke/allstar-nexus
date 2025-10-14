@@ -348,9 +348,9 @@ gamification:
 	tally_interval_minutes: 30
 
 	# Rested XP Bonus
-	rested_bonus:
-		enabled: true
-		accumulation_rate: 1.5   # hours of rested per day offline (example)
+		rested_bonus:
+			enabled: true
+			accumulation_rate: 1.5   # hours of rested per day idle (example)
 		max_hours: 336           # 14 days
 		multiplier: 2.0          # 2x XP while rested
 

@@ -15,7 +15,7 @@ import (
 type Config struct {
 	// Rested Bonus
 	RestedEnabled          bool
-	RestedAccumulationRate float64 // hours bonus per hour offline (1.5 = generous)
+	RestedAccumulationRate float64 // hours bonus per hour idle (1.5 = generous)
 	RestedMaxSeconds       int     // max rested bonus cap (336 hours = 14 days)
 	RestedMultiplier       float64 // XP multiplier when rested (2.0 = double XP)
 
@@ -349,7 +349,7 @@ func (s *TallyService) updateRestedBonus(profile *models.CallsignProfile) {
 
 	hoursOffline := time.Since(profile.LastTransmissionAt).Hours()
 	if hoursOffline >= 24 {
-		// Accumulate rested bonus: 1 hour offline = 1.5 hours bonus (generous!)
+		// Accumulate rested bonus: 1 hour idle = 1.5 hours bonus (generous!)
 		bonusHours := hoursOffline * s.config.RestedAccumulationRate
 		profile.RestedBonusSeconds += int(bonusHours * 3600)
 

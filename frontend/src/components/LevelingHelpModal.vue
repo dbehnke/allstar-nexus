@@ -41,7 +41,7 @@
           <div v-else>
             <p>Rested XP awards a multiplier for time spent after being inactive. The server accumulates a rested bonus which is consumed on next session(s).</p>
             <ul>
-              <li><strong>Accumulation rate:</strong> {{ restedAccumulationRate }} hours bonus per hour offline</li>
+              <li><strong>Accumulation rate:</strong> {{ restedAccumulationRate }} hours bonus per hour idle</li>
               <li><strong>Maximum cap:</strong> {{ restedMaxHours }} hours</li>
               <li><strong>Multiplier when rested:</strong> {{ formatMultiplier(restedMultiplier) }}</li>
             </ul>

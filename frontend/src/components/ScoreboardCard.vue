@@ -103,7 +103,9 @@ async function fetchProfile(callsign) {
   if (profileDetails.value[callsign] || profileLoading.value[callsign]) return
   profileLoading.value[callsign] = true
   try {
-    const res = await fetch(`/api/gamification/profile/${encodeURIComponent(callsign)}`)
+    const endpoint = `/api/gamification/profile/${encodeURIComponent(callsign)}`
+    const base = (typeof globalThis !== 'undefined' && globalThis.location && globalThis.location.origin) ? globalThis.location.origin : 'http://localhost'
+    const res = await fetch(new URL(endpoint, base).toString())
     if (!res.ok) throw new Error('fetch failed')
     const data = await res.json()
     profileDetails.value[callsign] = data
