@@ -61,6 +61,7 @@ gamification:
 	rested_bonus:
 		enabled: true
 		accumulation_rate: 1.5
+		idle_threshold_seconds: 300  # start accruing after 5 minutes idle
 		max_hours: 336
 		multiplier: 2.0
 
