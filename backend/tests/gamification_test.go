@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/api"
+	"github.com/dbehnke/allstar-nexus/backend/config"
 	"github.com/dbehnke/allstar-nexus/backend/gamification"
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
@@ -52,7 +53,7 @@ func testGamificationServer(t *testing.T) (*httptest.Server, *gorm.DB, func()) {
 		t.Fatalf("seed level config: %v", err)
 	}
 
-	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings(), true, 36000, true, 1.5, 336, 2.0, 300, 7200)
+	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings(), true, 36000, true, 1.5, 336, 2.0, 300, 7200, 1200, []config.DRTier{})
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/gamification/scoreboard", gapi.Scoreboard)

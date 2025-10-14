@@ -29,6 +29,8 @@ type GamificationAPI struct {
 	restedMultiplier       float64
 	restedIdleThresholdSec int
 	weeklyCapSeconds       int
+	dailyCapSeconds        int
+	drTiers                []cfgpkg.DRTier
 }
 
 func NewGamificationAPI(
@@ -45,6 +47,8 @@ func NewGamificationAPI(
 	restedMultiplier float64,
 	restedIdleThresholdSec int,
 	weeklyCapSeconds int,
+	dailyCapSeconds int,
+	drTiers []cfgpkg.DRTier,
 ) *GamificationAPI {
 	return &GamificationAPI{
 		profileRepo:            profileRepo,
@@ -60,6 +64,8 @@ func NewGamificationAPI(
 		restedMultiplier:       restedMultiplier,
 		restedIdleThresholdSec: restedIdleThresholdSec,
 		weeklyCapSeconds:       weeklyCapSeconds,
+		dailyCapSeconds:        dailyCapSeconds,
+		drTiers:                drTiers,
 	}
 }
 
@@ -98,14 +104,15 @@ func (g *GamificationAPI) Scoreboard(w http.ResponseWriter, r *http.Request) {
 
 	// Build response with rank and next level XP
 	type ScoreboardEntry struct {
-		Rank             int                        `json:"rank"`
-		Callsign         string                     `json:"callsign"`
-		Level            int                        `json:"level"`
-		ExperiencePoints int                        `json:"experience_points"`
-		RenownLevel      int                        `json:"renown_level"`
-		NextLevelXP      int                        `json:"next_level_xp"`
-		TotalTalkTime    int                        `json:"total_talk_time_seconds,omitempty"`
-		Grouping         *gamification.GroupingInfo `json:"grouping,omitempty"`
+		Rank               int                        `json:"rank"`
+		Callsign           string                     `json:"callsign"`
+		Level              int                        `json:"level"`
+		ExperiencePoints   int                        `json:"experience_points"`
+		RenownLevel        int                        `json:"renown_level"`
+		NextLevelXP        int                        `json:"next_level_xp"`
+		TotalTalkTime      int                        `json:"total_talk_time_seconds,omitempty"`
+		Grouping           *gamification.GroupingInfo `json:"grouping,omitempty"`
+		RestedBonusSeconds int                        `json:"rested_bonus_seconds"`
 	}
 
 	var entries []ScoreboardEntry
@@ -125,14 +132,15 @@ func (g *GamificationAPI) Scoreboard(w http.ResponseWriter, r *http.Request) {
 		}
 
 		entries = append(entries, ScoreboardEntry{
-			Rank:             i + 1,
-			Callsign:         profile.Callsign,
-			Level:            profile.Level,
-			ExperiencePoints: profile.ExperiencePoints,
-			RenownLevel:      profile.RenownLevel,
-			NextLevelXP:      nextLevelXP,
-			TotalTalkTime:    totalTime,
-			Grouping:         grouping,
+			Rank:               i + 1,
+			Callsign:           profile.Callsign,
+			Level:              profile.Level,
+			ExperiencePoints:   profile.ExperiencePoints,
+			RenownLevel:        profile.RenownLevel,
+			NextLevelXP:        nextLevelXP,
+			TotalTalkTime:      totalTime,
+			Grouping:           grouping,
+			RestedBonusSeconds: profile.RestedBonusSeconds,
 		})
 	}
 
@@ -148,6 +156,10 @@ func (g *GamificationAPI) Scoreboard(w http.ResponseWriter, r *http.Request) {
 		"rested_max_hours":              g.restedMaxHours,
 		"rested_multiplier":             g.restedMultiplier,
 		"rested_idle_threshold_seconds": g.restedIdleThresholdSec,
+		// XP cap and DR config for UI
+		"daily_cap_seconds":  g.dailyCapSeconds,
+		"weekly_cap_seconds": g.weeklyCapSeconds,
+		"dr_tiers":           g.drTiers,
 	}); err != nil {
 		log.Printf("Failed to encode scoreboard response: %v", err)
 	}
@@ -305,12 +317,15 @@ func (g *GamificationAPI) LevelConfig(w http.ResponseWriter, r *http.Request) {
 		"renown_enabled":      g.renownEnabled,
 		"renown_xp_per_level": g.renownXPPerLevel,
 		"weekly_cap_seconds":  g.weeklyCapSeconds,
+		"daily_cap_seconds":   g.dailyCapSeconds,
 		// Rested server config values for UI
 		"rested_enabled":                g.restedEnabled,
 		"rested_accumulation_rate":      g.restedAccumulationRate,
 		"rested_max_hours":              g.restedMaxHours,
 		"rested_multiplier":             g.restedMultiplier,
 		"rested_idle_threshold_seconds": g.restedIdleThresholdSec,
+		// DR config for UI
+		"dr_tiers": g.drTiers,
 	}); err != nil {
 		log.Printf("Failed to encode level config response: %v", err)
 	}

@@ -8,6 +8,12 @@ LDFLAGS=-X 'main.buildVersion=$(VERSION)' -X 'main.buildTime=$(BUILD_TIME)'
 
 .PHONY: frontend backend build frontend-install backend-install build-dashboard build run test test-e2e clean lint
 
+.PHONY: validate-config
+
+# Validate the configuration file (uses the app's validator)
+validate-config:
+	./allstar-nexus config validate --config ./config.yaml
+
 # Build the legacy Next.js exported frontend (if used)
 frontend:
 	cd $(FRONTEND_DIR) && npm install && npm run build

@@ -19,6 +19,9 @@ export const useNodeStore = defineStore('node', () => {
   const restedMaxHours = ref(0)
   const restedMultiplier = ref(1.0)
   const restedIdleThresholdSeconds = ref(null)
+  // XP cap and DR config
+  const dailyCapSeconds = ref(1200)
+  const drTiers = ref([])
 
   // Restored shape expected by the Dashboard and other components
   const links = ref([]) // array of link objects { node, current_tx, node_callsign, ... }
@@ -217,6 +220,10 @@ export const useNodeStore = defineStore('node', () => {
   try { restedMaxHours.value = Number(data.rested_max_hours) || restedMaxHours.value } catch (e) {}
   try { restedMultiplier.value = Number(data.rested_multiplier) || restedMultiplier.value } catch (e) {}
   try { restedIdleThresholdSeconds.value = (data.rested_idle_threshold_seconds != null) ? Number(data.rested_idle_threshold_seconds) : restedIdleThresholdSeconds.value } catch (e) {}
+  // Capture XP cap and DR config if present
+  try { dailyCapSeconds.value = (data.daily_cap_seconds != null) ? Number(data.daily_cap_seconds) : dailyCapSeconds.value } catch (e) {}
+  try { weeklyCapSeconds.value = (data.weekly_cap_seconds != null) ? Number(data.weekly_cap_seconds) : weeklyCapSeconds.value } catch (e) {}
+  try { drTiers.value = Array.isArray(data.dr_tiers) ? data.dr_tiers : drTiers.value } catch (e) {}
     } catch (e) { logger.debug('fetchScoreboard failed', e) }
   }
 
@@ -285,6 +292,9 @@ export const useNodeStore = defineStore('node', () => {
   try { restedMaxHours.value = Number(data.rested_max_hours) || restedMaxHours.value } catch (e) {}
   try { restedMultiplier.value = Number(data.rested_multiplier) || restedMultiplier.value } catch (e) {}
   try { restedIdleThresholdSeconds.value = (data.rested_idle_threshold_seconds != null) ? Number(data.rested_idle_threshold_seconds) : restedIdleThresholdSeconds.value } catch (e) {}
+  // Capture XP cap and DR config from level-config if present
+  try { dailyCapSeconds.value = (data.daily_cap_seconds != null) ? Number(data.daily_cap_seconds) : dailyCapSeconds.value } catch (e) {}
+  try { drTiers.value = Array.isArray(data.dr_tiers) ? data.dr_tiers : drTiers.value } catch (e) {}
     } catch (e) { logger.debug('fetchLevelConfig failed', e) }
   }
 
@@ -310,11 +320,13 @@ export const useNodeStore = defineStore('node', () => {
   renownEnabled,
   renownXPPerLevel,
   weeklyCapSeconds,
+  dailyCapSeconds,
   restedEnabled,
   restedAccumulationRate,
   restedMaxHours,
   restedMultiplier,
   restedIdleThresholdSeconds,
+  drTiers,
     // restored helpers
     setTopLinks,
     loadTalkerHistory,

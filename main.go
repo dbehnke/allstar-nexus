@@ -15,7 +15,6 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/api"
 	"github.com/dbehnke/allstar-nexus/backend/auth"
 	"github.com/dbehnke/allstar-nexus/backend/config"
-	cfgpkg "github.com/dbehnke/allstar-nexus/backend/config"
 	"github.com/dbehnke/allstar-nexus/backend/gamification"
 	"github.com/dbehnke/allstar-nexus/backend/middleware"
 	"github.com/dbehnke/allstar-nexus/backend/models"
@@ -40,9 +39,40 @@ var buildTime = ""
 func main() {
 	// Command-line flags
 	configFile := flag.String("config", "", "Path to config file (default: search ./config.yaml, data/config.yaml, etc.)")
+	force := flag.Bool("force", false, "When set, ignore config validation errors and continue startup")
+	flag.Usage = func() {
+		// Minimal usage with subcommands
+		_, _ = os.Stderr.WriteString("Allstar Nexus\n")
+		_, _ = os.Stderr.WriteString("\nUsage:\n")
+		_, _ = os.Stderr.WriteString("  allstar-nexus [flags]\n")
+		_, _ = os.Stderr.WriteString("  allstar-nexus config validate [--config path]\n")
+		_, _ = os.Stderr.WriteString("\nFlags:\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
+	// Handle optional subcommands: currently only `config validate`
+	// We deliberately check os.Args to avoid interfering with standard flag parsing for the server.
+	if len(os.Args) >= 3 && os.Args[1] == "config" && os.Args[2] == "validate" {
+		// Allow --config to override the path; if not provided, Validate will search defaults.
+		if err := config.Validate(*configFile); err != nil {
+			log.Printf("config validation: FAIL: %v", err)
+			os.Exit(2)
+		}
+		log.Printf("config validation: PASS")
+		return
+	}
+
 	// Load configuration
+	// Fail-fast: validate YAML and basic structure before full startup unless --force is provided.
+	if err := config.Validate(*configFile); err != nil {
+		if *force {
+			log.Printf("config validation failed but --force provided; continuing startup. Validation error: %v", err)
+		} else {
+			log.Fatalf("config validation failed: %v. Use --force to override and continue at your own risk.", err)
+		}
+	}
+
 	cfg := config.Load(*configFile)
 
 	// Initialize logger (simple for now)
@@ -179,7 +209,7 @@ func main() {
 		logger.Info("initializing gamification system...")
 
 		// Validate level groupings
-		var levelGroupings []cfgpkg.LevelGrouping
+		var levelGroupings []config.LevelGrouping
 		if len(cfg.Gamification.LevelGroupings) > 0 {
 			levelGroupings = cfg.Gamification.LevelGroupings
 			if err := gamification.ValidateGroupings(levelGroupings); err != nil {
@@ -293,6 +323,8 @@ func main() {
 			cfg.Gamification.RestedBonus.Multiplier,
 			cfg.Gamification.RestedBonus.IdleThresholdSec,
 			cfg.Gamification.XPCaps.WeeklyCap,
+			cfg.Gamification.XPCaps.DailyCap,
+			cfg.Gamification.DiminishingReturns.Tiers,
 		)
 
 		if cfg.AllowAnonDashboard {
@@ -326,6 +358,15 @@ func main() {
 	// AMI + WebSocket wiring (conditional). Always provide a /ws endpoint so the UI never hard-fails.
 	var hub *web.Hub
 	if cfg.AMIEnabled {
+		// Log effective AMI configuration (masking sensitive values) to aid troubleshooting
+		logger.Info("AMI enabled. Effective configuration",
+			zap.String("host", cfg.AMIHost),
+			zap.Int("port", cfg.AMIPort),
+			zap.String("user", cfg.AMIUser),
+			zap.String("events", cfg.AMIEvents),
+			zap.Duration("retry_min", cfg.AMIRetryInterval),
+			zap.Duration("retry_max", cfg.AMIRetryMax),
+		)
 		hub = web.NewHub()
 		sm := core.NewStateManager()
 
@@ -443,14 +484,14 @@ func main() {
 				}
 				levelCfg, _ := levelConfigRepo.GetAllAsMap(ctx)
 				// Build entries similar to API response shape
-				entries := make([]map[string]interface{}, 0, len(profiles))
+				entries := make([]map[string]any, 0, len(profiles))
 				for _, p := range profiles {
 					nextXP := 0
 					if xp, ok := levelCfg[p.Level+1]; ok {
 						nextXP = xp
 					}
 					totalTime, _ := txLogRepo.GetTotalTransmissionTime(p.Callsign)
-					entries = append(entries, map[string]interface{}{
+					entries = append(entries, map[string]any{
 						"callsign":                p.Callsign,
 						"level":                   p.Level,
 						"experience_points":       p.ExperiencePoints,
@@ -459,7 +500,7 @@ func main() {
 						"total_talk_time_seconds": totalTime,
 					})
 				}
-				hub.BroadcastTallyCompleted(map[string]interface{}{"summary": summary, "scoreboard": entries})
+				hub.BroadcastTallyCompleted(map[string]any{"summary": summary, "scoreboard": entries})
 			}
 		}
 

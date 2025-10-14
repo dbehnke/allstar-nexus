@@ -39,7 +39,11 @@ func SPAFileServer(embeddedFS embed.FS, basePath string) (http.Handler, error) {
 		// Try to serve the requested file; if it doesn't exist, rewrite to "/" to serve index.html.
 		reqPath := strings.TrimPrefix(r.URL.Path, "/")
 		if reqPath == "" {
-			fileServer.ServeHTTP(w, r) // serve index.html at root
+			// Serve index.html directly at root
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(indexBytes)
 			return
 		}
 

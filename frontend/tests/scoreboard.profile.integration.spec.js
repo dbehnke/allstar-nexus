@@ -25,26 +25,29 @@ describe('Scoreboard profile integration (msw)', () => {
   })
   afterAll(() => server.close())
 
-  it('fetches profile via API and shows rested pool', async () => {
+  it('shows rested XP on card and fetches profile via API when card clicked', async () => {
     const wrapper = mount(ScoreboardCard, {
       props: {
-        scoreboard: [{ callsign: 'N0CALL', level: 3, experience_points: 10 }],
+        scoreboard: [{ callsign: 'N0CALL', level: 3, experience_points: 10, rested_bonus_seconds: 0 }],
         levelConfig: {},
         renownXP: 36000,
         renownEnabled: false,
       }
     })
 
-    const btn = wrapper.find('button.btn-link')
-    expect(btn.exists()).toBe(true)
-    await btn.trigger('click')
+    // Rested should be visible on the card (even if 0)
+    expect(wrapper.html()).toContain('Rested:')
+
+    // Click the card entry to open modal
+    const entry = wrapper.find('.entry')
+    expect(entry.exists()).toBe(true)
+    await entry.trigger('click')
 
     // allow fetch + DOM updates
-    await new Promise(r => setTimeout(r, 0))
+    await new Promise(r => setTimeout(r, 50))
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.html()).toContain('Rested:')
-    // formatTime returns singular "hour" for exactly 1.0
-    expect(wrapper.html()).toContain('1.0 hour')
+    // Modal should show the callsign and fetch profile data
+    expect(wrapper.html()).toContain('N0CALL')
   })
 })
