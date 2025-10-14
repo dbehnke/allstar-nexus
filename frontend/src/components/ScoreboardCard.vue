@@ -24,7 +24,7 @@
           </div>
           <div class="info">
             <div class="line-1">
-              <a v-if="p.callsign" class="callsign" :href="`https://www.qrz.com/db/${(p.callsign||'').toUpperCase()}`" target="_blank" rel="noopener noreferrer" @click.stop>{{ p.callsign }}</a>
+              <a v-if="p.callsign" class="callsign" :href="`https://www.qrz.com/db/${p.callsign.toUpperCase()}`" target="_blank" rel="noopener noreferrer" @click.stop>{{ p.callsign }}</a>
               <span v-else class="callsign">Unknown</span>
               <span v-if="(p.renown_level || 0) > 0" class="level-badge renown">⭐ Renown {{ p.renown_level }}</span>
               <span v-else-if="p.grouping" class="level-badge" :style="{ borderColor: p.grouping.color || '#64748b', color: p.grouping.color || '#64748b' }">
