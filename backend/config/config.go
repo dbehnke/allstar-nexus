@@ -360,7 +360,7 @@ func Validate(configPath ...string) error {
 			// If any of the leading whitespace characters are tabs, flag as error
 			if strings.Contains(line[:i], "\t") {
 				// Show a short preview of the offending line (without tabs)
-				preview := strings.ReplaceAll(line, "\t", "→")
+				preview := strings.ReplaceAll(line, "\t", "[TAB]")
 				if len(preview) > 120 {
 					preview = preview[:120] + "…"
 				}
