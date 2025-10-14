@@ -486,6 +486,9 @@ func (s *TallyService) processLevelUps(profile *models.CallsignProfile) bool {
 			profile.RenownLevel++
 			profile.Level = 1
 			// Preserve carryover XP for the new renown cycle (leftover after subtracting requiredXP)
+			// Example: If profile.ExperiencePoints = 2500 and requiredXP = 2000,
+			// after leveling up, profile.ExperiencePoints = 2500 - 2000 = 500.
+			// When renown is gained, the leftover XP (500) is preserved for the next renown cycle.
 			// profile.ExperiencePoints already contains the leftover at this point.
 			s.logger.Info("Renown gained!",
 				zap.String("callsign", profile.Callsign),
