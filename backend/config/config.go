@@ -383,7 +383,7 @@ func Validate(configPath ...string) error {
 		raw := v.Get("nodes")
 		switch raw.(type) {
 		case []interface{}:
-			// expected: either []int or []map[string]interface{}
+			// expected: either []int or []map[string]any
 		default:
 			return fmt.Errorf("nodes must be a YAML sequence (e.g. [43732] or - node_id: 43732), but got %T", raw)
 		}

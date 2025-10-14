@@ -87,11 +87,8 @@ const props = defineProps({
   renownEnabled: { type: Boolean, default: false }
 })
 
-const showHelpRef = ref(false)
-const showHelp = computed({
-  get: () => showHelpRef.value,
-  set: (v) => (showHelpRef.value = v)
-})
+// Simple ref is sufficient; no need for computed wrapper
+const showHelp = ref(false)
 
 // Details modal state
 const showDetailsModal = ref(false)
