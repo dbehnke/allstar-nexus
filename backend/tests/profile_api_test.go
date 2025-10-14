@@ -97,7 +97,7 @@ func TestProfileAPI_ReturnsAccurateAggregates(t *testing.T) {
 	}
 
 	// Build API with profile route and query it
-	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings())
+	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings(), true, 36000, false, 0, 0, 1.0)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/gamification/profile/", gapi.Profile)
 	srv := httptest.NewServer(mux)

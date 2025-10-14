@@ -13,7 +13,13 @@
             <table>
               <thead><tr><th>Level</th><th>XP to next level (seconds)</th></tr></thead>
               <tbody>
-                <tr v-for="lvl in levels" :key="lvl"><td>{{ lvl }}</td><td>{{ xpFor(lvl) }}</td></tr>
+                  <tr v-for="lvl in levels" :key="lvl">
+                    <td>{{ lvl }}</td>
+                    <td>
+                      {{ xpFor(lvl) }}
+                      <small class="muted">({{ formatTime(xpFor(lvl)) }})</small>
+                    </td>
+                  </tr>
               </tbody>
             </table>
           </div>
@@ -24,16 +30,35 @@
           <p>When a user reaches level 60, they enter a Renown cycle. Each Renown level requires a fixed amount of XP configured on the server.</p>
           <p><strong>Default:</strong> {{ renownXP }} seconds (10 hours)</p>
           <p>When Renown is awarded the player's level is reset to 1 and any leftover XP beyond the renown threshold is carried into the new cycle.</p>
+            <p v-if="weeklyCapSeconds != null"><strong>Weekly level cap:</strong> {{ weeklyCapSeconds }} seconds (~{{ formatTime(weeklyCapSeconds) }})</p>
         </section>
 
         <section class="section">
           <h4>Rested XP</h4>
-          <p>Rested XP awards a multiplier for time spent after being inactive. The server accumulates a rested bonus which is consumed on next session(s). See server config for exact accumulation and multiplier values.</p>
+          <div v-if="!restedEnabled">
+            <p>Rested XP is currently disabled on this server.</p>
+          </div>
+          <div v-else>
+            <p>Rested XP awards a multiplier for time spent after being inactive. The server accumulates a rested bonus which is consumed on next session(s).</p>
+            <ul>
+              <li><strong>Accumulation rate:</strong> {{ restedAccumulationRate }} hours bonus per hour offline</li>
+              <li><strong>Maximum cap:</strong> {{ restedMaxHours }} hours</li>
+              <li><strong>Multiplier when rested:</strong> {{ formatMultiplier(restedMultiplier) }}</li>
+            </ul>
+          </div>
         </section>
 
         <section class="section">
           <h4>Diminishing Returns</h4>
           <p>Diminishing returns reduce XP awarded for longer daily talk time windows. The system applies tiered multipliers based on recent activity to encourage fair play.</p>
+            <p>Example tiers (server-configurable):</p>
+            <ul>
+              <li>0–20 minutes: 1.0x (full XP)</li>
+              <li>20–40 minutes: 0.75x</li>
+              <li>40–60 minutes: 0.5x</li>
+              <li>60+ minutes: 0.25x</li>
+            </ul>
+            <p>This means longer, continuous talk sessions earn less XP per second after passing each tier threshold. The intent is to reward diversified participation while limiting farming of long continuous TX time.</p>
         </section>
       </div>
       <div class="modal-footer">
@@ -45,7 +70,18 @@
 
 <script setup>
 import { computed } from 'vue'
-const props = defineProps({ visible: Boolean, levelConfig: Object, renownXP: { type: Number, default: 36000 }, renownEnabled: { type: Boolean, default: true } })
+const props = defineProps({
+  visible: Boolean,
+  levelConfig: Object,
+  renownXP: { type: Number, default: 36000 },
+  renownEnabled: { type: Boolean, default: true },
+  weeklyCapSeconds: { type: Number, default: null },
+  // Rested server values (provided by backend API)
+  restedEnabled: { type: Boolean, default: false },
+  restedAccumulationRate: { type: Number, default: 0 },
+  restedMaxHours: { type: Number, default: 0 },
+  restedMultiplier: { type: Number, default: 1.0 },
+})
 const emits = defineEmits(['close'])
 
 function close() { emits('close') }
@@ -64,6 +100,25 @@ function xpFor(lvl) {
   if (lc[k] != null) return lc[k]
   if (lvl <= 10) return 360
   return 360 + Math.floor(Math.pow(lvl - 10, 1.8) * 100)
+}
+
+function formatTime(seconds) {
+  if (seconds == null) return '-'
+  const s = Number(seconds)
+  if (isNaN(s)) return '-'
+  if (s < 60) return `${s} second${s === 1 ? '' : 's'}`
+  if (s < 3600) {
+    const m = Math.round(s / 60)
+    return `${m} minute${m === 1 ? '' : 's'}`
+  }
+  const h = (s / 3600)
+  return `${h.toFixed(1)} hour${h.toFixed(1) === '1.0' ? '' : 's'}`
+}
+
+function formatMultiplier(n) {
+  const v = Number(n)
+  if (isNaN(v)) return '-'
+  return `${v.toFixed(1)}x`
 }
 </script>
 

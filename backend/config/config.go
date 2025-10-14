@@ -25,6 +25,7 @@ type GamificationConfig struct {
 	XPCaps               XPCapsConfig             `mapstructure:"xp_caps" yaml:"xp_caps"`
 	LevelScale           []LevelScaleConfig       `mapstructure:"level_scale" yaml:"level_scale"`
 	LevelGroupings       []LevelGrouping          `mapstructure:"level_groupings" yaml:"level_groupings"`
+	Renown               RenownConfig             `mapstructure:"renown" yaml:"renown"`
 }
 
 type RestedBonusConfig struct {
@@ -74,10 +75,15 @@ type LevelScaleConfig struct {
 
 // LevelGrouping defines a level range with a title and badge
 type LevelGrouping struct {
-	Levels string `mapstructure:"levels" yaml:"levels"`       // e.g., "1-9", "11-19"
-	Title  string `mapstructure:"title" yaml:"title"`         // e.g., "Novice", "General"
-	Badge  string `mapstructure:"badge" yaml:"badge"`         // e.g., "🌱", "📻"
-	Color  string `mapstructure:"color" yaml:"color"`         // e.g., "#10b981", "#3b82f6"
+	Levels string `mapstructure:"levels" yaml:"levels"` // e.g., "1-9", "11-19"
+	Title  string `mapstructure:"title" yaml:"title"`   // e.g., "Novice", "General"
+	Badge  string `mapstructure:"badge" yaml:"badge"`   // e.g., "🌱", "📻"
+	Color  string `mapstructure:"color" yaml:"color"`   // e.g., "#10b981", "#3b82f6"
+}
+
+type RenownConfig struct {
+	Enabled    bool `mapstructure:"enabled" yaml:"enabled"`
+	XPPerLevel int  `mapstructure:"xp_per_level" yaml:"xp_per_level"`
 }
 
 // Config holds runtime configuration values.
@@ -154,6 +160,10 @@ func Load(configPath ...string) Config {
 	viper.SetDefault("gamification.xp_caps.weekly_cap_seconds", 7200)
 	viper.SetDefault("gamification.xp_caps.reset_hour", 0)
 	viper.SetDefault("gamification.xp_caps.week_starts", "sunday")
+	// Renown (prestige) defaults
+	// By default renown is enabled and each renown level requires 36,000 seconds (10 hours) of XP
+	viper.SetDefault("gamification.renown.enabled", true)
+	viper.SetDefault("gamification.renown.xp_per_level", 36000)
 
 	// Config file search paths
 	if len(configPath) > 0 && configPath[0] != "" {
@@ -386,11 +396,11 @@ gamification:
 	#     title: "Novice"
 	#     badge: "🌱"
 	#     color: "#10b981"
-	#   - levels: "11-19"
+	#   - levels: "10-19"
 	#     title: "Technician"
 	#     badge: "🔧"
 	#     color: "#3b82f6"
-	#   - levels: "21-29"
+	#   - levels: "20-29"
 	#     title: "General"
 	#     badge: "📡"
 	#     color: "#8b5cf6"

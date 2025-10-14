@@ -103,11 +103,11 @@ gamification:
 	#     title: "Novice"
 	#     badge: "🌱"
 	#     color: "#10b981"
-	#   - levels: "11-19"
+	#   - levels: "10-19"
 	#     title: "Technician"
 	#     badge: "🔧"
 	#     color: "#3b82f6"
-	#   - levels: "21-29"
+	#   - levels: "20-29"
 	#     title: "General"
 	#     badge: "📡"
 	#     color: "#8b5cf6"
@@ -127,3 +127,11 @@ gamification:
 	#     title: "Professor"
 	#     badge: "🎓"
 	#     color: "#6366f1"
+
+	# Renown (prestige) settings
+	# When a user reaches level 60 they may enter Renown cycles. Each Renown level
+	# requires a fixed amount of XP (seconds) configured below. Default is 36000
+	# seconds (10 hours).
+	# renown:
+	#   enabled: true
+	#   xp_per_level: 36000

@@ -12,6 +12,12 @@ export const useNodeStore = defineStore('node', () => {
   const gamificationEnabled = ref(false)
   const renownEnabled = ref(false)
   const renownXPPerLevel = ref(36000)
+  const weeklyCapSeconds = ref(null)
+  // Rested server config values (from API)
+  const restedEnabled = ref(false)
+  const restedAccumulationRate = ref(0) // hours bonus per hour offline
+  const restedMaxHours = ref(0)
+  const restedMultiplier = ref(1.0)
 
   // Restored shape expected by the Dashboard and other components
   const links = ref([]) // array of link objects { node, current_tx, node_callsign, ... }
@@ -204,6 +210,11 @@ export const useNodeStore = defineStore('node', () => {
       // Capture renown metadata if present
       try { renownEnabled.value = !!data.renown_enabled } catch (e) {}
       try { renownXPPerLevel.value = Number(data.renown_xp_per_level) || renownXPPerLevel.value } catch (e) {}
+  // Capture rested server config if present
+  try { restedEnabled.value = !!data.rested_enabled } catch (e) {}
+  try { restedAccumulationRate.value = Number(data.rested_accumulation_rate) || restedAccumulationRate.value } catch (e) {}
+  try { restedMaxHours.value = Number(data.rested_max_hours) || restedMaxHours.value } catch (e) {}
+  try { restedMultiplier.value = Number(data.rested_multiplier) || restedMultiplier.value } catch (e) {}
     } catch (e) { logger.debug('fetchScoreboard failed', e) }
   }
 
@@ -265,6 +276,12 @@ export const useNodeStore = defineStore('node', () => {
       // Capture renown metadata if present in level config response
       try { renownEnabled.value = !!data.renown_enabled } catch (e) {}
       try { renownXPPerLevel.value = Number(data.renown_xp_per_level) || renownXPPerLevel.value } catch (e) {}
+      try { weeklyCapSeconds.value = (data.weekly_cap_seconds != null) ? Number(data.weekly_cap_seconds) : (data.weeklyCapSeconds != null ? Number(data.weeklyCapSeconds) : weeklyCapSeconds.value) } catch (e) {}
+  // Capture rested server config from level-config if present
+  try { restedEnabled.value = !!data.rested_enabled } catch (e) {}
+  try { restedAccumulationRate.value = Number(data.rested_accumulation_rate) || restedAccumulationRate.value } catch (e) {}
+  try { restedMaxHours.value = Number(data.rested_max_hours) || restedMaxHours.value } catch (e) {}
+  try { restedMultiplier.value = Number(data.rested_multiplier) || restedMultiplier.value } catch (e) {}
     } catch (e) { logger.debug('fetchLevelConfig failed', e) }
   }
 
@@ -289,6 +306,11 @@ export const useNodeStore = defineStore('node', () => {
     fetchLevelConfig,
   renownEnabled,
   renownXPPerLevel,
+  weeklyCapSeconds,
+  restedEnabled,
+  restedAccumulationRate,
+  restedMaxHours,
+  restedMultiplier,
     // restored helpers
     setTopLinks,
     loadTalkerHistory,

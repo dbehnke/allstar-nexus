@@ -36,6 +36,10 @@ type Config struct {
 	CapsEnabled      bool
 	DailyCapSeconds  int // 1,200 = 20 minutes/day for low-activity hub
 	WeeklyCapSeconds int // 7,200 = 2 hours/week for low-activity hub
+
+	// Renown (prestige)
+	RenownEnabled    bool
+	RenownXPPerLevel int // fixed XP required per renown-level (applies after level 60)
 }
 
 type DRTier struct {
@@ -444,11 +448,23 @@ func (s *TallyService) processLevelUps(profile *models.CallsignProfile) bool {
 	// Loop to handle multiple level-ups at once
 	for {
 		nextLevel := profile.Level + 1
-		if nextLevel > 60 {
-			nextLevel = 61 // Renown reset
+
+		var requiredXP int
+		var ok bool
+
+		if nextLevel <= 60 {
+			requiredXP, ok = s.levelRequirements[nextLevel]
+		} else {
+			// Renown levels beyond 60 use fixed XP-per-level when enabled
+			if s.config.RenownEnabled && s.config.RenownXPPerLevel > 0 {
+				requiredXP = s.config.RenownXPPerLevel
+				ok = true
+			} else {
+				// No renown configured; don't allow leveling beyond 60
+				ok = false
+			}
 		}
 
-		requiredXP, ok := s.levelRequirements[nextLevel]
 		if !ok || profile.ExperiencePoints < requiredXP {
 			break // Not enough XP for next level
 		}
@@ -458,14 +474,16 @@ func (s *TallyService) processLevelUps(profile *models.CallsignProfile) bool {
 		profile.Level++
 		leveledUp = true
 
-		// Check for renown (prestige) at level 60
+		// If we've reached level 60 (i.e., reached renown threshold), award renown
 		if profile.Level >= 60 {
 			profile.RenownLevel++
 			profile.Level = 1
-			profile.ExperiencePoints = 0
+			// Preserve carryover XP for the new renown cycle (leftover after subtracting requiredXP)
+			// profile.ExperiencePoints already contains the leftover at this point.
 			s.logger.Info("Renown gained!",
 				zap.String("callsign", profile.Callsign),
 				zap.Int("renown", profile.RenownLevel),
+				zap.Int("carryover_xp", profile.ExperiencePoints),
 			)
 			break // Stop after renown to avoid infinite loop
 		}

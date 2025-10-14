@@ -228,6 +228,9 @@ func main() {
 			CapsEnabled:            cfg.Gamification.XPCaps.Enabled,
 			DailyCapSeconds:        cfg.Gamification.XPCaps.DailyCap,
 			WeeklyCapSeconds:       cfg.Gamification.XPCaps.WeeklyCap,
+			// Renown settings
+			RenownEnabled:    cfg.Gamification.Renown.Enabled,
+			RenownXPPerLevel: cfg.Gamification.Renown.XPPerLevel,
 		}
 
 		// Convert DR tiers
@@ -274,8 +277,20 @@ func main() {
 			)
 		}
 
-		// Register gamification API endpoints
-		gamificationAPI := api.NewGamificationAPI(profileRepo, txLogRepo, levelConfigRepo, activityRepo, levelGroupings)
+		// Register gamification API endpoints (include rested server config values)
+		gamificationAPI := api.NewGamificationAPI(
+			profileRepo,
+			txLogRepo,
+			levelConfigRepo,
+			activityRepo,
+			levelGroupings,
+			cfg.Gamification.Renown.Enabled,
+			cfg.Gamification.Renown.XPPerLevel,
+			cfg.Gamification.RestedBonus.Enabled,
+			cfg.Gamification.RestedBonus.AccumulationRate,
+			cfg.Gamification.RestedBonus.MaxHours,
+			cfg.Gamification.RestedBonus.Multiplier,
+		)
 
 		if cfg.AllowAnonDashboard {
 			publicLimiter := middleware.RateLimiter(cfg.PublicStatsRateLimitRPM)

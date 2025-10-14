@@ -15,8 +15,8 @@ This implementation adds configurable level groupings with badges to the gamific
 #### 2. Grouping Logic (`backend/gamification/groupings.go`)
 - `DefaultLevelGroupings()` - Returns default grouping configuration:
   - Novice (1-9) 🌱 Green
-  - Technician (11-19) 🔧 Blue
-  - General (21-29) 📡 Purple
+  - Technician (10-19) 🔧 Blue
+  - General (20-29) 📡 Purple
   - Advanced (30-39) 🎯 Amber
   - Extra (40-49) 💎 Red
   - Elmer (50-55) 🧙 Pink
@@ -75,7 +75,27 @@ gamification:
 ✅ **Top 3 Highlighting** - Gold/silver/bronze border colors for leaderboard positions
 ✅ **Startup Validation** - Prevents configuration errors with overlap detection
 ✅ **Default Groupings** - Sensible defaults work out-of-the-box
-✅ **Gap Support** - Levels 10, 20 intentionally have no grouping (gaps between tiers)
+✅ **Continuous Defaults** - The default grouping ranges are continuous across the 60-level progression. Technician covers levels 10-19 and General covers 20-29 by default. If you prefer gaps between tiers, you can omit a level from the configuration or add single-level groupings to create bridge tiers.
+
+## Renown (Prestige) Levels
+
+Renown levels are awarded when a user progresses past level 60. The system supports a configurable fixed XP requirement per Renown level (this does not scale like the base 1-60 progression). By default the application ships with:
+
+- `gamification.renown.enabled: true`
+- `gamification.renown.xp_per_level: 36000`  # 36,000 seconds = 10 hours
+
+Example config snippet:
+
+```yaml
+gamification:
+  renown:
+    enabled: true
+    xp_per_level: 36000
+```
+
+Behavior notes:
+- When a profile reaches the configured `xp_per_level` for Renown they gain +1 `renown_level`, their `level` is reset to 1 and `experience_points` is reset to 0 (this is the default behavior).
+- Renown XP is fixed and does not follow the logarithmic/linear scaling used for levels 1-60.
 
 ## API Response Format
 

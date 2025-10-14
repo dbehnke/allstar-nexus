@@ -38,6 +38,13 @@
                 :required-xp="requiredXP(p.level || 1)"
                 :level="p.level || 1"
               />
+              <div class="entry-meta">
+                <button class="btn-link" @click.prevent="fetchProfile(p.callsign)">Details</button>
+                <span v-if="profileDetails[p.callsign] && profileDetails[p.callsign].rested_bonus_seconds != null" class="rested">
+                  Rested: {{ formatTime(profileDetails[p.callsign].rested_bonus_seconds) }}
+                </span>
+                <span v-else-if="profileLoading[p.callsign]" class="rested">Loading...</span>
+              </div>
             </div>
           </div>
         </div>
@@ -45,11 +52,23 @@
       <div v-else class="empty">No profiles yet</div>
     </div>
   </div>
-  <LevelingHelpModal :visible="showHelp" :levelConfig="levelConfig" :renownXP="renownXP" :renown-enabled="renownEnabled" @close="showHelp = false" />
+  <LevelingHelpModal
+    :visible="showHelp"
+    :levelConfig="levelConfig"
+    :renownXP="renownXP"
+    :renownEnabled="renownEnabled"
+    :weeklyCapSeconds="(undefined)"
+    :restedEnabled="restedEnabled"
+    :restedAccumulationRate="restedAccumulationRate"
+    :restedMaxHours="restedMaxHours"
+    :restedMultiplier="restedMultiplier"
+    @close="showHelp = false"
+  />
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useNodeStore } from '../stores/node'
 import LevelProgressBar from './LevelProgressBar.vue'
 import LevelingHelpModal from './LevelingHelpModal.vue'
 
@@ -65,6 +84,49 @@ const showHelp = computed({
   get: () => showHelpRef.value,
   set: (v) => (showHelpRef.value = v)
 })
+
+// Local cache for fetched profile details (callsign -> profile payload)
+const profileDetails = ref({})
+const profileLoading = ref({})
+
+// Read server-provided rested/renown metadata from the node store so the modal
+// displays the authoritative values (fixes issue where modal showed "rested disabled"
+// because the parent wasn't passing the store values).
+const nodeStore = useNodeStore()
+const restedEnabled = computed(() => nodeStore.restedEnabled)
+const restedAccumulationRate = computed(() => nodeStore.restedAccumulationRate)
+const restedMaxHours = computed(() => nodeStore.restedMaxHours)
+const restedMultiplier = computed(() => nodeStore.restedMultiplier)
+
+async function fetchProfile(callsign) {
+  if (!callsign) return
+  if (profileDetails.value[callsign] || profileLoading.value[callsign]) return
+  profileLoading.value[callsign] = true
+  try {
+    const res = await fetch(`/api/gamification/profile/${encodeURIComponent(callsign)}`)
+    if (!res.ok) throw new Error('fetch failed')
+    const data = await res.json()
+    profileDetails.value[callsign] = data
+  } catch (e) {
+    // fail silently; don't block UI
+    console.debug('failed to fetch profile', callsign, e)
+  } finally {
+    profileLoading.value[callsign] = false
+  }
+}
+
+function formatTime(seconds) {
+  if (seconds == null) return '-'
+  const s = Number(seconds)
+  if (isNaN(s)) return '-'
+  if (s < 60) return `${s} second${s === 1 ? '' : 's'}`
+  if (s < 3600) {
+    const m = Math.round(s / 60)
+    return `${m} minute${m === 1 ? '' : 's'}`
+  }
+  const h = s / 3600
+  return `${h.toFixed(1)} hour${h.toFixed(1) === '1.0' ? '' : 's'}`
+}
 
 function requiredXP(level) {
   // levelConfig may be a map of string keys -> int

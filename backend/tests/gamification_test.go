@@ -52,7 +52,7 @@ func testGamificationServer(t *testing.T) (*httptest.Server, *gorm.DB, func()) {
 		t.Fatalf("seed level config: %v", err)
 	}
 
-	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings())
+	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings(), true, 36000, true, 1.5, 336, 2.0)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/gamification/scoreboard", gapi.Scoreboard)
@@ -79,8 +79,8 @@ func TestLevelConfigEndpoint_ReturnsConfig(t *testing.T) {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
 	var payload struct {
-		Config    map[string]int                           `json:"config"`
-		Groupings map[string]*gamification.GroupingInfo    `json:"groupings"`
+		Config    map[string]int                        `json:"config"`
+		Groupings map[string]*gamification.GroupingInfo `json:"groupings"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode: %v", err)
