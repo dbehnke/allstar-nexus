@@ -34,7 +34,7 @@ func TestTallyBroadcastPayloadIncludesScoreboard(t *testing.T) {
 			nextXP = xp
 		}
 		totalTime, _ := getTotalTalkTime(p.Callsign)
-	entries = append(entries, map[string]any{
+		entries = append(entries, map[string]any{
 			"callsign":                p.Callsign,
 			"level":                   p.Level,
 			"experience_points":       p.ExperiencePoints,

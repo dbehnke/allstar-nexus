@@ -105,8 +105,8 @@ func TestWebsocketTallyBroadcastIntegration(t *testing.T) {
 
 	// Prepare broadcast payload including scoreboard
 	payload := map[string]any{
-	"summary":    map[string]any{"rows_processed": 1},
-	"scoreboard": []map[string]any{{"callsign": "ABC", "experience_points": 10}},
+		"summary":    map[string]any{"rows_processed": 1},
+		"scoreboard": []map[string]any{{"callsign": "ABC", "experience_points": 10}},
 	}
 
 	// Broadcast to connected clients
