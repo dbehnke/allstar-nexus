@@ -29,9 +29,7 @@ describe('ScoreboardCard - details fetch', () => {
       }
     })
 
-    // Rested XP should be visible directly on the card
-    expect(wrapper.html()).toContain('Rested:')
-    expect(wrapper.html()).toContain('2.0 hours')
+  // Rested is displayed in the modal now; card should not be asserting 'Rested:'
 
     // Click the card entry to open modal
     const entry = wrapper.find('.entry')

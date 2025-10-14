@@ -38,11 +38,6 @@
                 :required-xp="requiredXP(p.level || 1)"
                 :level="p.level || 1"
               />
-              <div class="entry-meta">
-                <span v-if="p.callsign" class="rested">
-                  Rested: {{ formatTime(p.rested_bonus_seconds || 0) }}
-                </span>
-              </div>
             </div>
           </div>
         </div>

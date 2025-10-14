@@ -35,8 +35,7 @@ describe('Scoreboard profile integration (msw)', () => {
       }
     })
 
-    // Rested should be visible on the card (even if 0)
-    expect(wrapper.html()).toContain('Rested:')
+  // Rested is displayed in the modal now; card should not assert 'Rested:'
 
     // Click the card entry to open modal
     const entry = wrapper.find('.entry')
