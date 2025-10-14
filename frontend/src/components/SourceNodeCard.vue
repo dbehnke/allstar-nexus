@@ -22,6 +22,10 @@
               <span class="dot"></span>
               <span>RX</span>
             </div>
+            <div class="indicator renown-indicator" v-if="nodeStore.renownEnabled">
+              <span>⭐</span>
+              <span class="renown-text">Renown {{ nodeStore.renownXPPerLevel ? '~' + Math.round(nodeStore.renownXPPerLevel/3600) + 'h' : '' }}</span>
+            </div>
           </div>
           <div class="settings-area">
             <button @click="txNotif.openSettings()" class="settings-btn" title="Notification Settings">

@@ -10,6 +10,8 @@ export const useNodeStore = defineStore('node', () => {
   const recentTransmissions = ref([])
   const levelConfig = ref({})
   const gamificationEnabled = ref(false)
+  const renownEnabled = ref(false)
+  const renownXPPerLevel = ref(36000)
 
   // Restored shape expected by the Dashboard and other components
   const links = ref([]) // array of link objects { node, current_tx, node_callsign, ... }
@@ -199,6 +201,9 @@ export const useNodeStore = defineStore('node', () => {
       const data = await res.json().catch(() => ({}))
       scoreboard.value = (data && (data.scoreboard || data.data || data.results)) || []
       gamificationEnabled.value = !!(data && (data.enabled || data.ok))
+      // Capture renown metadata if present
+      try { renownEnabled.value = !!data.renown_enabled } catch (e) {}
+      try { renownXPPerLevel.value = Number(data.renown_xp_per_level) || renownXPPerLevel.value } catch (e) {}
     } catch (e) { logger.debug('fetchScoreboard failed', e) }
   }
 
@@ -257,6 +262,9 @@ export const useNodeStore = defineStore('node', () => {
       const res = await fetch('/api/gamification/level-config', { headers })
       const data = await res.json()
       levelConfig.value = (data && (data.config || data.data)) || {}
+      // Capture renown metadata if present in level config response
+      try { renownEnabled.value = !!data.renown_enabled } catch (e) {}
+      try { renownXPPerLevel.value = Number(data.renown_xp_per_level) || renownXPPerLevel.value } catch (e) {}
     } catch (e) { logger.debug('fetchLevelConfig failed', e) }
   }
 
@@ -279,6 +287,8 @@ export const useNodeStore = defineStore('node', () => {
     triggerRecentTxRefresh,
     fetchRecentTransmissions,
     fetchLevelConfig,
+  renownEnabled,
+  renownXPPerLevel,
     // restored helpers
     setTopLinks,
     loadTalkerHistory,

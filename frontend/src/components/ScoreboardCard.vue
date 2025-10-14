@@ -4,9 +4,13 @@
       <div class="header-left">
         <h3>Achievements</h3>
       </div>
-      <div class="header-right">
-        <button class="btn-secondary" @click="$emit('refresh')">Refresh</button>
-      </div>
+        <div class="header-right">
+          <div v-if="props.renownEnabled" class="renown-indicator" title="Renown enabled on this server">
+            ⭐ Renown: {{ Math.round(props.renownXP/3600) }}h
+          </div>
+          <button class="btn-secondary" @click="$emit('refresh')">Refresh</button>
+          <button class="btn-secondary" @click="showHelp = true" title="How leveling works">?</button>
+        </div>
     </div>
     <div class="card-body">
       <div v-if="(scoreboard || []).length" class="scoreboard-list">
@@ -41,14 +45,25 @@
       <div v-else class="empty">No profiles yet</div>
     </div>
   </div>
+  <LevelingHelpModal :visible="showHelp" :levelConfig="levelConfig" :renownXP="renownXP" :renown-enabled="renownEnabled" @close="showHelp = false" />
 </template>
 
 <script setup>
+import { ref, computed } from 'vue'
 import LevelProgressBar from './LevelProgressBar.vue'
+import LevelingHelpModal from './LevelingHelpModal.vue'
 
 const props = defineProps({
   scoreboard: { type: Array, default: () => [] },
-  levelConfig: { type: Object, default: () => ({}) }
+  levelConfig: { type: Object, default: () => ({}) },
+  renownXP: { type: Number, default: 36000 },
+  renownEnabled: { type: Boolean, default: false }
+})
+
+const showHelpRef = ref(false)
+const showHelp = computed({
+  get: () => showHelpRef.value,
+  set: (v) => (showHelpRef.value = v)
 })
 
 function requiredXP(level) {

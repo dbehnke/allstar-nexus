@@ -22,7 +22,7 @@
       </div>
 
       <div class="grid-item scoreboard">
-        <ScoreboardCard :scoreboard="nodeStore.scoreboard" :level-config="nodeStore.levelConfig" @refresh="nodeStore.fetchScoreboard" />
+  <ScoreboardCard :scoreboard="nodeStore.scoreboard" :level-config="nodeStore.levelConfig" :renown-xp="nodeStore.renownXPPerLevel" :renown-enabled="nodeStore.renownEnabled" @refresh="nodeStore.fetchScoreboard" />
       </div>
     </div>
   </div>
