@@ -293,18 +293,18 @@ export const useNodeStore = defineStore('node', () => {
       const data = await res.json()
       levelConfig.value = (data && (data.config || data.data)) || {}
       // Capture renown metadata if present in level config response
-      try { renownEnabled.value = !!data.renown_enabled } catch (e) {}
-      try { renownXPPerLevel.value = Number(data.renown_xp_per_level) || renownXPPerLevel.value } catch (e) {}
-      try { weeklyCapSeconds.value = (data.weekly_cap_seconds != null) ? Number(data.weekly_cap_seconds) : (data.weeklyCapSeconds != null ? Number(data.weeklyCapSeconds) : weeklyCapSeconds.value) } catch (e) {}
-  // Capture rested server config from level-config if present
-  try { restedEnabled.value = !!data.rested_enabled } catch (e) {}
-  try { restedAccumulationRate.value = Number(data.rested_accumulation_rate) || restedAccumulationRate.value } catch (e) {}
-  try { restedMaxHours.value = Number(data.rested_max_hours) || restedMaxHours.value } catch (e) {}
-  try { restedMultiplier.value = Number(data.rested_multiplier) || restedMultiplier.value } catch (e) {}
-  try { restedIdleThresholdSeconds.value = (data.rested_idle_threshold_seconds != null) ? Number(data.rested_idle_threshold_seconds) : restedIdleThresholdSeconds.value } catch (e) {}
-  // Capture XP cap and DR config from level-config if present
-  try { dailyCapSeconds.value = (data.daily_cap_seconds != null) ? Number(data.daily_cap_seconds) : dailyCapSeconds.value } catch (e) {}
-  try { drTiers.value = Array.isArray(data.dr_tiers) ? data.dr_tiers : drTiers.value } catch (e) {}
+      safeSet(renownEnabled, () => !!data.renown_enabled)
+      safeSet(renownXPPerLevel, () => Number(data.renown_xp_per_level) || renownXPPerLevel.value)
+      safeSet(weeklyCapSeconds, () => (data.weekly_cap_seconds != null) ? Number(data.weekly_cap_seconds) : (data.weeklyCapSeconds != null ? Number(data.weeklyCapSeconds) : weeklyCapSeconds.value))
+      // Capture rested server config from level-config if present
+      safeSet(restedEnabled, () => !!data.rested_enabled)
+      safeSet(restedAccumulationRate, () => Number(data.rested_accumulation_rate) || restedAccumulationRate.value)
+      safeSet(restedMaxHours, () => Number(data.rested_max_hours) || restedMaxHours.value)
+      safeSet(restedMultiplier, () => Number(data.rested_multiplier) || restedMultiplier.value)
+      safeSet(restedIdleThresholdSeconds, () => (data.rested_idle_threshold_seconds != null) ? Number(data.rested_idle_threshold_seconds) : restedIdleThresholdSeconds.value)
+      // Capture XP cap and DR config from level-config if present
+      safeSet(dailyCapSeconds, () => (data.daily_cap_seconds != null) ? Number(data.daily_cap_seconds) : dailyCapSeconds.value)
+      safeSet(drTiers, () => Array.isArray(data.dr_tiers) ? data.dr_tiers : drTiers.value)
     } catch (e) { logger.debug('fetchLevelConfig failed', e) }
   }
 
