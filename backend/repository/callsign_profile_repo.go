@@ -106,3 +106,10 @@ func (r *CallsignProfileRepo) BulkUpdate(ctx context.Context, profiles []models.
 		return nil
 	})
 }
+
+// GetAllProfiles returns all callsign profiles (for rested XP accumulation)
+func (r *CallsignProfileRepo) GetAllProfiles(ctx context.Context) ([]models.CallsignProfile, error) {
+	var profiles []models.CallsignProfile
+	err := r.db.WithContext(ctx).Find(&profiles).Error
+	return profiles, err
+}

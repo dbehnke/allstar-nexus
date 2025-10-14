@@ -1,9 +1,13 @@
 # Rested XP Accumulation Bug Fix
 
 ## Issue
-The rested XP accumulation system had a critical bug that caused exponential accumulation instead of linear accumulation.
+The rested XP accumulation system had two critical bugs:
+1. **Exponential accumulation bug** - Recalculated from LastTransmissionAt on every tally cycle
+2. **Idle users not processed** - Only users with recent transmissions were processed for rested XP
 
-### Root Cause
+## Root Causes
+
+### Bug 1: Exponential Accumulation
 The `updateRestedBonus()` function calculated idle time from `LastTransmissionAt` on every tally cycle (every 30 minutes) and added it to the existing rested bonus **without tracking what had already been accumulated**.
 
 Example of the bug:
@@ -12,6 +16,9 @@ Example of the bug:
 - Tally runs at 1 hour: adds (1.0h × 1.5) = 1.5 hours (doesn't subtract the 0.75!)
 - Tally runs at 1.5 hours: adds (1.5h × 1.5) = 2.25 hours
 - Result: Massively inflated rested time
+
+### Bug 2: Idle Users Skipped
+The tally service only processed callsigns that had transmissions in the current window. Users who were completely idle (no recent activity) were never processed, so their rested XP never accumulated at all.
 
 ## Fix
 
@@ -25,7 +32,15 @@ Modified `updateRestedBonus()` to:
 - Update `LastRestedCalculationAt` after each calculation
 - This ensures only **new** idle time is accumulated
 
-### 3. Adjusted Default Values
+### 3. Process All Profiles for Rested XP
+Added logic to process **all** profiles after processing transmissions:
+- Added `GetAllProfiles()` method to `CallsignProfileRepo`
+- After processing transmission logs, iterate through all profiles
+- Skip profiles already processed (have recent transmissions)
+- Update rested bonus for idle profiles and save them
+- Logs idle profiles processed for visibility
+
+### 4. Adjusted Default Values
 Changed defaults to be less generous:
 - **Accumulation rate:** 1.5 → 0.006 (~1 hour per week maximum)
 - **Max hours:** 336 (14 days) → 2 hours total cap
