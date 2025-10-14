@@ -329,6 +329,39 @@ func (s *TallyService) ProcessTally() error {
 		}
 	}
 
+	// Process rested XP accumulation for ALL profiles (including idle ones)
+	// This ensures users who haven't transmitted recently still accumulate rested bonus
+	if s.config.RestedEnabled {
+		s.logger.Info("Processing rested XP accumulation for idle profiles")
+		allProfiles, err := s.profileRepo.GetAllProfiles(ctx)
+		if err != nil {
+			s.logger.Warn("Failed to get all profiles for rested XP accumulation", zap.Error(err))
+		} else {
+			idleProfilesProcessed := 0
+			for i := range allProfiles {
+				// Skip profiles that were already processed in this tally cycle
+				if _, alreadyProcessed := processed[allProfiles[i].Callsign]; alreadyProcessed {
+					continue
+				}
+
+				// Update rested bonus for idle profile
+				s.updateRestedBonus(&allProfiles[i])
+
+				// Save the profile
+				if err := s.profileRepo.Upsert(ctx, &allProfiles[i]); err != nil {
+					s.logger.Warn("Failed to update idle profile",
+						zap.String("callsign", allProfiles[i].Callsign),
+						zap.Error(err))
+				} else {
+					idleProfilesProcessed++
+				}
+			}
+			s.logger.Info("Rested XP accumulation complete",
+				zap.Int("idle_profiles_processed", idleProfilesProcessed),
+				zap.Int("total_profiles", len(allProfiles)))
+		}
+	}
+
 	if s.OnTallyComplete != nil {
 		go func(cb func(TallySummary), sum TallySummary) {
 			defer func() {
@@ -347,6 +380,7 @@ func (s *TallyService) updateRestedBonus(profile *models.CallsignProfile) {
 	if !s.config.RestedEnabled {
 		return
 	}
+
 	// Determine idle time and apply threshold before accruing
 	idleSince := time.Since(profile.LastTransmissionAt)
 	threshold := time.Duration(s.config.RestedIdleThresholdSeconds) * time.Second
@@ -354,17 +388,34 @@ func (s *TallyService) updateRestedBonus(profile *models.CallsignProfile) {
 		// Default threshold to 5 minutes if not provided
 		threshold = 5 * time.Minute
 	}
-	if idleSince >= threshold {
-		// Accumulate rested bonus: per-hour idle scaled by accumulation rate
-		hoursIdle := idleSince.Hours()
-		bonusHours := hoursIdle * s.config.RestedAccumulationRate
-		profile.RestedBonusSeconds += int(bonusHours * 3600)
 
-		// Cap at maximum (e.g., 14 days worth)
-		if profile.RestedBonusSeconds > s.config.RestedMaxSeconds {
-			profile.RestedBonusSeconds = s.config.RestedMaxSeconds
-		}
+	if idleSince < threshold {
+		return
 	}
+
+	// Initialize LastRestedCalculationAt if this is the first calculation
+	if profile.LastRestedCalculationAt.IsZero() {
+		profile.LastRestedCalculationAt = profile.LastTransmissionAt
+	}
+
+	// Only accumulate for NEW idle time since last calculation
+	timeSinceLastCalculation := time.Since(profile.LastRestedCalculationAt)
+	if timeSinceLastCalculation <= 0 {
+		return
+	}
+
+	// Accumulate rested bonus: per-hour idle scaled by accumulation rate
+	hoursIdle := timeSinceLastCalculation.Hours()
+	bonusHours := hoursIdle * s.config.RestedAccumulationRate
+	profile.RestedBonusSeconds += int(bonusHours * 3600)
+
+	// Cap at maximum
+	if profile.RestedBonusSeconds > s.config.RestedMaxSeconds {
+		profile.RestedBonusSeconds = s.config.RestedMaxSeconds
+	}
+
+	// Update the last calculation timestamp
+	profile.LastRestedCalculationAt = time.Now()
 }
 
 // applyRestedBonus consumes rested bonus and returns multiplier
