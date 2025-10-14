@@ -203,6 +203,14 @@ export const useNodeStore = defineStore('node', () => {
     return null
   }
 
+  // Helper to safely read numeric/boolean values from API payloads without throwing
+  function safeSet(targetRef, getter) {
+    try {
+      const v = getter()
+      if (v !== undefined) targetRef.value = v
+    } catch (e) {}
+  }
+
   async function fetchScoreboard(limit = 50) {
     try {
       let headers = {}
@@ -212,18 +220,20 @@ export const useNodeStore = defineStore('node', () => {
       scoreboard.value = (data && (data.scoreboard || data.data || data.results)) || []
       gamificationEnabled.value = !!(data && (data.enabled || data.ok))
       // Capture renown metadata if present
-      try { renownEnabled.value = !!data.renown_enabled } catch (e) {}
-      try { renownXPPerLevel.value = Number(data.renown_xp_per_level) || renownXPPerLevel.value } catch (e) {}
-  // Capture rested server config if present
-  try { restedEnabled.value = !!data.rested_enabled } catch (e) {}
-  try { restedAccumulationRate.value = Number(data.rested_accumulation_rate) || restedAccumulationRate.value } catch (e) {}
-  try { restedMaxHours.value = Number(data.rested_max_hours) || restedMaxHours.value } catch (e) {}
-  try { restedMultiplier.value = Number(data.rested_multiplier) || restedMultiplier.value } catch (e) {}
-  try { restedIdleThresholdSeconds.value = (data.rested_idle_threshold_seconds != null) ? Number(data.rested_idle_threshold_seconds) : restedIdleThresholdSeconds.value } catch (e) {}
-  // Capture XP cap and DR config if present
-  try { dailyCapSeconds.value = (data.daily_cap_seconds != null) ? Number(data.daily_cap_seconds) : dailyCapSeconds.value } catch (e) {}
-  try { weeklyCapSeconds.value = (data.weekly_cap_seconds != null) ? Number(data.weekly_cap_seconds) : weeklyCapSeconds.value } catch (e) {}
-  try { drTiers.value = Array.isArray(data.dr_tiers) ? data.dr_tiers : drTiers.value } catch (e) {}
+      safeSet(renownEnabled, () => !!data.renown_enabled)
+      safeSet(renownXPPerLevel, () => Number(data.renown_xp_per_level) || renownXPPerLevel.value)
+
+      // Capture rested server config if present
+      safeSet(restedEnabled, () => !!data.rested_enabled)
+      safeSet(restedAccumulationRate, () => Number(data.rested_accumulation_rate) || restedAccumulationRate.value)
+      safeSet(restedMaxHours, () => Number(data.rested_max_hours) || restedMaxHours.value)
+      safeSet(restedMultiplier, () => Number(data.rested_multiplier) || restedMultiplier.value)
+      safeSet(restedIdleThresholdSeconds, () => (data.rested_idle_threshold_seconds != null) ? Number(data.rested_idle_threshold_seconds) : restedIdleThresholdSeconds.value)
+
+      // Capture XP cap and DR config if present
+      safeSet(dailyCapSeconds, () => (data.daily_cap_seconds != null) ? Number(data.daily_cap_seconds) : dailyCapSeconds.value)
+      safeSet(weeklyCapSeconds, () => (data.weekly_cap_seconds != null) ? Number(data.weekly_cap_seconds) : weeklyCapSeconds.value)
+      safeSet(drTiers, () => Array.isArray(data.dr_tiers) ? data.dr_tiers : drTiers.value)
     } catch (e) { logger.debug('fetchScoreboard failed', e) }
   }
 
