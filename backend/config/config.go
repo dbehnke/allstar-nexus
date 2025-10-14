@@ -466,9 +466,9 @@ gamification:
 	# Rested XP Bonus
 	rested_bonus:
 		enabled: true
-		accumulation_rate: 1.5   # hours of rested per day idle (example)
+		accumulation_rate: 0.006  # ~1 hour of rested per week maximum (1/168)
 		idle_threshold_seconds: 300 # start accruing after 5 minutes idle
-		max_hours: 336           # 14 days
+		max_hours: 2             # 2 hours total cap
 		multiplier: 2.0          # 2x XP while rested
 
 	# Diminishing Returns (tiers in seconds with multipliers)
