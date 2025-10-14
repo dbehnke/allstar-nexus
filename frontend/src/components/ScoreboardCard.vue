@@ -54,14 +54,14 @@
   </div>
   <LevelingHelpModal
     :visible="showHelp"
-    :levelConfig="levelConfig"
-    :renownXP="renownXP"
-    :renownEnabled="renownEnabled"
-    :weeklyCapSeconds="(undefined)"
-    :restedEnabled="restedEnabled"
-    :restedAccumulationRate="restedAccumulationRate"
-    :restedMaxHours="restedMaxHours"
-    :restedMultiplier="restedMultiplier"
+  :levelConfig="levelConfig"
+  :renownXP="renownXP"
+  :renownEnabled="renownEnabled"
+  :weeklyCapSeconds="nodeStore.weeklyCapSeconds"
+  :restedEnabled="restedEnabled"
+  :restedAccumulationRate="restedAccumulationRate"
+  :restedMaxHours="restedMaxHours"
+  :restedMultiplier="restedMultiplier"
     @close="showHelp = false"
   />
 </template>
