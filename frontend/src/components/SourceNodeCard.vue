@@ -573,9 +573,23 @@ const adjacentList = computed(() => {
     })
     .filter(node => node && node.NodeID)
     .sort((a, b) => {
+      // 1. Currently transmitting nodes first
       if (a.IsTransmitting && !b.IsTransmitting) return -1
       if (!a.IsTransmitting && b.IsTransmitting) return 1
-      // Ensure numeric comparison when possible
+      
+      // 2. Nodes that have transmitted (TotalTxSeconds > 0) before nodes that haven't
+      const aHasTalked = a.TotalTxSeconds > 0
+      const bHasTalked = b.TotalTxSeconds > 0
+      if (aHasTalked && !bHasTalked) return -1
+      if (!aHasTalked && bHasTalked) return 1
+      
+      // 3. Within same talk status, sort by most recent connection (newest first)
+      // ConnectedSince is in milliseconds, higher value = more recent
+      const aConnected = Number(a.ConnectedSince) || 0
+      const bConnected = Number(b.ConnectedSince) || 0
+      if (aConnected !== bConnected) return bConnected - aConnected
+      
+      // 4. Fallback: sort by NodeID for stability
       const na = Number(a.NodeID)
       const nb = Number(b.NodeID)
       if (!isNaN(na) && !isNaN(nb)) return na - nb
