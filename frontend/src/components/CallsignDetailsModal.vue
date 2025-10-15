@@ -2,97 +2,97 @@
   <Teleport to="body">
     <div v-if="visible" class="modal-overlay" @click.self="close">
       <div class="modal" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <h3>{{ callsign }}</h3>
-        <button class="close" @click="close">✕</button>
-      </div>
-      <div class="modal-body">
-        <div v-if="loading" class="loading">Loading profile...</div>
-        <div v-else-if="error" class="error">{{ error }}</div>
-        <div v-else-if="!profile" class="loading">No profile data available</div>
-        <div v-else>
-          <section class="section">
-            <h4>Level Progress</h4>
-            <div class="stat-row">
-              <span class="label">Level:</span>
-              <span class="value">{{ profile.level || 1 }}</span>
-            </div>
-            <div v-if="profile.renown_level > 0" class="stat-row">
-              <span class="label">Renown:</span>
-              <span class="value renown">⭐ {{ profile.renown_level }}</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">Current XP:</span>
-              <span class="value">{{ profile.experience_points || 0 }} / {{ profile.next_level_xp || 0 }}</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">Total Talk Time:</span>
-              <span class="value">{{ formatTime(profile.total_talk_time_seconds || 0) }}</span>
-            </div>
-          </section>
-
-          <section class="section">
-            <h4>Rested XP</h4>
-            <div class="stat-row">
-              <span class="label">Available:</span>
-              <span class="value" :class="{ 'highlight': (profile.rested_bonus_seconds || 0) > 0 }">
-                {{ formatTime(profile.rested_bonus_seconds || 0) }}
-              </span>
-            </div>
-            <div v-if="(profile.rested_bonus_seconds || 0) > 0" class="info-text">
-              Your next {{ formatTime(profile.rested_bonus_seconds) }} of talk time will earn bonus XP!
-            </div>
-            <div v-else class="info-text muted">
-              No rested XP available. Rested XP accumulates while you're idle.
-            </div>
-          </section>
-
-          <section class="section">
-            <h4>XP Caps</h4>
-            <div class="stat-row">
-              <span class="label">Daily XP:</span>
-              <span class="value" :class="capStatusClass('daily')">
-                {{ profile.daily_xp || 0 }} / {{ dailyCapSeconds || 0 }} seconds
-                <span v-if="isDailyCapped" class="badge capped">CAPPED</span>
-              </span>
-            </div>
-            <div class="stat-row">
-              <span class="label">Weekly XP:</span>
-              <span class="value" :class="capStatusClass('weekly')">
-                {{ profile.weekly_xp || 0 }} / {{ weeklyCapSeconds || 0 }} seconds
-                <span v-if="isWeeklyCapped" class="badge capped">CAPPED</span>
-              </span>
-            </div>
-            <div v-if="isDailyCapped || isWeeklyCapped" class="warning-text">
-              You've reached your {{ isDailyCapped ? 'daily' : 'weekly' }} XP cap. Further transmissions won't earn XP until the cap resets.
-            </div>
-          </section>
-
-          <section v-if="drTiers.length > 0" class="section">
-            <h4>Diminishing Returns</h4>
-            <div class="info-text">
-              Based on your recent activity, XP is currently multiplied by: <strong>{{ currentDRMultiplier }}x</strong>
-            </div>
-            <div class="dr-tiers">
-              <div v-for="(tier, idx) in drTiers" :key="idx" class="tier" :class="{ 'active': isActiveTier(tier) }">
-                <span class="tier-range">{{ formatTierRange(tier, idx) }}</span>
-                <span class="tier-mult">{{ tier.multiplier }}x</span>
-              </div>
-            </div>
-          </section>
-
-          <section class="section">
-            <h4>Recent Activity</h4>
-            <div v-if="profile.last_transmission_at" class="stat-row">
-              <span class="label">Last Active:</span>
-              <span class="value">{{ formatTimestamp(profile.last_transmission_at) }}</span>
-            </div>
-          </section>
+        <div class="modal-header">
+          <h3>{{ callsign }}</h3>
+          <button class="close" @click="close">✕</button>
         </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-primary" @click="close">Close</button>
-      </div>
+        <div class="modal-body">
+          <div v-if="loading" class="loading">Loading profile...</div>
+          <div v-else-if="error" class="error">{{ error }}</div>
+          <div v-else-if="!profile" class="loading">No profile data available</div>
+          <div v-else>
+            <section class="section">
+              <h4>Level Progress</h4>
+              <div class="stat-row">
+                <span class="label">Level:</span>
+                <span class="value">{{ profile.level || 1 }}</span>
+              </div>
+              <div v-if="profile.renown_level > 0" class="stat-row">
+                <span class="label">Renown:</span>
+                <span class="value renown">⭐ {{ profile.renown_level }}</span>
+              </div>
+              <div class="stat-row">
+                <span class="label">Current XP:</span>
+                <span class="value">{{ profile.experience_points || 0 }} / {{ profile.next_level_xp || 0 }}</span>
+              </div>
+              <div class="stat-row">
+                <span class="label">Total Talk Time:</span>
+                <span class="value">{{ formatTime(profile.total_talk_time_seconds || 0) }}</span>
+              </div>
+            </section>
+
+            <section class="section">
+              <h4>Rested XP</h4>
+              <div class="stat-row">
+                <span class="label">Available:</span>
+                <span class="value" :class="{ 'highlight': (profile.rested_bonus_seconds || 0) > 0 }">
+                  {{ formatTime(profile.rested_bonus_seconds || 0) }}
+                </span>
+              </div>
+              <div v-if="(profile.rested_bonus_seconds || 0) > 0" class="info-text">
+                Your next {{ formatTime(profile.rested_bonus_seconds) }} of talk time will earn bonus XP!
+              </div>
+              <div v-else class="info-text muted">
+                No rested XP available. Rested XP accumulates while you're idle.
+              </div>
+            </section>
+
+            <section class="section">
+              <h4>XP Caps</h4>
+              <div class="stat-row">
+                <span class="label">Daily XP:</span>
+                <span class="value" :class="capStatusClass('daily')">
+                  {{ profile.daily_xp || 0 }} / {{ dailyCapSeconds || 0 }} seconds
+                  <span v-if="isDailyCapped" class="badge capped">CAPPED</span>
+                </span>
+              </div>
+              <div class="stat-row">
+                <span class="label">Weekly XP:</span>
+                <span class="value" :class="capStatusClass('weekly')">
+                  {{ profile.weekly_xp || 0 }} / {{ weeklyCapSeconds || 0 }} seconds
+                  <span v-if="isWeeklyCapped" class="badge capped">CAPPED</span>
+                </span>
+              </div>
+              <div v-if="isDailyCapped || isWeeklyCapped" class="warning-text">
+                You've reached your {{ isDailyCapped ? 'daily' : 'weekly' }} XP cap. Further transmissions won't earn XP until the cap resets.
+              </div>
+            </section>
+
+            <section v-if="drTiers.length > 0" class="section">
+              <h4>Diminishing Returns</h4>
+              <div class="info-text">
+                Based on your recent activity, XP is currently multiplied by: <strong>{{ currentDRMultiplier }}x</strong>
+              </div>
+              <div class="dr-tiers">
+                <div v-for="(tier, idx) in drTiers" :key="idx" class="tier" :class="{ 'active': isActiveTier(tier) }">
+                  <span class="tier-range">{{ formatTierRange(tier, idx) }}</span>
+                  <span class="tier-mult">{{ tier.multiplier }}x</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="section">
+              <h4>Recent Activity</h4>
+              <div v-if="profile.last_transmission_at" class="stat-row">
+                <span class="label">Last Active:</span>
+                <span class="value">{{ formatTimestamp(profile.last_transmission_at) }}</span>
+              </div>
+            </section>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-primary" @click="close">Close</button>
+        </div>
       </div>
     </div>
   </Teleport>
