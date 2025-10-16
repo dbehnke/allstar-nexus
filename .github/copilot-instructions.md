@@ -1,7 +1,5 @@
 # Allstar Nexus – Contributor / AI Assistant Guidance
 
-> **Note**: This file has been moved to `.github/copilot-instructions.md` to follow GitHub's best practices for Copilot instructions. Please refer to that file for the most up-to-date guidance.
-
 This file keeps assistants and contributors aligned with the CURRENT (not historical) architecture & objectives.
 
 ## Active Architecture Snapshot
