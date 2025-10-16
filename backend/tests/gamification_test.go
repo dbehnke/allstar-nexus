@@ -52,6 +52,10 @@ func testGamificationServer(t *testing.T) (*httptest.Server, *gorm.DB, func()) {
 	if err := levelRepo.SeedDefaults(context.Background(), reqs); err != nil {
 		t.Fatalf("seed level config: %v", err)
 	}
+	
+	// Set the precomputed level requirements in the gamification package
+	// This is required for the handler to work after the optimization
+	gamification.SetLevelRequirements(reqs)
 
 	gapi := api.NewGamificationAPI(profileRepo, txRepo, levelRepo, activityRepo, gamification.DefaultLevelGroupings(), true, 36000, true, 1.5, 336, 2.0, 300, 7200, 1200, []config.DRTier{})
 

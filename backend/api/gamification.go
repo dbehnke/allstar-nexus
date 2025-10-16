@@ -299,11 +299,10 @@ func (g *GamificationAPI) LevelConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.Background()
-
-	levelConfig, err := g.levelRepo.GetAllAsMap(ctx)
-	if err != nil {
-		http.Error(w, "Failed to get level config", http.StatusInternalServerError)
+	// Use precomputed level requirements from package accessor
+	levelConfig := gamification.GetLevelRequirements()
+	if levelConfig == nil {
+		http.Error(w, "Level config not initialized", http.StatusInternalServerError)
 		return
 	}
 
