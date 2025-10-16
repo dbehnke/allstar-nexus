@@ -19,6 +19,10 @@ func TestDefaultLevelRequirements_BasicShape(t *testing.T) {
 			t.Fatalf("level %d expected 360 got %d", lvl, req[lvl])
 		}
 	}
+	// Level 11 should be greater than 360 (using level-anchored weights)
+	if req[11] <= 360 {
+		t.Fatalf("level 11 expected to be > 360, got %d", req[11])
+	}
 	// Total should be close to 259,200 (allow small rounding variance)
 	total := 0
 	for lvl := 1; lvl <= 60; lvl++ {
