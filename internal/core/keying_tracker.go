@@ -25,6 +25,7 @@ type AdjacentNodeStatus struct {
 	IsTransmitting  bool       `json:"IsTransmitting"`
 	PendingUnkey    bool       `json:"PendingUnkey"` // True when unkey timer is scheduled (during 2s delay)
 	TotalTxSeconds  int        `json:"TotalTxSeconds"`
+	LastTxEnd       *time.Time `json:"LastTxEnd,omitempty"` // Timestamp of last transmission end
 
 	// Node information for display
 	Callsign        string `json:"Callsign,omitempty"`
@@ -189,10 +190,11 @@ func (kt *KeyingTracker) processTxEnd(endTime time.Time, adjacentNodeID int, nod
 	// Update total TX seconds
 	nodeStatus.TotalTxSeconds += duration
 
-	// Reset state
+	// Reset state and record last TX end time
 	nodeStatus.IsTransmitting = false
 	nodeStatus.PendingUnkey = false
 	nodeStatus.KeyedStartTime = nil
+	nodeStatus.LastTxEnd = &endTime
 
 	// Emit TX_END callback
 	if kt.onTxEnd != nil {
