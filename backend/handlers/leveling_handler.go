@@ -32,6 +32,12 @@ type ThresholdsResponse struct {
 // LevelingThresholdsHandler returns authoritative level XP thresholds computed
 // at startup and stored in gamification package.
 func LevelingThresholdsHandler(w http.ResponseWriter, r *http.Request) {
+	// Only accept GET requests
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	q := r.URL.Query()
 
 	// default max level

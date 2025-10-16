@@ -16,6 +16,7 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/auth"
 	"github.com/dbehnke/allstar-nexus/backend/config"
 	"github.com/dbehnke/allstar-nexus/backend/gamification"
+	"github.com/dbehnke/allstar-nexus/backend/handlers"
 	"github.com/dbehnke/allstar-nexus/backend/middleware"
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
@@ -235,6 +236,10 @@ func main() {
 		} else {
 			levelRequirements = gamification.CalculateLevelRequirements()
 		}
+		
+		// Store precomputed requirements in gamification package for handler access
+		gamification.SetLevelRequirements(levelRequirements)
+		
 		if err := levelConfigRepo.SeedDefaults(context.Background(), levelRequirements); err != nil {
 			logger.Warn("failed to seed level config", zap.Error(err))
 		} else {
@@ -333,11 +338,13 @@ func main() {
 			mux.Handle("/api/gamification/profile/", publicLimiter(http.HandlerFunc(gamificationAPI.Profile)))
 			mux.Handle("/api/gamification/recent-transmissions", publicLimiter(http.HandlerFunc(gamificationAPI.RecentTransmissions)))
 			mux.Handle("/api/gamification/level-config", publicLimiter(http.HandlerFunc(gamificationAPI.LevelConfig)))
+			mux.Handle("/api/leveling/thresholds", publicLimiter(http.HandlerFunc(handlers.LevelingThresholdsHandler)))
 		} else {
 			mux.Handle("/api/gamification/scoreboard", authMW(http.HandlerFunc(gamificationAPI.Scoreboard)))
 			mux.Handle("/api/gamification/profile/", authMW(http.HandlerFunc(gamificationAPI.Profile)))
 			mux.Handle("/api/gamification/recent-transmissions", authMW(http.HandlerFunc(gamificationAPI.RecentTransmissions)))
 			mux.Handle("/api/gamification/level-config", authMW(http.HandlerFunc(gamificationAPI.LevelConfig)))
+			mux.Handle("/api/leveling/thresholds", authMW(http.HandlerFunc(handlers.LevelingThresholdsHandler)))
 		}
 
 		logger.Info("gamification API endpoints registered")

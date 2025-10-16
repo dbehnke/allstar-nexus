@@ -4,8 +4,15 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	cfgpkg "github.com/dbehnke/allstar-nexus/backend/config"
+)
+
+// Package-level precomputed level requirements (thread-safe)
+var (
+	precomputedRequirements map[int]int
+	requirementsMu          sync.RWMutex
 )
 
 // CalculateLevelRequirements generates XP requirements for all 60 levels
@@ -151,4 +158,37 @@ func GetLevelFromXP(totalXP int, requirements map[int]int) int {
 		}
 	}
 	return 60 // Max level
+}
+
+// SetLevelRequirements stores precomputed level requirements for package-level access
+// This should be called once at startup after computing level requirements
+func SetLevelRequirements(req map[int]int) {
+	requirementsMu.Lock()
+	defer requirementsMu.Unlock()
+	
+	// Store a copy to prevent external modification
+	precomputedRequirements = make(map[int]int, len(req))
+	for k, v := range req {
+		precomputedRequirements[k] = v
+	}
+}
+
+// GetLevelRequirements returns the precomputed level requirements
+// Returns a copy to prevent concurrent modification
+// Falls back to CalculateLevelRequirements() if SetLevelRequirements was never called
+func GetLevelRequirements() map[int]int {
+	requirementsMu.RLock()
+	defer requirementsMu.RUnlock()
+	
+	// If not initialized, compute on demand
+	if precomputedRequirements == nil {
+		return CalculateLevelRequirements()
+	}
+	
+	// Return a copy to prevent concurrent modification
+	result := make(map[int]int, len(precomputedRequirements))
+	for k, v := range precomputedRequirements {
+		result[k] = v
+	}
+	return result
 }
