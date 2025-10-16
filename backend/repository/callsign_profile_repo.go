@@ -60,6 +60,7 @@ func (r *CallsignProfileRepo) Upsert(ctx context.Context, profile *models.Callsi
 		DoUpdates: clause.AssignmentColumns([]string{
 			"level", "experience_points", "renown_level",
 			"last_tally_at", "last_transmission_at", "rested_bonus_seconds",
+			"last_rested_calculation_at", "daily_xp", "weekly_xp",
 			"updated_at",
 		}),
 	}).Create(profile).Error
