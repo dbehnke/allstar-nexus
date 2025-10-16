@@ -23,16 +23,17 @@ func CalculateLevelRequirements() map[int]int {
 	// Target: 259,200 total XP (72 hours = ~36 weeks at 2hr/week cap)
 	// Already used: 10 * 360 = 3,600 XP
 	// Remaining: 255,600 XP across 50 levels
+	// Using k = level-1 so level 11 anchors to k=10 (ensuring it's > 360)
 
 	totalRemaining := 255600.0
 	sum := 0.0
 	for level := 11; level <= 60; level++ {
-		sum += math.Pow(float64(level-10), 1.8)
+		sum += math.Pow(float64(level-1), 1.8)
 	}
 
 	scaleFactor := totalRemaining / sum
 	for level := 11; level <= 60; level++ {
-		xp := int(math.Pow(float64(level-10), 1.8) * scaleFactor)
+		xp := int(math.Pow(float64(level-1), 1.8) * scaleFactor)
 		requirements[level] = xp
 	}
 
