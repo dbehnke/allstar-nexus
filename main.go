@@ -333,11 +333,13 @@ func main() {
 			mux.Handle("/api/gamification/profile/", publicLimiter(http.HandlerFunc(gamificationAPI.Profile)))
 			mux.Handle("/api/gamification/recent-transmissions", publicLimiter(http.HandlerFunc(gamificationAPI.RecentTransmissions)))
 			mux.Handle("/api/gamification/level-config", publicLimiter(http.HandlerFunc(gamificationAPI.LevelConfig)))
+			mux.Handle("/api/leveling/thresholds", publicLimiter(http.HandlerFunc(gamificationAPI.LevelingThresholds)))
 		} else {
 			mux.Handle("/api/gamification/scoreboard", authMW(http.HandlerFunc(gamificationAPI.Scoreboard)))
 			mux.Handle("/api/gamification/profile/", authMW(http.HandlerFunc(gamificationAPI.Profile)))
 			mux.Handle("/api/gamification/recent-transmissions", authMW(http.HandlerFunc(gamificationAPI.RecentTransmissions)))
 			mux.Handle("/api/gamification/level-config", authMW(http.HandlerFunc(gamificationAPI.LevelConfig)))
+			mux.Handle("/api/leveling/thresholds", authMW(http.HandlerFunc(gamificationAPI.LevelingThresholds)))
 		}
 
 		logger.Info("gamification API endpoints registered")
