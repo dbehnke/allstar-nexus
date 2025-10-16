@@ -330,3 +330,75 @@ func (g *GamificationAPI) LevelConfig(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Failed to encode level config response: %v", err)
 	}
 }
+
+// LevelingThresholds returns authoritative leveling XP thresholds
+// GET /api/leveling/thresholds?max_level=60&levels=10,15,20
+func (g *GamificationAPI) LevelingThresholds(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ctx := context.Background()
+
+	// Parse query parameters
+	maxLevel := 60
+	if maxStr := r.URL.Query().Get("max_level"); maxStr != "" {
+		if parsed, err := strconv.Atoi(maxStr); err == nil && parsed > 0 && parsed <= 60 {
+			maxLevel = parsed
+		}
+	}
+
+	// Get authoritative level config from database
+	levelConfig, err := g.levelRepo.GetAllAsMap(ctx)
+	if err != nil {
+		http.Error(w, "Failed to get level config", http.StatusInternalServerError)
+		return
+	}
+
+	// Filter by specific levels if provided
+	var specificLevels []int
+	if levelsStr := r.URL.Query().Get("levels"); levelsStr != "" {
+		parts := strings.Split(levelsStr, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if lvl, err := strconv.Atoi(part); err == nil && lvl > 0 && lvl <= 60 {
+				specificLevels = append(specificLevels, lvl)
+			}
+		}
+	}
+
+	// Build levels array response
+	type LevelThreshold struct {
+		Level int `json:"level"`
+		XP    int `json:"xp"`
+	}
+	var levels []LevelThreshold
+
+	if len(specificLevels) > 0 {
+		// Return only requested levels
+		for _, lvl := range specificLevels {
+			if xp, ok := levelConfig[lvl]; ok {
+				levels = append(levels, LevelThreshold{Level: lvl, XP: xp})
+			}
+		}
+	} else {
+		// Return levels 1 to maxLevel
+		for lvl := 1; lvl <= maxLevel; lvl++ {
+			if xp, ok := levelConfig[lvl]; ok {
+				levels = append(levels, LevelThreshold{Level: lvl, XP: xp})
+			}
+		}
+	}
+
+	// Set cache headers for performance (5 minutes)
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.Header().Set("Content-Type", "application/json")
+	
+	if err := json.NewEncoder(w).Encode(map[string]any{
+		"levels":      levels,
+		"calculation": "level-based pow 1.8 scaled",
+	}); err != nil {
+		log.Printf("Failed to encode thresholds response: %v", err)
+	}
+}
