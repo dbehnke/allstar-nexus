@@ -106,15 +106,15 @@ function xpFor(lvl) {
   // Levels 1-10: Linear (360 XP each)
   if (lvl <= 10) return 360
   
-  // Levels 11-60: Logarithmic scaling
+  // Levels 11-60: Logarithmic scaling using k = level-1 (anchored to ensure level 11 > 360)
   // Total remaining XP: 255,600 across 50 levels (11-60)
   const totalRemaining = 255600.0
   let sum = 0.0
   for (let level = 11; level <= 60; level++) {
-    sum += Math.pow(level - 10, 1.8)
+    sum += Math.pow(level - 1, 1.8)
   }
   const scaleFactor = totalRemaining / sum
-  return Math.floor(Math.pow(lvl - 10, 1.8) * scaleFactor)
+  return Math.floor(Math.pow(lvl - 1, 1.8) * scaleFactor)
 }
 
 function formatTime(seconds) {

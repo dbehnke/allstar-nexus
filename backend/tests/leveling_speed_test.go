@@ -31,7 +31,8 @@ func TestLevelingSpeed_NoMultipliers(t *testing.T) {
 	}
 
 	// Test case: User at level 15 with 0 XP, adds 10 minutes (600 seconds)
-	// Level 16 requires 306 XP, so they should level up to 16 with 294 XP remaining
+	// After merge with main, level requirements changed (using level-1 formula):
+	// Level 16 requires 1013 XP, so they should stay at level 15 with 600 XP
 	callsign := "W1LEVEL15"
 	prof, err := profileRepo.GetByCallsign(context.Background(), callsign)
 	if err != nil {
@@ -70,12 +71,12 @@ func TestLevelingSpeed_NoMultipliers(t *testing.T) {
 		t.Fatalf("reload profile: %v", err)
 	}
 
-	// Should be level 16 with 294 XP (600 - 306)
-	if prof2.Level != 16 {
-		t.Errorf("expected level 16, got %d", prof2.Level)
+	// Should stay at level 15 with 600 XP (not enough for level 16 which needs 1013)
+	if prof2.Level != 15 {
+		t.Errorf("expected level 15, got %d", prof2.Level)
 	}
-	if prof2.ExperiencePoints != 294 {
-		t.Errorf("expected 294 XP, got %d", prof2.ExperiencePoints)
+	if prof2.ExperiencePoints != 600 {
+		t.Errorf("expected 600 XP, got %d", prof2.ExperiencePoints)
 	}
 }
 
@@ -97,9 +98,10 @@ func TestLevelingSpeed_WithRestedBonus(t *testing.T) {
 	// Test case: User at level 15 with 100 XP and rested bonus, adds 10 minutes
 	// With 2x multiplier: 600 * 2 = 1200 XP total
 	// 100 + 1200 = 1300 XP
-	// Level 16 needs 306: 1300 - 306 = 994 XP
-	// Level 17 needs 404: 994 - 404 = 590 XP
-	// Should end at level 17 with 590 XP
+	// After merge with main, level requirements changed (using level-1 formula):
+	// Level 16 needs 1013: 1300 - 1013 = 287 XP remaining
+	// Level 17 needs 1137: 287 < 1137, stays at level 16
+	// Should end at level 16 with 287 XP
 	callsign := "W1RESTED"
 	prof, err := profileRepo.GetByCallsign(context.Background(), callsign)
 	if err != nil {
@@ -144,15 +146,18 @@ func TestLevelingSpeed_WithRestedBonus(t *testing.T) {
 		t.Fatalf("reload profile: %v", err)
 	}
 
-	// With rested bonus, should reach at least level 17
-	// (May reach level 18 depending on exact bonus calculation)
-	if prof2.Level < 17 {
-		t.Errorf("expected at least level 17 with rested bonus, got %d", prof2.Level)
+	// With rested bonus and updated level requirements (after merge), should reach level 16
+	// (Level requirements increased after using level-1 formula)
+	if prof2.Level < 16 {
+		t.Errorf("expected at least level 16 with rested bonus, got %d", prof2.Level)
+	}
+	if prof2.Level > 16 {
+		t.Errorf("expected level 16 with current XP, got %d (requirements may have changed)", prof2.Level)
 	}
 	
 	// Document what happened
 	t.Logf("Result: Level %d with %d XP (rested bonus active)", prof2.Level, prof2.ExperiencePoints)
-	t.Log("This demonstrates that rested XP bonus can cause rapid multi-level jumps")
+	t.Log("This demonstrates that rested XP bonus can cause rapid leveling progress")
 }
 
 // TestProfileUpsert_PersistsDailyWeeklyXP verifies that daily_xp and weekly_xp are persisted
@@ -193,7 +198,7 @@ func TestProfileUpsert_PersistsDailyWeeklyXP(t *testing.T) {
 func TestLevelRequirements_Documentation(t *testing.T) {
 	reqs := gamification.CalculateLevelRequirements()
 
-	// Document critical level thresholds
+	// Document critical level thresholds (updated after merge with main - using level-1 formula)
 	tests := []struct {
 		level       int
 		expectedXP  int
@@ -201,14 +206,14 @@ func TestLevelRequirements_Documentation(t *testing.T) {
 	}{
 		{1, 360, "First level (6 minutes)"},
 		{10, 360, "Last linear level"},
-		{11, 12, "First logarithmic level"},
-		{15, 220, "Level 15 requirement"},
-		{16, 306, "Level 16 requirement"},
-		{17, 404, "Level 17 requirement"},
-		{20, 768, "Level 20 requirement"},
+		{11, 488, "First logarithmic level (anchored with level-1)"},
+		{15, 894, "Level 15 requirement"},
+		{16, 1013, "Level 16 requirement"},
+		{17, 1137, "Level 17 requirement"},
+		{20, 1550, "Level 20 requirement"},
 	}
 
-	t.Log("Level Requirements (Low-Activity Hub Scale):")
+	t.Log("Level Requirements (Low-Activity Hub Scale - After Merge):")
 	cumulative := 0
 	for _, tt := range tests {
 		cumulative += reqs[tt.level]
@@ -224,13 +229,13 @@ func TestLevelRequirements_Documentation(t *testing.T) {
 	// Also document level 60 (max level before renown)
 	t.Logf("Level 60: %5d XP (Max level before renown)", reqs[60])
 
-	// Document jump scenarios
-	t.Log("\nJump Scenarios:")
+	// Document jump scenarios with updated values
+	t.Log("\nJump Scenarios (After Merge):")
 	t.Logf("Level 15→16: Need %d XP", reqs[16])
 	t.Logf("Level 15→17: Need %d XP (both levels)", reqs[16]+reqs[17])
 	t.Logf("10 minutes talking = 600 XP (without bonuses)")
 	t.Logf("10 minutes talking = 1200 XP (with 2x rested bonus)")
-	t.Log("\nConclusion: Jumping from 15→17 in 10 minutes requires rested XP bonus")
+	t.Log("\nConclusion: With updated requirements, need ~900 accumulated XP + rested bonus to jump 15→17")
 }
 
 func setupLevelingDB(t *testing.T) *gorm.DB {
