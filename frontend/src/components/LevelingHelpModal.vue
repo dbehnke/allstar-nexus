@@ -9,6 +9,8 @@
         <section class="section">
           <h4>Levels and XP</h4>
           <p>This table shows XP required to advance from the current level to the next level. Values are seconds of credited talk time.</p>
+          <p v-if="isUsingServerData" class="data-source server"><small>✓ Values provided by server</small></p>
+          <p v-else-if="thresholdsFetchAttempted" class="data-source local"><small>⚠ Using local calculation (server unavailable)</small></p>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Level</th><th>XP to next level (seconds)</th></tr></thead>
@@ -71,7 +73,8 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+
 const props = defineProps({
   visible: Boolean,
   levelConfig: Object,
@@ -87,7 +90,37 @@ const props = defineProps({
 })
 const emits = defineEmits(['close'])
 
+// State for fetched thresholds
+const serverThresholds = ref(null)
+const isUsingServerData = ref(false)
+const thresholdsFetchAttempted = ref(false)
+
 function close() { emits('close') }
+
+// Fetch thresholds from server when modal becomes visible
+watch(() => props.visible, async (isVisible) => {
+  if (isVisible && !thresholdsFetchAttempted.value) {
+    thresholdsFetchAttempted.value = true
+    try {
+      const response = await fetch('/api/leveling/thresholds?max_level=60')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.levels && Array.isArray(data.levels)) {
+          // Convert array to map for easier lookup: { level: xp, ... }
+          const thresholdMap = {}
+          data.levels.forEach(item => {
+            thresholdMap[item.level] = item.xp
+          })
+          serverThresholds.value = thresholdMap
+          isUsingServerData.value = true
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch leveling thresholds from server, using local fallback:', err)
+      isUsingServerData.value = false
+    }
+  }
+})
 
 const levels = computed(() => {
   const lc = props.levelConfig || {}
@@ -98,9 +131,17 @@ const levels = computed(() => {
 })
 
 function xpFor(lvl) {
+  // Prefer server data if available
+  if (serverThresholds.value && serverThresholds.value[lvl] != null) {
+    return serverThresholds.value[lvl]
+  }
+  
+  // Fallback to levelConfig prop
   const lc = props.levelConfig || {}
   const k = String(lvl)
   if (lc[k] != null) return lc[k]
+  
+  // Final fallback to local calculation (synchronized formula)
   if (lvl <= 10) return 360
   return 360 + Math.floor(Math.pow(lvl - 10, 1.8) * 100)
 }
@@ -136,4 +177,7 @@ function formatMultiplier(n) {
 table { width: 100%; border-collapse: collapse }
 th, td { padding: 0.35rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border-color) }
 .section { margin-bottom: 1rem }
+.data-source { font-style: italic; margin-top: 0.25rem; margin-bottom: 0.5rem; }
+.data-source.server { color: #4ade80; }
+.data-source.local { color: #fbbf24; }
 </style>
