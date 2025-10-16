@@ -175,9 +175,10 @@ func (LevelConfig) TableName() string {
 **Default Scaling (Low-Activity Hub Version):**
 - **Levels 1-10:** 360 XP each (6 minutes per level = easy progression for newcomers)
   - With 2 hours/week cap: ~3.3 levels per week possible for active users
-- **Levels 11-60:** Logarithmic curve
-  - Formula: `base + int((level-10)^1.8 * scale_factor)`
-  - Tuned so total XP from 1→60 = 259,200 seconds (72 hours of talking = ~36 weeks at max participation)
+- **Levels 11-60:** Logarithmic curve with level-anchored weights
+  - Formula: `int((level-1)^1.8 * scale_factor)`
+  - Uses k = level-1, so level 11 uses k=10 (ensuring progression is maintained)
+  - Tuned so total XP from 1→60 = ~259,200 seconds (72 hours of talking = ~36 weeks at max participation)
 
 **Rationale:**
 - 2 hours/week cap = 7,200 XP max per week
@@ -197,20 +198,21 @@ func CalculateLevelRequirements(cfg map[string]interface{}) map[int]int {
         requirements[level] = 360  // 6 minutes per level
     }
 
-    // Levels 11-60: Logarithmic scaling
+    // Levels 11-60: Logarithmic scaling with level-anchored weights
     // Target: 259,200 total XP (72 hours = ~36 weeks at 2hr/week cap)
     // Already used: 10 * 360 = 3,600 XP
     // Remaining: 255,600 XP across 50 levels
+    // Using k = level-1 so level 11 uses k=10 (ensuring it's > 360)
 
     totalRemaining := 255600.0
     sum := 0.0
     for level := 11; level <= 60; level++ {
-        sum += math.Pow(float64(level-10), 1.8)
+        sum += math.Pow(float64(level-1), 1.8)
     }
 
     scaleFactor := totalRemaining / sum
     for level := 11; level <= 60; level++ {
-        xp := int(math.Pow(float64(level-10), 1.8) * scaleFactor)
+        xp := int(math.Pow(float64(level-1), 1.8) * scaleFactor)
         requirements[level] = xp
     }
 
@@ -223,12 +225,12 @@ func CalculateLevelRequirements(cfg map[string]interface{}) map[int]int {
 |-------|-------------|---------------|-------------------|
 | 1     | 360         | 360           | 0.05              |
 | 5     | 360         | 1,800         | 0.25              |
-| 10    | 360         | 3,600         | 0.5               |
-| 20    | ~4,200      | ~45,000       | 6.25              |
-| 30    | ~9,800      | ~115,000      | 16                |
-| 40    | ~16,500     | ~205,000      | 28.5              |
-| 50    | ~24,000     | ~295,000      | 41                |
-| 60    | ~32,000     | ~390,000      | 54                |
+| 10    | 360         | 3,600         | 0.50              |
+| 20    | 1,550       | 13,394        | 1.86              |
+| 30    | 3,318       | 38,131        | 5.30              |
+| 40    | 5,656       | 83,717        | 11.63             |
+| 50    | 8,531       | 155,657       | 21.62             |
+| 60    | 11,917      | 259,175       | 36.00             |
 
 \* Assuming 7,200 XP/week (2 hours at 100% rate)
 
