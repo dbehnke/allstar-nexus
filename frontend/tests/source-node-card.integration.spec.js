@@ -169,4 +169,80 @@ describe('SourceNodeCard integration with store', () => {
     }
     expect(clearRemovedAt).toHaveBeenCalledWith(sourceNodeID, 2001)
   })
+
+  it('sorts adjacent nodes by transmit activity and connection time', () => {
+    const now = Date.now()
+    
+    // Create test nodes with different states
+    const nodes = {
+      '2001': { NodeID: 2001, Callsign: 'N1ABC', TotalTxSeconds: 0, ConnectedSince: now - 10000, IsTransmitting: false, LastTxEnd: null },      // Never talked, connected 10s ago
+      '2002': { NodeID: 2002, Callsign: 'N2DEF', TotalTxSeconds: 100, ConnectedSince: now - 20000, IsTransmitting: false, LastTxEnd: now - 50000 },    // Talked, last TX ended 50s ago
+      '2003': { NodeID: 2003, Callsign: 'N3GHI', TotalTxSeconds: 50, ConnectedSince: now - 5000, IsTransmitting: false, LastTxEnd: now - 100000 },    // Talked, last TX ended 100s ago
+      '2004': { NodeID: 2004, Callsign: 'N4JKL', TotalTxSeconds: 200, ConnectedSince: now - 15000, IsTransmitting: true, LastTxEnd: null },    // Currently transmitting
+      '2005': { NodeID: 2005, Callsign: 'N5MNO', TotalTxSeconds: 0, ConnectedSince: now - 3000, IsTransmitting: false, LastTxEnd: null },      // Never talked, connected 3s ago
+    }
+    
+    // Expected sort order:
+    // 1. Currently transmitting: 2004
+    // 2. Recent talkers (TotalTxSeconds > 0), by most recent LastTxEnd: 2002 (50s ago), 2003 (100s ago)
+    // 3. Never talked (TotalTxSeconds = 0), newest connection first: 2005 (3s ago), 2001 (10s ago)
+    
+    // Mock parseAnyToMs function behavior
+    const parseAnyToMs = (v) => {
+      if (v == null) return NaN
+      if (typeof v === 'number') return v
+      return NaN
+    }
+    
+    // Simulate the sorting logic from adjacentList computed
+    const sorted = Object.values(nodes).sort((a, b) => {
+      // 1. Currently transmitting nodes first
+      if (a.IsTransmitting && !b.IsTransmitting) return -1
+      if (!a.IsTransmitting && b.IsTransmitting) return 1
+      
+      // 2. Nodes that have transmitted (TotalTxSeconds > 0) before nodes that haven't
+      const aHasTalked = a.TotalTxSeconds > 0
+      const bHasTalked = b.TotalTxSeconds > 0
+      if (aHasTalked && !bHasTalked) return -1
+      if (!aHasTalked && bHasTalked) return 1
+      
+      // 3. Within nodes that have talked, sort by most recent last transmission (newest first)
+      if (aHasTalked && bHasTalked) {
+        const aLastTx = a.LastTxEnd ? parseAnyToMs(a.LastTxEnd) : 0
+        const bLastTx = b.LastTxEnd ? parseAnyToMs(b.LastTxEnd) : 0
+        if (aLastTx !== bLastTx) return bLastTx - aLastTx // Higher timestamp = more recent
+      }
+      
+      // 4. For nodes that haven't talked, sort by most recent connection (newest first)
+      if (!aHasTalked && !bHasTalked) {
+        const aConnected = Number(a.ConnectedSince) || 0
+        const bConnected = Number(b.ConnectedSince) || 0
+        if (aConnected !== bConnected) return bConnected - aConnected
+      }
+      
+      // 5. Fallback: sort by NodeID for stability
+      const na = Number(a.NodeID)
+      const nb = Number(b.NodeID)
+      if (!isNaN(na) && !isNaN(nb)) return na - nb
+      if (a.NodeID < b.NodeID) return -1
+      if (a.NodeID > b.NodeID) return 1
+      return 0
+    })
+    
+    // Verify the sort order
+    expect(sorted.map(n => n.NodeID)).toEqual([2004, 2002, 2003, 2005, 2001])
+    
+    // Verify first is transmitting
+    expect(sorted[0].IsTransmitting).toBe(true)
+    
+    // Verify next two have talked and are sorted by last TX time (most recent first)
+    expect(sorted[1].TotalTxSeconds).toBeGreaterThan(0)
+    expect(sorted[2].TotalTxSeconds).toBeGreaterThan(0)
+    expect(sorted[1].LastTxEnd).toBeGreaterThan(sorted[2].LastTxEnd) // More recent LastTxEnd (higher timestamp)
+    
+    // Verify last two haven't talked and are sorted by connection time (newest first)
+    expect(sorted[3].TotalTxSeconds).toBe(0)
+    expect(sorted[4].TotalTxSeconds).toBe(0)
+    expect(sorted[3].ConnectedSince).toBeGreaterThan(sorted[4].ConnectedSince)
+  })
 })

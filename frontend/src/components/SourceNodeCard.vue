@@ -454,6 +454,7 @@ const adjacentList = computed(() => {
       const isTransmitting = raw.IsTransmitting || raw.is_transmitting || raw.current_tx || raw.currentTx || raw.current_tx || false
       const isKeyed = raw.IsKeyed || raw.is_keyed || raw.is_keyed || raw.isKeyed || raw.is_keyed || false
       const keyedStart = raw.KeyedStartTime || raw.keyed_start_time || raw.keyedStartTime || raw.keyed_start || raw.KeyedStart
+      const lastTxEnd = raw.LastTxEnd || raw.last_tx_end || raw.lastTxEnd || null
       // Determine connectedSince; server-provided ConnectedSince preferred. For stale entries use
       // the removal timestamp so the UI shows time-since-lost. For present nodes, use a persistent
       // seenAt timestamp so the counter increments rather than resetting to now on every recompute.
@@ -560,6 +561,7 @@ const adjacentList = computed(() => {
         IsTransmitting: !!isTransmitting,
         IsKeyed: !!isKeyed,
     KeyedStartTime: keyedStart || null,
+    LastTxEnd: lastTxEnd || null,
   ConnectedSince: connectedSince || null,
     RemovedAt: entry.removedAt || null,
         Mode: mode || null,
@@ -573,9 +575,31 @@ const adjacentList = computed(() => {
     })
     .filter(node => node && node.NodeID)
     .sort((a, b) => {
+      // 1. Currently transmitting nodes first
       if (a.IsTransmitting && !b.IsTransmitting) return -1
       if (!a.IsTransmitting && b.IsTransmitting) return 1
-      // Ensure numeric comparison when possible
+      
+      // 2. Nodes that have transmitted (TotalTxSeconds > 0) before nodes that haven't
+      const aHasTalked = a.TotalTxSeconds > 0
+      const bHasTalked = b.TotalTxSeconds > 0
+      if (aHasTalked && !bHasTalked) return -1
+      if (!aHasTalked && bHasTalked) return 1
+      
+      // 3. Within nodes that have talked, sort by most recent last transmission (newest first)
+      if (aHasTalked && bHasTalked) {
+        const aLastTx = a.LastTxEnd ? parseAnyToMs(a.LastTxEnd) : 0
+        const bLastTx = b.LastTxEnd ? parseAnyToMs(b.LastTxEnd) : 0
+        if (aLastTx !== bLastTx) return bLastTx - aLastTx // Higher timestamp = more recent
+      }
+      
+      // 4. For nodes that haven't talked, sort by most recent connection (newest first)
+      if (!aHasTalked && !bHasTalked) {
+        const aConnected = Number(a.ConnectedSince) || 0
+        const bConnected = Number(b.ConnectedSince) || 0
+        if (aConnected !== bConnected) return bConnected - aConnected
+      }
+      
+      // 5. Fallback: sort by NodeID for stability
       const na = Number(a.NodeID)
       const nb = Number(b.NodeID)
       if (!isNaN(na) && !isNaN(nb)) return na - nb
