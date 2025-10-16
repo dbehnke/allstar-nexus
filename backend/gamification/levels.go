@@ -31,6 +31,7 @@ func GetLevelRequirements() map[int]int {
 	return levelRequirements
 }
 
+
 // CalculateLevelRequirements generates XP requirements for all 60 levels
 // This is the LOW-ACTIVITY HUB version with 10x reduction
 func CalculateLevelRequirements() map[int]int {
