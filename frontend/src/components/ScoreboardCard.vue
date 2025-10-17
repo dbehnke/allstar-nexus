@@ -35,7 +35,7 @@
             <div class="line-2">
               <LevelProgressBar
                 :current-xp="p.experience_points || p.xp || 0"
-                :required-xp="requiredXP(p.level || 1)"
+                :required-xp="p.next_level_xp || requiredXP(p.level || 1)"
                 :level="p.level || 1"
               />
             </div>
