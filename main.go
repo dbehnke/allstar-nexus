@@ -235,6 +235,10 @@ func main() {
 		} else {
 			levelRequirements = gamification.CalculateLevelRequirements()
 		}
+		
+		// Set the precomputed level requirements in the gamification package
+		gamification.SetLevelRequirements(levelRequirements)
+		
 		if err := levelConfigRepo.SeedDefaults(context.Background(), levelRequirements); err != nil {
 			logger.Warn("failed to seed level config", zap.Error(err))
 		} else {
