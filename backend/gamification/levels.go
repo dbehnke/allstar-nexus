@@ -4,9 +4,40 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 
 	cfgpkg "github.com/dbehnke/allstar-nexus/backend/config"
 )
+
+// Package-level variables for precomputed level requirements
+var (
+	precomputedRequirements map[int]int
+	requirementsMutex       sync.RWMutex
+)
+
+// SetLevelRequirements stores the precomputed level requirements for efficient access
+func SetLevelRequirements(req map[int]int) {
+	requirementsMutex.Lock()
+	defer requirementsMutex.Unlock()
+	precomputedRequirements = make(map[int]int, len(req))
+	for k, v := range req {
+		precomputedRequirements[k] = v
+	}
+}
+
+// GetLevelRequirements returns a copy of the precomputed level requirements
+func GetLevelRequirements() map[int]int {
+	requirementsMutex.RLock()
+	defer requirementsMutex.RUnlock()
+	if precomputedRequirements == nil {
+		return nil
+	}
+	result := make(map[int]int, len(precomputedRequirements))
+	for k, v := range precomputedRequirements {
+		result[k] = v
+	}
+	return result
+}
 
 // CalculateLevelRequirements generates XP requirements for all 60 levels
 // This is the LOW-ACTIVITY HUB version with 10x reduction
