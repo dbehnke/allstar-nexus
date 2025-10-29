@@ -17,7 +17,7 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "5.2.4",
+    "@vitejs/plugin-vue": "6.0.1",
     "playwright": "^1.56.1",
     "@playwright/test": "^1.56.1",
     "vite": "^6.4.1",
