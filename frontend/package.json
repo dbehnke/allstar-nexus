@@ -20,11 +20,11 @@
     "@vitejs/plugin-vue": "5.2.4",
     "playwright": "^1.56.1",
     "@playwright/test": "^1.56.1",
-    "vite": "6.3.6",
+    "vite": "^6.4.1",
     "vitest": "^3.2.4",
     "@vue/test-utils": "^2.3.0",
   "jsdom": "^21.0.0",
-  "msw": "^1.2.1"
+  "msw": "^2.11.6"
   },
   "vitest": {}
 }
