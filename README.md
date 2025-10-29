@@ -92,6 +92,7 @@ npm run test:e2e
 
 - The frontend package.json indicates a Vite + Vue 3 stack (not Next.js). The README was updated to reflect the actual stack.
 - See `/backend/README.md` for backend-specific development notes and the various `Makefile` / `tasks` present in the repo.
+- For information on setting up automated releases, see [`.github/RELEASE_SETUP.md`](.github/RELEASE_SETUP.md)
 
 - This project powers the Dashboard for The Who Cares Allstar Hub (WC8MI): https://asl3.whocaresradio.com
 
