@@ -90,6 +90,16 @@ type RenownConfig struct {
 	XPPerLevel int  `mapstructure:"xp_per_level" yaml:"xp_per_level"`
 }
 
+// DiscordConfig holds Discord webhook notification settings
+type DiscordConfig struct {
+	Enabled               bool   `mapstructure:"enabled" yaml:"enabled"`
+	WebhookURL            string `mapstructure:"webhook_url" yaml:"webhook_url"`
+	QSOInactiveSeconds    int    `mapstructure:"qso_inactive_seconds" yaml:"qso_inactive_seconds"`       // Time to wait after last TX before declaring QSO ended (default 120)
+	NodeIdleSeconds       int    `mapstructure:"node_idle_seconds" yaml:"node_idle_seconds"`             // Time to wait after last activity before declaring node idle (default 300)
+	MinTalkersForQSO      int    `mapstructure:"min_talkers_for_qso" yaml:"min_talkers_for_qso"`        // Minimum unique talkers to declare QSO started (default 2)
+	NotifyIndividualTalks bool   `mapstructure:"notify_individual_talks" yaml:"notify_individual_talks"` // Whether to notify for each individual talker (default true)
+}
+
 // Config holds runtime configuration values.
 type Config struct {
 	Port                    string
@@ -118,6 +128,7 @@ type Config struct {
 	Title                   string
 	Subtitle                string
 	Gamification            GamificationConfig
+	Discord                 DiscordConfig
 }
 
 // Load loads configuration from config file and environment variables using Viper
@@ -147,6 +158,14 @@ func Load(configPath ...string) Config {
 	viper.SetDefault("allow_anon_dashboard", true)
 	viper.SetDefault("title", "Allstar Nexus")
 	viper.SetDefault("subtitle", "")
+
+	// Discord webhook defaults (disabled by default)
+	viper.SetDefault("discord.enabled", false)
+	viper.SetDefault("discord.webhook_url", "")
+	viper.SetDefault("discord.qso_inactive_seconds", 120)   // 2 minutes
+	viper.SetDefault("discord.node_idle_seconds", 300)      // 5 minutes
+	viper.SetDefault("discord.min_talkers_for_qso", 2)      // 2 different talkers
+	viper.SetDefault("discord.notify_individual_talks", true)
 
 	// Gamification defaults (low-activity hub configuration)
 	viper.SetDefault("gamification.enabled", false) // Disabled by default
@@ -249,6 +268,11 @@ func Load(configPath ...string) Config {
 	// Load gamification configuration
 	if err := viper.UnmarshalKey("gamification", &cfg.Gamification); err != nil {
 		log.Printf("warning: failed to load gamification config: %v (using defaults)", err)
+	}
+
+	// Load Discord configuration
+	if err := viper.UnmarshalKey("discord", &cfg.Discord); err != nil {
+		log.Printf("warning: failed to load discord config: %v (using defaults)", err)
 	}
 
 	// Load nodes configuration - supports multiple formats:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"flag"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"github.com/dbehnke/allstar-nexus/internal/ami"
 	"github.com/dbehnke/allstar-nexus/internal/astdb"
 	"github.com/dbehnke/allstar-nexus/internal/core"
+	"github.com/dbehnke/allstar-nexus/internal/discord"
 	"github.com/dbehnke/allstar-nexus/internal/web"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
@@ -445,6 +447,46 @@ func main() {
 		go hub.TalkerLogRefreshLoop(sm, 2*time.Minute)      // Periodic talker log refresh
 		go hub.SourceNodeKeyingLoop(sm.KeyingUpdates())     // Source node keying updates
 		go hub.SourceNodeKeyingEventLoop(sm.KeyingEvents()) // Session edge events (TX_START/TX_END)
+
+		// Initialize Discord notifier if enabled
+		if cfg.Discord.Enabled {
+			nodeName := ""
+			if len(cfg.Nodes) > 0 {
+				nodeName = fmt.Sprintf("%d", cfg.Nodes[0].NodeID)
+				// Use custom name if configured
+				if cfg.Nodes[0].Name != "" {
+					nodeName = cfg.Nodes[0].Name
+				}
+			}
+
+			discordConfig := discord.Config{
+				WebhookURL:            cfg.Discord.WebhookURL,
+				QSOInactiveSeconds:    cfg.Discord.QSOInactiveSeconds,
+				NodeIdleSeconds:       cfg.Discord.NodeIdleSeconds,
+				MinTalkersForQSO:      cfg.Discord.MinTalkersForQSO,
+				NotifyIndividualTalks: cfg.Discord.NotifyIndividualTalks,
+			}
+
+			discordNotifier := discord.NewNotifier(discordConfig, cfg.Nodes[0].NodeID, nodeName)
+			discordNotifier.Start()
+			logger.Info("Discord webhook notifier started",
+				zap.Int("node_id", cfg.Nodes[0].NodeID),
+				zap.String("node_name", nodeName),
+				zap.Int("qso_inactive_seconds", cfg.Discord.QSOInactiveSeconds),
+				zap.Int("node_idle_seconds", cfg.Discord.NodeIdleSeconds),
+			)
+
+			// Subscribe to talker events and forward to Discord notifier
+			go func() {
+				for evt := range sm.TalkerEvents() {
+					discordNotifier.ProcessTalkerEvent(evt)
+				}
+			}()
+
+			// Register cleanup on shutdown
+			defer discordNotifier.Stop()
+		}
+
 		conn := ami.NewConnector(cfg.AMIHost, cfg.AMIPort, cfg.AMIUser, cfg.AMIPassword, cfg.AMIEvents, cfg.AMIRetryInterval, cfg.AMIRetryMax)
 		// Pass AMI connector and StateManager to API layer
 		apiLayer.SetAMIConnector(conn)
