@@ -1,14 +1,14 @@
 import { describe, it, beforeAll, afterAll, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { setupServer } from 'msw/node'
-import { rest } from 'msw'
+import { http, HttpResponse } from 'msw'
 import ScoreboardCard from '../src/components/ScoreboardCard.vue'
 import { createPinia, setActivePinia } from 'pinia'
 
 const server = setupServer(
-  rest.get('/api/gamification/profile/:callsign', (req, res, ctx) => {
-    const callsign = req.params.callsign
-    return res(ctx.status(200), ctx.json({ callsign, rested_bonus_seconds: 3600 }))
+  http.get('/api/gamification/profile/:callsign', ({ params }) => {
+    const callsign = params.callsign
+    return HttpResponse.json({ callsign, rested_bonus_seconds: 3600 })
   })
 )
 
