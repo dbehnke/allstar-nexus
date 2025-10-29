@@ -1,0 +1,16 @@
+{
+  "release-type": "go",
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "package-name": "allstar-nexus",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": false,
+      "versioning": "default",
+      "extra-files": [],
+      "include-component-in-tag": false
+    }
+  },
+  "plugins": []
+}
