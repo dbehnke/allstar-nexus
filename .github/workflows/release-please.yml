@@ -1,10 +1,17 @@
 name: Release Please
 
-# IMPORTANT: This workflow requires the following repository setting to be enabled:
-# Settings > Actions > General > Workflow permissions
-# ✓ "Allow GitHub Actions to create and approve pull requests"
+# IMPORTANT: This workflow requires ONE of the following to be configured:
 #
-# Without this setting enabled, the workflow will fail with:
+# Option 1 (Recommended): Enable repository setting to allow GitHub Actions to create PRs
+#   Settings > Actions > General > Workflow permissions
+#   ✓ "Allow GitHub Actions to create and approve pull requests"
+#
+# Option 2 (Alternative): Use a Personal Access Token (PAT) or GitHub App token
+#   1. Create a PAT with 'repo' and 'workflow' scopes
+#   2. Add it as a repository secret (e.g., RELEASE_PLEASE_TOKEN)
+#   3. Update the 'token' parameter below to use: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+#
+# Without one of these configurations, the workflow will fail with:
 # "GitHub Actions is not permitted to create or approve pull requests"
 #
 # See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository
@@ -28,6 +35,7 @@ jobs:
         with:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       # Checkout code if a release was created
       - name: Checkout
