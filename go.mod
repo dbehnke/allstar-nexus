@@ -1,6 +1,6 @@
 module github.com/dbehnke/allstar-nexus
 
-go 1.25.1
+go 1.25.3
 
 require modernc.org/sqlite v1.39.1
 
