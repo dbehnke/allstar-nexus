@@ -438,17 +438,9 @@ func main() {
 		if len(cfg.Nodes) > 0 {
 			sm.SeedKeyingTrackerFromLinks(cfg.Nodes[0].NodeID)
 		}
-		go hub.BroadcastLoop(sm.Updates())
-		go hub.TalkerLoop(sm.TalkerEvents())
-		go hub.LinkUpdateLoop(sm.LinkUpdates())
-		go hub.LinkRemovalLoop(sm.LinkRemovals())
-		go hub.LinkTxBatchLoop(sm.LinkTxEvents(), 100*time.Millisecond)
-		go hub.HeartbeatLoop(sm, 5*time.Second)
-		go hub.TalkerLogRefreshLoop(sm, 2*time.Minute)      // Periodic talker log refresh
-		go hub.SourceNodeKeyingLoop(sm.KeyingUpdates())     // Source node keying updates
-		go hub.SourceNodeKeyingEventLoop(sm.KeyingEvents()) // Session edge events (TX_START/TX_END)
-
-		// Initialize Discord notifier if enabled
+		
+		// Initialize Discord notifier if enabled (before starting hub loops)
+		var discordNotifier *discord.Notifier
 		if cfg.Discord.Enabled {
 			nodeName := ""
 			if len(cfg.Nodes) > 0 {
@@ -467,7 +459,7 @@ func main() {
 				NotifyIndividualTalks: cfg.Discord.NotifyIndividualTalks,
 			}
 
-			discordNotifier := discord.NewNotifier(discordConfig, cfg.Nodes[0].NodeID, nodeName)
+			discordNotifier = discord.NewNotifier(discordConfig, cfg.Nodes[0].NodeID, nodeName)
 			discordNotifier.Start()
 			logger.Info("Discord webhook notifier started",
 				zap.Int("node_id", cfg.Nodes[0].NodeID),
@@ -476,16 +468,24 @@ func main() {
 				zap.Int("node_idle_seconds", cfg.Discord.NodeIdleSeconds),
 			)
 
-			// Subscribe to talker events and forward to Discord notifier
-			go func() {
-				for evt := range sm.TalkerEvents() {
-					discordNotifier.ProcessTalkerEvent(evt)
-				}
-			}()
+			// Hook the Discord notifier into the hub's talker event broadcast
+			hub.SetOnTalkerEvent(func(evt core.TalkerEvent) {
+				discordNotifier.ProcessTalkerEvent(evt)
+			})
 
 			// Register cleanup on shutdown
 			defer discordNotifier.Stop()
 		}
+		
+		go hub.BroadcastLoop(sm.Updates())
+		go hub.TalkerLoop(sm.TalkerEvents())
+		go hub.LinkUpdateLoop(sm.LinkUpdates())
+		go hub.LinkRemovalLoop(sm.LinkRemovals())
+		go hub.LinkTxBatchLoop(sm.LinkTxEvents(), 100*time.Millisecond)
+		go hub.HeartbeatLoop(sm, 5*time.Second)
+		go hub.TalkerLogRefreshLoop(sm, 2*time.Minute)      // Periodic talker log refresh
+		go hub.SourceNodeKeyingLoop(sm.KeyingUpdates())     // Source node keying updates
+		go hub.SourceNodeKeyingEventLoop(sm.KeyingEvents()) // Session edge events (TX_START/TX_END)
 
 		conn := ami.NewConnector(cfg.AMIHost, cfg.AMIPort, cfg.AMIUser, cfg.AMIPassword, cfg.AMIEvents, cfg.AMIRetryInterval, cfg.AMIRetryMax)
 		// Pass AMI connector and StateManager to API layer

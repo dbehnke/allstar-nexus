@@ -29,6 +29,8 @@ type Hub struct {
 	triggerPoll func()
 	pollMu      sync.Mutex
 	pollTimer   *time.Timer
+	// Optional hook to forward talker events (e.g., to Discord notifier)
+	onTalkerEvent func(core.TalkerEvent)
 }
 
 type clientInfo struct {
@@ -44,6 +46,13 @@ func (h *Hub) SetTriggerPoll(fn func()) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.triggerPoll = fn
+}
+
+// SetOnTalkerEvent sets an optional callback for talker events (e.g., Discord notifier)
+func (h *Hub) SetOnTalkerEvent(fn func(core.TalkerEvent)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onTalkerEvent = fn
 }
 
 // TriggerPollDebounced requests a poll after a short delay (2s). Subsequent
@@ -187,6 +196,11 @@ func (h *Hub) BroadcastLoop(updates <-chan core.NodeState) {
 // TalkerLoop broadcasts talker events.
 func (h *Hub) TalkerLoop(events <-chan core.TalkerEvent) {
 	for evt := range events {
+		// Forward to optional hook (e.g., Discord notifier)
+		if h.onTalkerEvent != nil {
+			h.onTalkerEvent(evt)
+		}
+		
 		env := messageEnvelope{MessageType: "TALKER_EVENT", Data: evt, Timestamp: time.Now().UnixMilli()}
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
