@@ -105,11 +105,15 @@ func (n *Notifier) ProcessTalkerEvent(evt core.TalkerEvent) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	// Debug logging to track all events received
+	log.Printf("[DISCORD DEBUG] Received event: kind=%s node=%d callsign=%s", evt.Kind, evt.Node, evt.Callsign)
+
 	now := time.Now()
 	n.lastActivity = now
 
 	// Skip node==0 events (these are global/unspecific events)
 	if evt.Node == 0 {
+		log.Printf("[DISCORD DEBUG] Skipping node==0 event")
 		return
 	}
 
@@ -126,6 +130,8 @@ func (n *Notifier) ProcessTalkerEvent(evt core.TalkerEvent) {
 				LastSeen:    now,
 			}
 
+			log.Printf("[DISCORD DEBUG] New talker added: node=%d callsign=%s, total_talkers=%d", evt.Node, evt.Callsign, len(n.activeTalkers))
+
 			// Notify about individual talker if enabled
 			if n.config.NotifyIndividualTalks {
 				callsignInfo := fmt.Sprintf("%s (%d)", evt.Callsign, evt.Node)
@@ -140,12 +146,14 @@ func (n *Notifier) ProcessTalkerEvent(evt core.TalkerEvent) {
 		} else {
 			// Update last seen time
 			n.activeTalkers[evt.Node].LastSeen = now
+			log.Printf("[DISCORD DEBUG] Updated existing talker: node=%d", evt.Node)
 		}
 
 	case "TX_STOP":
 		// Talker stopped - keep them in activeTalkers for now, cleanup happens in monitor
 		if talker, exists := n.activeTalkers[evt.Node]; exists {
 			talker.LastSeen = now
+			log.Printf("[DISCORD DEBUG] Talker stopped: node=%d", evt.Node)
 		}
 	}
 }

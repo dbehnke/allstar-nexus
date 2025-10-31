@@ -466,12 +466,20 @@ func main() {
 				zap.String("node_name", nodeName),
 				zap.Int("qso_inactive_seconds", cfg.Discord.QSOInactiveSeconds),
 				zap.Int("node_idle_seconds", cfg.Discord.NodeIdleSeconds),
+				zap.Bool("notify_individual_talks", cfg.Discord.NotifyIndividualTalks),
+				zap.String("webhook_url_set", func() string {
+					if cfg.Discord.WebhookURL != "" {
+						return "yes (length: " + fmt.Sprintf("%d", len(cfg.Discord.WebhookURL)) + ")"
+					}
+					return "no"
+				}()),
 			)
 
 			// Hook the Discord notifier into the hub's talker event broadcast
 			hub.SetOnTalkerEvent(func(evt core.TalkerEvent) {
 				discordNotifier.ProcessTalkerEvent(evt)
 			})
+			logger.Info("Discord notifier hook registered with hub")
 
 			// Register cleanup on shutdown
 			defer discordNotifier.Stop()

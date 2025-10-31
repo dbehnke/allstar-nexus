@@ -196,9 +196,14 @@ func (h *Hub) BroadcastLoop(updates <-chan core.NodeState) {
 // TalkerLoop broadcasts talker events.
 func (h *Hub) TalkerLoop(events <-chan core.TalkerEvent) {
 	for evt := range events {
+		log.Printf("[HUB DEBUG] Received talker event: kind=%s node=%d callsign=%s", evt.Kind, evt.Node, evt.Callsign)
+		
 		// Forward to optional hook (e.g., Discord notifier)
 		if h.onTalkerEvent != nil {
+			log.Printf("[HUB DEBUG] Forwarding event to onTalkerEvent hook")
 			h.onTalkerEvent(evt)
+		} else {
+			log.Printf("[HUB DEBUG] No onTalkerEvent hook registered")
 		}
 		
 		env := messageEnvelope{MessageType: "TALKER_EVENT", Data: evt, Timestamp: time.Now().UnixMilli()}
@@ -206,8 +211,8 @@ func (h *Hub) TalkerLoop(events <-chan core.TalkerEvent) {
 		h.mu.RLock()
 		for c := range h.clients {
 			go func(conn *websocket.Conn, p []byte) {
-			_ = conn.Write(context.Background(), websocket.MessageText, p)
-		}(c, payload)
+				_ = conn.Write(context.Background(), websocket.MessageText, p)
+			}(c, payload)
 		}
 		h.mu.RUnlock()
 	}
