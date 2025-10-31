@@ -71,15 +71,7 @@ type Notifier struct {
 
 // NodeLookupService interface for looking up node information
 type NodeLookupService interface {
-	LookupNode(nodeID int) *NodeInfo
-}
-
-// NodeInfo contains enriched node information
-type NodeInfo struct {
-	Node        int
-	Callsign    string
-	Description string
-	Location    string
+	LookupNode(nodeID int) *core.NodeInfo
 }
 
 // NewNotifier creates a new Discord notifier
