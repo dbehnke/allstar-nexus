@@ -66,6 +66,20 @@ type Notifier struct {
 	nodeName      string
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
+	nodeLookup    NodeLookupService // Interface for looking up node info
+}
+
+// NodeLookupService interface for looking up node information
+type NodeLookupService interface {
+	LookupNode(nodeID int) *NodeInfo
+}
+
+// NodeInfo contains enriched node information
+type NodeInfo struct {
+	Node        int
+	Callsign    string
+	Description string
+	Location    string
 }
 
 // NewNotifier creates a new Discord notifier
@@ -86,6 +100,13 @@ func NewNotifier(config Config, nodeID int, nodeName string) *Notifier {
 		nodeName:      nodeName,
 		stopCh:        make(chan struct{}),
 	}
+}
+
+// SetNodeLookup sets the node lookup service for enriching node information
+func (n *Notifier) SetNodeLookup(lookup NodeLookupService) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.nodeLookup = lookup
 }
 
 // Start begins monitoring for state transitions
@@ -175,33 +196,57 @@ func (n *Notifier) ProcessLinkTxEvent(evt core.LinkTxEvent) {
 		return
 	}
 
+	// Look up callsign information
+	var callsign, description string
+	if n.nodeLookup != nil {
+		if info := n.nodeLookup.LookupNode(evt.Node); info != nil {
+			callsign = info.Callsign
+			description = info.Description
+			log.Printf("[DISCORD DEBUG] Node lookup successful: node=%d callsign=%s", evt.Node, callsign)
+		} else {
+			log.Printf("[DISCORD DEBUG] Node lookup returned nil for node=%d", evt.Node)
+		}
+	} else {
+		log.Printf("[DISCORD DEBUG] No node lookup service available")
+	}
+
 	switch evt.Kind {
 	case "START":
 		// New talker started
 		if _, exists := n.activeTalkers[evt.Node]; !exists {
 			// First time seeing this talker in current session
-			// Note: LinkTxEvent doesn't have callsign, we'll display node ID
 			n.activeTalkers[evt.Node] = &TalkerInfo{
-				NodeID:    evt.Node,
-				Callsign:  "", // Will be populated from link info if available
-				StartTime: now,
-				LastSeen:  now,
+				NodeID:      evt.Node,
+				Callsign:    callsign,
+				Description: description,
+				StartTime:   now,
+				LastSeen:    now,
 			}
 
-			log.Printf("[DISCORD DEBUG] New talker added from link event: node=%d, total_talkers=%d", evt.Node, len(n.activeTalkers))
+			log.Printf("[DISCORD DEBUG] New talker added from link event: node=%d callsign=%s, total_talkers=%d", evt.Node, callsign, len(n.activeTalkers))
 
 			// Notify about individual talker if enabled
 			if n.config.NotifyIndividualTalks {
-				// Try to get callsign info from node lookup if available
-				callsignInfo := fmt.Sprintf("Node %d", evt.Node)
-				n.sendNotification(fmt.Sprintf("%s is now talking.", callsignInfo))
+				// Format: Callsign (NodeID) or just Node NodeID if no callsign
+				var talkerInfo string
+				if callsign != "" {
+					talkerInfo = fmt.Sprintf("%s (%d)", callsign, evt.Node)
+				} else {
+					talkerInfo = fmt.Sprintf("Node %d", evt.Node)
+				}
+				n.sendNotification(fmt.Sprintf("📻 %s is now talking.", talkerInfo))
 			}
 
 			// Check for state transitions
 			n.checkStateTransition()
 		} else {
-			// Update last seen time
-			n.activeTalkers[evt.Node].LastSeen = now
+			// Update last seen time and enrich with callsign if we didn't have it before
+			talker := n.activeTalkers[evt.Node]
+			talker.LastSeen = now
+			if talker.Callsign == "" && callsign != "" {
+				talker.Callsign = callsign
+				talker.Description = description
+			}
 			log.Printf("[DISCORD DEBUG] Updated existing talker from link event: node=%d", evt.Node)
 		}
 
@@ -243,20 +288,20 @@ func (n *Notifier) notifyStateChange(oldState, newState ActivityState) {
 	switch newState {
 	case StateActive:
 		if oldState == StateIdle {
-			n.sendNotification(fmt.Sprintf("Node %s has activity!", n.nodeName))
+			n.sendNotification(fmt.Sprintf("✨ Node %s has activity!", n.nodeName))
 		}
 	case StateQSO:
 		if oldState != StateQSO {
-			n.sendNotification("A QSO has started!")
+			n.sendNotification("🎙️ A QSO has started!")
 		}
 	case StateIdle:
 		if oldState == StateQSO {
 			// QSO ended first, then idle
-			n.sendNotification("A QSO has ended!")
-			n.sendNotification(fmt.Sprintf("Node %s is now idle.", n.nodeName))
+			n.sendNotification("👋 A QSO has ended!")
+			n.sendNotification(fmt.Sprintf("💤 Node %s is now idle.", n.nodeName))
 		} else if oldState == StateActive {
 			// Just went from active to idle (no QSO)
-			n.sendNotification(fmt.Sprintf("Node %s is now idle.", n.nodeName))
+			n.sendNotification(fmt.Sprintf("💤 Node %s is now idle.", n.nodeName))
 		}
 	}
 }

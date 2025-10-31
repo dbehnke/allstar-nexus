@@ -460,6 +460,10 @@ func main() {
 			}
 
 			discordNotifier = discord.NewNotifier(discordConfig, cfg.Nodes[0].NodeID, nodeName)
+			
+			// Set the node lookup service so Discord can enrich notifications with callsigns
+			discordNotifier.SetNodeLookup(nodeLookup)
+			
 			discordNotifier.Start()
 			logger.Info("Discord webhook notifier started",
 				zap.Int("node_id", cfg.Nodes[0].NodeID),
