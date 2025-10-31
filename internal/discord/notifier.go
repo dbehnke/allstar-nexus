@@ -106,14 +106,14 @@ func (n *Notifier) ProcessTalkerEvent(evt core.TalkerEvent) {
 	defer n.mu.Unlock()
 
 	// Debug logging to track all events received
-	log.Printf("[DISCORD DEBUG] Received event: kind=%s node=%d callsign=%s", evt.Kind, evt.Node, evt.Callsign)
+	log.Printf("[DISCORD DEBUG] Received TalkerEvent: kind=%s node=%d callsign=%s", evt.Kind, evt.Node, evt.Callsign)
 
 	now := time.Now()
 	n.lastActivity = now
 
 	// Skip node==0 events (these are global/unspecific events)
 	if evt.Node == 0 {
-		log.Printf("[DISCORD DEBUG] Skipping node==0 event")
+		log.Printf("[DISCORD DEBUG] Skipping node==0 event - use LinkTxEvents for actual node tracking")
 		return
 	}
 
@@ -154,6 +154,62 @@ func (n *Notifier) ProcessTalkerEvent(evt core.TalkerEvent) {
 		if talker, exists := n.activeTalkers[evt.Node]; exists {
 			talker.LastSeen = now
 			log.Printf("[DISCORD DEBUG] Talker stopped: node=%d", evt.Node)
+		}
+	}
+}
+
+// ProcessLinkTxEvent processes a per-link transmit event
+func (n *Notifier) ProcessLinkTxEvent(evt core.LinkTxEvent) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	// Debug logging to track all link events received
+	log.Printf("[DISCORD DEBUG] Received LinkTxEvent: kind=%s node=%d", evt.Kind, evt.Node)
+
+	now := time.Now()
+	n.lastActivity = now
+
+	// Skip invalid nodes
+	if evt.Node == 0 {
+		log.Printf("[DISCORD DEBUG] Skipping node==0 link event")
+		return
+	}
+
+	switch evt.Kind {
+	case "START":
+		// New talker started
+		if _, exists := n.activeTalkers[evt.Node]; !exists {
+			// First time seeing this talker in current session
+			// Note: LinkTxEvent doesn't have callsign, we'll display node ID
+			n.activeTalkers[evt.Node] = &TalkerInfo{
+				NodeID:    evt.Node,
+				Callsign:  "", // Will be populated from link info if available
+				StartTime: now,
+				LastSeen:  now,
+			}
+
+			log.Printf("[DISCORD DEBUG] New talker added from link event: node=%d, total_talkers=%d", evt.Node, len(n.activeTalkers))
+
+			// Notify about individual talker if enabled
+			if n.config.NotifyIndividualTalks {
+				// Try to get callsign info from node lookup if available
+				callsignInfo := fmt.Sprintf("Node %d", evt.Node)
+				n.sendNotification(fmt.Sprintf("%s is now talking.", callsignInfo))
+			}
+
+			// Check for state transitions
+			n.checkStateTransition()
+		} else {
+			// Update last seen time
+			n.activeTalkers[evt.Node].LastSeen = now
+			log.Printf("[DISCORD DEBUG] Updated existing talker from link event: node=%d", evt.Node)
+		}
+
+	case "STOP":
+		// Talker stopped - keep them in activeTalkers for now, cleanup happens in monitor
+		if talker, exists := n.activeTalkers[evt.Node]; exists {
+			talker.LastSeen = now
+			log.Printf("[DISCORD DEBUG] Talker stopped from link event: node=%d", evt.Node)
 		}
 	}
 }

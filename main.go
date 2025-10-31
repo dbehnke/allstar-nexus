@@ -479,7 +479,13 @@ func main() {
 			hub.SetOnTalkerEvent(func(evt core.TalkerEvent) {
 				discordNotifier.ProcessTalkerEvent(evt)
 			})
-			logger.Info("Discord notifier hook registered with hub")
+			
+			// Hook the Discord notifier into the hub's link TX event broadcast
+			// This is the primary source of per-node events
+			hub.SetOnLinkTxEvent(func(evt core.LinkTxEvent) {
+				discordNotifier.ProcessLinkTxEvent(evt)
+			})
+			logger.Info("Discord notifier hooks registered with hub")
 
 			// Register cleanup on shutdown
 			defer discordNotifier.Stop()

@@ -31,6 +31,8 @@ type Hub struct {
 	pollTimer   *time.Timer
 	// Optional hook to forward talker events (e.g., to Discord notifier)
 	onTalkerEvent func(core.TalkerEvent)
+	// Optional hook to forward link TX events (e.g., to Discord notifier)
+	onLinkTxEvent func(core.LinkTxEvent)
 }
 
 type clientInfo struct {
@@ -53,6 +55,13 @@ func (h *Hub) SetOnTalkerEvent(fn func(core.TalkerEvent)) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.onTalkerEvent = fn
+}
+
+// SetOnLinkTxEvent sets an optional callback for link TX events (e.g., Discord notifier)
+func (h *Hub) SetOnLinkTxEvent(fn func(core.LinkTxEvent)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onLinkTxEvent = fn
 }
 
 // TriggerPollDebounced requests a poll after a short delay (2s). Subsequent
@@ -310,6 +319,16 @@ func (h *Hub) LinkTxBatchLoop(events <-chan core.LinkTxEvent, window time.Durati
 				flush()
 				return
 			}
+			
+			// Forward to optional hook (e.g., Discord notifier) before buffering
+			h.mu.RLock()
+			hookFn := h.onLinkTxEvent
+			h.mu.RUnlock()
+			if hookFn != nil {
+				log.Printf("[HUB DEBUG] Forwarding LinkTxEvent to hook: kind=%s node=%d", evt.Kind, evt.Node)
+				hookFn(evt)
+			}
+			
 			buf = append(buf, evt)
 			if len(buf) == 1 {
 				if !timer.Stop() {
