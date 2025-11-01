@@ -6,7 +6,7 @@ VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS=-X 'main.buildVersion=$(VERSION)' -X 'main.buildTime=$(BUILD_TIME)'
 
-.PHONY: frontend backend build frontend-install backend-install build-dashboard build run test test-e2e clean lint
+.PHONY: frontend backend build frontend-install backend-install build-dashboard build run test test-e2e clean lint tools cgnat-whitelist
 
 .PHONY: validate-config
 
@@ -54,3 +54,9 @@ clean:
 	rm -f $(APP_NAME)
 	rm -rf $(FRONTEND_DIR)/out
 	rm -rf $(VUE_DASHBOARD_DIR)/dist
+
+# Build standalone tools
+tools: cgnat-whitelist
+
+cgnat-whitelist:
+	cd tools/cgnat-whitelist && go build -o cgnat-whitelist .
