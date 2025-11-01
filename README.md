@@ -96,7 +96,25 @@ npm run test:e2e
 
 - `/frontend` — Vue 3 + Vite app (dev scripts, builds, tests)
 - `/backend` — Go packages: api, repository, models, gamification, middleware, tests
+- `/tools` — Standalone utilities (e.g., cgnat-whitelist generator)
 - `main.go` — application entrypoint; embeds/serves frontend
+
+## Utilities
+
+### CGNAT Whitelist Generator
+
+A standalone tool for generating AllStar node whitelist entries for CGNAT forwarding scenarios.
+
+Location: `tools/cgnat-whitelist/`
+
+See [tools/cgnat-whitelist/README.md](tools/cgnat-whitelist/README.md) for detailed usage instructions.
+
+Quick example:
+```bash
+cd tools/cgnat-whitelist
+go build -o cgnat-whitelist .
+./cgnat-whitelist -f callsigns.txt -o whitelist.txt -i 100.89.118.58
+```
 
 ## Notes
 

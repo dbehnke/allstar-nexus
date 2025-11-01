@@ -2,6 +2,8 @@
 allstar-nexus
 dist/
 data/
+tools/*/cgnat-whitelist
+tools/cgnat-whitelist/cgnat-whitelist
 
 # Node modules
 **/node_modules/
