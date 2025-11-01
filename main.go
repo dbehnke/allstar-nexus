@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"flag"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"github.com/dbehnke/allstar-nexus/internal/ami"
 	"github.com/dbehnke/allstar-nexus/internal/astdb"
 	"github.com/dbehnke/allstar-nexus/internal/core"
+	"github.com/dbehnke/allstar-nexus/internal/discord"
 	"github.com/dbehnke/allstar-nexus/internal/web"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
@@ -449,6 +451,63 @@ func main() {
 		if len(cfg.Nodes) > 0 {
 			sm.SeedKeyingTrackerFromLinks(cfg.Nodes[0].NodeID)
 		}
+		
+		// Initialize Discord notifier if enabled (before starting hub loops)
+		var discordNotifier *discord.Notifier
+		if cfg.Discord.Enabled {
+			nodeName := ""
+			if len(cfg.Nodes) > 0 {
+				nodeName = fmt.Sprintf("%d", cfg.Nodes[0].NodeID)
+				// Use custom name if configured
+				if cfg.Nodes[0].Name != "" {
+					nodeName = cfg.Nodes[0].Name
+				}
+			}
+
+			discordConfig := discord.Config{
+				WebhookURL:            cfg.Discord.WebhookURL,
+				QSOInactiveSeconds:    cfg.Discord.QSOInactiveSeconds,
+				NodeIdleSeconds:       cfg.Discord.NodeIdleSeconds,
+				MinTalkersForQSO:      cfg.Discord.MinTalkersForQSO,
+				NotifyIndividualTalks: cfg.Discord.NotifyIndividualTalks,
+			}
+
+			discordNotifier = discord.NewNotifier(discordConfig, cfg.Nodes[0].NodeID, nodeName)
+			
+			// Set the node lookup service so Discord can enrich notifications with callsigns
+			discordNotifier.SetNodeLookup(nodeLookup)
+			
+			discordNotifier.Start()
+			logger.Info("Discord webhook notifier started",
+				zap.Int("node_id", cfg.Nodes[0].NodeID),
+				zap.String("node_name", nodeName),
+				zap.Int("qso_inactive_seconds", cfg.Discord.QSOInactiveSeconds),
+				zap.Int("node_idle_seconds", cfg.Discord.NodeIdleSeconds),
+				zap.Bool("notify_individual_talks", cfg.Discord.NotifyIndividualTalks),
+				zap.String("webhook_url_set", func() string {
+					if cfg.Discord.WebhookURL != "" {
+						return "yes (length: " + fmt.Sprintf("%d", len(cfg.Discord.WebhookURL)) + ")"
+					}
+					return "no"
+				}()),
+			)
+
+			// Hook the Discord notifier into the hub's talker event broadcast
+			hub.SetOnTalkerEvent(func(evt core.TalkerEvent) {
+				discordNotifier.ProcessTalkerEvent(evt)
+			})
+			
+			// Hook the Discord notifier into the hub's link TX event broadcast
+			// This is the primary source of per-node events
+			hub.SetOnLinkTxEvent(func(evt core.LinkTxEvent) {
+				discordNotifier.ProcessLinkTxEvent(evt)
+			})
+			logger.Info("Discord notifier hooks registered with hub")
+
+			// Register cleanup on shutdown
+			defer discordNotifier.Stop()
+		}
+		
 		go hub.BroadcastLoop(sm.Updates())
 		go hub.TalkerLoop(sm.TalkerEvents())
 		go hub.LinkUpdateLoop(sm.LinkUpdates())
@@ -458,6 +517,7 @@ func main() {
 		go hub.TalkerLogRefreshLoop(sm, 2*time.Minute)      // Periodic talker log refresh
 		go hub.SourceNodeKeyingLoop(sm.KeyingUpdates())     // Source node keying updates
 		go hub.SourceNodeKeyingEventLoop(sm.KeyingEvents()) // Session edge events (TX_START/TX_END)
+
 		conn := ami.NewConnector(cfg.AMIHost, cfg.AMIPort, cfg.AMIUser, cfg.AMIPassword, cfg.AMIEvents, cfg.AMIRetryInterval, cfg.AMIRetryMax)
 		// Pass AMI connector and StateManager to API layer
 		apiLayer.SetAMIConnector(conn)

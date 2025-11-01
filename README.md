@@ -8,7 +8,17 @@ Allstar Nexus is a full-stack application: a Go backend that serves APIs and an 
 - Backend: Go (HTTP API, gamification logic, repository layer)
 - Frontend: Vue 3 + Vite (single-page app in `/frontend`)
 - Single-binary distribution: frontend static files are built and embedded into the Go binary
- - Purpose: Dashboard / Admin for Allstar Link (ASL) 3 nodes; serves as a monitoring dashboard for the Who Cares site at https://asl3.whocaresradio.com
+- Purpose: Dashboard / Admin for Allstar Link (ASL) 3 nodes; serves as a monitoring dashboard for the Who Cares site at https://asl3.whocaresradio.com
+- **Discord Integration**: Real-time notifications for node activity and QSOs (see [DISCORD.md](DISCORD.md))
+
+## Features
+
+- **Real-time Monitoring**: WebSocket-based live updates of node activity
+- **Link Tracking**: Monitor connected nodes and transmission statistics
+- **Gamification System**: Optional XP/leveling system for operators (see configuration)
+- **Discord Webhooks**: Get notified in Discord when your node is active, QSOs start/end, and individual stations talk
+- **Multi-Node Support**: Monitor multiple Allstar nodes from a single dashboard
+- **Authentication**: Secure admin interface with role-based access control
 
 ## Quickstart
 
@@ -86,7 +96,25 @@ npm run test:e2e
 
 - `/frontend` — Vue 3 + Vite app (dev scripts, builds, tests)
 - `/backend` — Go packages: api, repository, models, gamification, middleware, tests
+- `/tools` — Standalone utilities (e.g., cgnat-whitelist generator)
 - `main.go` — application entrypoint; embeds/serves frontend
+
+## Utilities
+
+### CGNAT Whitelist Generator
+
+A standalone tool for generating AllStar node whitelist entries for CGNAT forwarding scenarios.
+
+Location: `tools/cgnat-whitelist/`
+
+See [tools/cgnat-whitelist/README.md](tools/cgnat-whitelist/README.md) for detailed usage instructions.
+
+Quick example:
+```bash
+cd tools/cgnat-whitelist
+go build -o cgnat-whitelist .
+./cgnat-whitelist -f callsigns.txt -o whitelist.txt -i 100.89.118.58
+```
 
 ## Notes
 

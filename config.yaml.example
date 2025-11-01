@@ -53,6 +53,15 @@ ami_retry_max: 60s
 disable_link_poller: false
 allow_anon_dashboard: true
 
+# Discord Webhook Notifications (Disabled by default)
+discord:
+  enabled: false
+  webhook_url: ""  # Set your Discord webhook URL here
+  qso_inactive_seconds: 120  # Declare QSO ended after 2 minutes of inactivity
+  node_idle_seconds: 300     # Declare node idle after 5 minutes of no activity
+  min_talkers_for_qso: 2     # Minimum unique talkers to declare QSO started
+  notify_individual_talks: true  # Notify when individual stations start talking
+
 # Gamification System Configuration (Disabled by default)
 gamification:
 	enabled: false
