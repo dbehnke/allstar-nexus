@@ -187,6 +187,3 @@ func TestDiscordNotifications_GroupTransition(t *testing.T) {
 	}
 }
 
-
-
-

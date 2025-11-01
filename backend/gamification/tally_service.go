@@ -606,7 +606,7 @@ func (s *TallyService) processLevelUps(profile *models.CallsignProfile) (bool, [
 				PreviousLevel: previousLevel,
 				NewLevel:      profile.Level,
 				PreviousGroup: originalGroup,
-				NewGroup:      nil, // Renown doesn't have grouping
+				NewGroup:      nil, // Renown resets level to 1, so group transitions not applicable here
 				RenownGained:  true,
 				RenownLevel:   profile.RenownLevel,
 			})

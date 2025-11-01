@@ -284,10 +284,10 @@ func main() {
 
 		// Initialize Discord notifier if enabled
 		var discordNotifier *gamification.DiscordNotifier
-		if cfg.Gamification.Discord.Enabled {
+		if cfg.Gamification.Discord.Enabled && cfg.Gamification.Discord.WebhookURL != "" {
 			discordNotifier = gamification.NewDiscordNotifier(
 				cfg.Gamification.Discord.WebhookURL,
-				cfg.Gamification.Discord.Enabled,
+				true, // Already checked enabled above
 				logger,
 			)
 			logger.Info("Discord notifications enabled for gamification")
