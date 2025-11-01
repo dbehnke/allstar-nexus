@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -29,15 +30,9 @@ func main() {
 	astdbURL := flag.String("astdb-url", "http://allmondb.allstarlink.org/", "URL to download astdb from")
 	flag.Parse()
 
-	// Validate required flags
-	if *callsignsFile == "" {
-		log.Fatal("Error: -f (callsigns file) is required")
-	}
-	if *outputFile == "" {
-		log.Fatal("Error: -o (output file) is required")
-	}
-	if *ipAddress == "" {
-		log.Fatal("Error: -i (IP address) is required")
+	// Validate IP address
+	if net.ParseIP(*ipAddress) == nil {
+		log.Fatalf("Error: Invalid IP address: %s", *ipAddress)
 	}
 
 	// Initialize logger
@@ -92,8 +87,14 @@ func main() {
 		logger.Info("Database is empty or needs initialization. Downloading astdb...")
 
 		// Download and import astdb to a temp location
-		astdbPath := "/tmp/cgnat-astdb.txt"
-		downloader := astdb.NewDownloader(*astdbURL, astdbPath, 24, logger)
+		astdbPath, err := os.CreateTemp("", "cgnat-astdb-*.txt")
+		if err != nil {
+			log.Fatalf("Failed to create temp file for astdb: %v", err)
+		}
+		astdbPath.Close()
+		defer os.Remove(astdbPath.Name())
+
+		downloader := astdb.NewDownloader(*astdbURL, astdbPath.Name(), 24, logger)
 		downloader.SetNodeInfoRepository(nodeInfoRepo)
 
 		if err := downloader.DownloadAndImport(); err != nil {
@@ -155,7 +156,8 @@ func main() {
 
 		// Write each node entry
 		for _, node := range nodes {
-			fmt.Fprintf(writer, "%-6d = radio@%s/%d,NONE\n", node.NodeID, *ipAddress, node.NodeID)
+			nodeIDStr := fmt.Sprintf("%-6d", node.NodeID)
+			fmt.Fprintf(writer, "%s = radio@%s/%d,NONE\n", nodeIDStr, *ipAddress, node.NodeID)
 			totalEntries++
 		}
 
