@@ -84,7 +84,7 @@ func TestTallyService_ProcessOnce(t *testing.T) {
 	}
 
 	// Build TallyService (logger nil-safe in code; if not, we'd stub)
-	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger())
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger(), gamification.DefaultLevelGroupings(), nil)
 
 	// Seed transmissions across a single callsign to exercise logic
 	callsign := "K9TEST"

@@ -29,6 +29,7 @@ type GamificationConfig struct {
 	LevelScale           []LevelScaleConfig       `mapstructure:"level_scale" yaml:"level_scale"`
 	LevelGroupings       []LevelGrouping          `mapstructure:"level_groupings" yaml:"level_groupings"`
 	Renown               RenownConfig             `mapstructure:"renown" yaml:"renown"`
+	Discord              DiscordConfig            `mapstructure:"discord" yaml:"discord"`
 }
 
 type RestedBonusConfig struct {
@@ -88,6 +89,12 @@ type LevelGrouping struct {
 type RenownConfig struct {
 	Enabled    bool `mapstructure:"enabled" yaml:"enabled"`
 	XPPerLevel int  `mapstructure:"xp_per_level" yaml:"xp_per_level"`
+}
+
+// DiscordConfig holds Discord webhook notification settings
+type DiscordConfig struct {
+	Enabled    bool   `mapstructure:"enabled" yaml:"enabled"`
+	WebhookURL string `mapstructure:"webhook_url" yaml:"webhook_url"`
 }
 
 // Config holds runtime configuration values.
@@ -166,6 +173,9 @@ func Load(configPath ...string) Config {
 	viper.SetDefault("gamification.xp_caps.weekly_cap_seconds", 7200)
 	viper.SetDefault("gamification.xp_caps.reset_hour", 0)
 	viper.SetDefault("gamification.xp_caps.week_starts", "sunday")
+	// Discord notifications
+	viper.SetDefault("gamification.discord.enabled", false)
+	viper.SetDefault("gamification.discord.webhook_url", "")
 	// Renown (prestige) defaults
 	// By default renown is enabled and each renown level requires 36,000 seconds (10 hours) of XP
 	viper.SetDefault("gamification.renown.enabled", true)

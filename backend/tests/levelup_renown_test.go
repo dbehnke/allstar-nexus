@@ -71,7 +71,7 @@ func TestLevelUp_CarryoverXP(t *testing.T) {
 	}
 
 	cfg := &gamification.Config{CapsEnabled: false, RestedEnabled: false, DREnabled: false, KerchunkEnabled: false}
-	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger())
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger(), gamification.DefaultLevelGroupings(), nil)
 	if err := ts.Start(); err != nil {
 		t.Fatalf("start tally: %v", err)
 	}
@@ -123,7 +123,7 @@ func TestRenownTransition_Level59To60(t *testing.T) {
 	}
 
 	cfg := &gamification.Config{CapsEnabled: false, RestedEnabled: false, DREnabled: false, KerchunkEnabled: false}
-	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger())
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger(), gamification.DefaultLevelGroupings(), nil)
 	if err := ts.Start(); err != nil {
 		t.Fatalf("start tally: %v", err)
 	}

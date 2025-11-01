@@ -59,7 +59,7 @@ func TestLevelingSpeed_NoMultipliers(t *testing.T) {
 		KerchunkEnabled: false,
 		RenownEnabled:   false,
 	}
-	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger())
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger(), gamification.DefaultLevelGroupings(), nil)
 	if err := ts.Start(); err != nil {
 		t.Fatalf("start tally: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestLevelingSpeed_WithRestedBonus(t *testing.T) {
 		KerchunkEnabled:            false,
 		RenownEnabled:              false,
 	}
-	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger())
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger(), gamification.DefaultLevelGroupings(), nil)
 	if err := ts.Start(); err != nil {
 		t.Fatalf("start tally: %v", err)
 	}
