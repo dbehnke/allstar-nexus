@@ -29,6 +29,10 @@ type Hub struct {
 	triggerPoll func()
 	pollMu      sync.Mutex
 	pollTimer   *time.Timer
+	// Optional hook to forward talker events (e.g., to Discord notifier)
+	onTalkerEvent func(core.TalkerEvent)
+	// Optional hook to forward link TX events (e.g., to Discord notifier)
+	onLinkTxEvent func(core.LinkTxEvent)
 }
 
 type clientInfo struct {
@@ -44,6 +48,20 @@ func (h *Hub) SetTriggerPoll(fn func()) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.triggerPoll = fn
+}
+
+// SetOnTalkerEvent sets an optional callback for talker events (e.g., Discord notifier)
+func (h *Hub) SetOnTalkerEvent(fn func(core.TalkerEvent)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onTalkerEvent = fn
+}
+
+// SetOnLinkTxEvent sets an optional callback for link TX events (e.g., Discord notifier)
+func (h *Hub) SetOnLinkTxEvent(fn func(core.LinkTxEvent)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onLinkTxEvent = fn
 }
 
 // TriggerPollDebounced requests a poll after a short delay (2s). Subsequent
@@ -187,13 +205,23 @@ func (h *Hub) BroadcastLoop(updates <-chan core.NodeState) {
 // TalkerLoop broadcasts talker events.
 func (h *Hub) TalkerLoop(events <-chan core.TalkerEvent) {
 	for evt := range events {
+		log.Printf("[HUB DEBUG] Received talker event: kind=%s node=%d callsign=%s", evt.Kind, evt.Node, evt.Callsign)
+		
+		// Forward to optional hook (e.g., Discord notifier)
+		if h.onTalkerEvent != nil {
+			log.Printf("[HUB DEBUG] Forwarding event to onTalkerEvent hook")
+			h.onTalkerEvent(evt)
+		} else {
+			log.Printf("[HUB DEBUG] No onTalkerEvent hook registered")
+		}
+		
 		env := messageEnvelope{MessageType: "TALKER_EVENT", Data: evt, Timestamp: time.Now().UnixMilli()}
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
 		for c := range h.clients {
 			go func(conn *websocket.Conn, p []byte) {
-			_ = conn.Write(context.Background(), websocket.MessageText, p)
-		}(c, payload)
+				_ = conn.Write(context.Background(), websocket.MessageText, p)
+			}(c, payload)
 		}
 		h.mu.RUnlock()
 	}
@@ -291,6 +319,16 @@ func (h *Hub) LinkTxBatchLoop(events <-chan core.LinkTxEvent, window time.Durati
 				flush()
 				return
 			}
+			
+			// Forward to optional hook (e.g., Discord notifier) before buffering
+			h.mu.RLock()
+			hookFn := h.onLinkTxEvent
+			h.mu.RUnlock()
+			if hookFn != nil {
+				log.Printf("[HUB DEBUG] Forwarding LinkTxEvent to hook: kind=%s node=%d", evt.Kind, evt.Node)
+				hookFn(evt)
+			}
+			
 			buf = append(buf, evt)
 			if len(buf) == 1 {
 				if !timer.Stop() {
