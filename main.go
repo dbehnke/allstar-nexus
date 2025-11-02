@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dbehnke/allstar-nexus/backend/admin"
 	"github.com/dbehnke/allstar-nexus/backend/api"
 	"github.com/dbehnke/allstar-nexus/backend/auth"
 	"github.com/dbehnke/allstar-nexus/backend/config"
@@ -110,6 +111,7 @@ func main() {
 		&models.LevelConfig{},
 		&models.XPActivityLog{},
 		&models.TallyState{},
+		&models.AuditLog{},
 	); err != nil {
 		log.Fatalf("GORM auto-migrate error: %v", err)
 	}
@@ -170,9 +172,35 @@ func main() {
 
 	authMW := middleware.Auth(cfg.JWTSecret, userLoader)
 	adminMW := middleware.RequireRole("admin", "superadmin")
+	superadminMW := middleware.RequireSuperAdmin()
 
 	mux.Handle("/api/me", authMW(http.HandlerFunc(apiLayer.Me)))
 	mux.Handle("/api/admin/summary", authMW(adminMW(http.HandlerFunc(apiLayer.AdminSummary))))
+
+	// Initialize admin API
+	auditLogger := admin.NewAuditLogger(gormDB)
+	adminAPI := api.NewAdminAPI(auditLogger, userRepo)
+
+	// Admin routes (require superadmin role)
+	mux.Handle("/api/admin/audit", authMW(superadminMW(http.HandlerFunc(adminAPI.GetAuditLogs))))
+	mux.Handle("/api/admin/audit/recent", authMW(superadminMW(http.HandlerFunc(adminAPI.GetRecentAuditLogs))))
+	mux.Handle("/api/admin/users", authMW(superadminMW(http.HandlerFunc(adminAPI.ListUsers))))
+	mux.HandleFunc("/api/admin/users/", func(w http.ResponseWriter, r *http.Request) {
+		// Route based on method
+		authMW(superadminMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPost:
+				adminAPI.CreateUser(w, r)
+			case http.MethodPut:
+				adminAPI.UpdateUser(w, r)
+			case http.MethodDelete:
+				adminAPI.DeleteUser(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))).ServeHTTP(w, r)
+	})
+	mux.Handle("/api/admin/system/status", authMW(superadminMW(http.HandlerFunc(adminAPI.GetSystemStatus))))
 
 	// Node lookup and talker log APIs - can be public or require auth based on config
 	if cfg.AllowAnonDashboard {

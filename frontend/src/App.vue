@@ -22,6 +22,7 @@
         <router-link to="/network-map" class="nav-link" @click="mobileMenuOpen = false">Network Map</router-link>
         <router-link to="/rpt-stats" class="nav-link" v-if="authStore.isAuthenticated" @click="mobileMenuOpen = false">RPT Stats</router-link>
         <router-link to="/voter" class="nav-link" v-if="authStore.isAuthenticated" @click="mobileMenuOpen = false">Voter</router-link>
+        <router-link to="/admin" class="nav-link admin-link" v-if="authStore.role === 'superadmin'" @click="mobileMenuOpen = false">Admin</router-link>
       </div>
 
       <div class="navbar-user" :class="{ 'mobile-open': mobileMenuOpen }">
@@ -344,6 +345,22 @@ body {
 .nav-link.router-link-active {
   background: var(--accent-hover);
   color: #fff;
+}
+
+.nav-link.admin-link {
+  border: 1px solid var(--warning);
+  color: var(--warning);
+}
+
+.nav-link.admin-link:hover {
+  background: color-mix(in srgb, var(--warning) 20%, var(--bg-secondary));
+  color: var(--warning);
+}
+
+.nav-link.admin-link.router-link-active {
+  background: var(--warning);
+  color: #000;
+  border-color: var(--warning);
 }
 
 .navbar-user {

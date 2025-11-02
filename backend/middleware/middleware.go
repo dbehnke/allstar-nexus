@@ -131,6 +131,21 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	}
 }
 
+// RequireSuperAdmin is a convenience middleware that requires superadmin role
+func RequireSuperAdmin() func(http.Handler) http.Handler {
+	return RequireRole("superadmin")
+}
+
+// RequireAdminOrSuperAdmin is a convenience middleware that requires admin or superadmin role
+func RequireAdminOrSuperAdmin() func(http.Handler) http.Handler {
+	return RequireRole("admin", "superadmin")
+}
+
+// GetClientIP extracts the client IP address from the request
+func GetClientIP(r *http.Request) string {
+	return clientIP(r)
+}
+
 // writeJSONError returns standardized error envelope.
 func writeJSONError(w http.ResponseWriter, status int, code, msg string) {
 	w.Header().Set("Content-Type", "application/json")

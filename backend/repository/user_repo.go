@@ -80,3 +80,20 @@ type SafeUser struct {
 	Email string
 	Role  string
 }
+
+// GetAll returns all users from the database
+func (r *UserRepo) GetAll(ctx context.Context) ([]models.User, error) {
+	var users []models.User
+	err := r.DB.WithContext(ctx).Find(&users).Error
+	return users, err
+}
+
+// Update updates user fields by ID
+func (r *UserRepo) Update(ctx context.Context, id int64, updates map[string]interface{}) error {
+	return r.DB.WithContext(ctx).Model(&models.User{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// Delete removes a user by ID
+func (r *UserRepo) Delete(ctx context.Context, id int64) error {
+	return r.DB.WithContext(ctx).Delete(&models.User{}, id).Error
+}
