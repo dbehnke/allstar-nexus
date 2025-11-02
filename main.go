@@ -87,6 +87,28 @@ func main() {
 		return
 	}
 
+	// Optional subcommand: `db backfill-epochs` to populate start_unix/end_unix from timestamps
+	if len(os.Args) >= 3 && os.Args[1] == "db" && os.Args[2] == "backfill-epochs" {
+		// Load config to resolve DB path (allow --config override or env)
+		cfg := config.Load(*configFile)
+		// Open DB
+		gormDB, err := gorm.Open(sqlite.New(sqlite.Config{
+			DriverName: "sqlite",
+			DSN:        cfg.DBPath,
+		}), &gorm.Config{})
+		if err != nil {
+			log.Fatalf("GORM database open error: %v", err)
+		}
+		// Basic logger to stdout
+		logger, _ := zap.NewProduction()
+		defer func() { _ = logger.Sync() }()
+		if err := tools.BackfillTransmissionEpochs(gormDB, logger); err != nil {
+			log.Fatalf("epoch backfill failed: %v", err)
+		}
+		log.Printf("epoch backfill completed successfully for %s", cfg.DBPath)
+		return
+	}
+
 	// Load configuration
 	// Fail-fast: validate YAML and basic structure before full startup unless --force is provided.
 	if err := config.Validate(*configFile); err != nil {
