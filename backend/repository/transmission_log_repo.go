@@ -50,28 +50,28 @@ func (r *TransmissionLogRepository) LogTransmission(sourceID, adjacentLinkID int
 // GetRecentLogs returns the N most recent transmission logs
 func (r *TransmissionLogRepository) GetRecentLogs(limit int) ([]models.TransmissionLog, error) {
 	var logs []models.TransmissionLog
-	err := r.db.Order("timestamp_start DESC").Limit(limit).Find(&logs).Error
+	err := r.db.Order("start_unix DESC").Limit(limit).Find(&logs).Error
 	return logs, err
 }
 
 // GetLogsByCallsign returns transmission logs for a specific callsign
 func (r *TransmissionLogRepository) GetLogsByCallsign(callsign string, limit int) ([]models.TransmissionLog, error) {
 	var logs []models.TransmissionLog
-	err := r.db.Where("callsign = ?", callsign).Order("timestamp_start DESC").Limit(limit).Find(&logs).Error
+	err := r.db.Where("callsign = ?", callsign).Order("start_unix DESC").Limit(limit).Find(&logs).Error
 	return logs, err
 }
 
 // GetLogsBySourceNode returns transmission logs for a specific source node
 func (r *TransmissionLogRepository) GetLogsBySourceNode(sourceID int, limit int) ([]models.TransmissionLog, error) {
 	var logs []models.TransmissionLog
-	err := r.db.Where("source_id = ?", sourceID).Order("timestamp_start DESC").Limit(limit).Find(&logs).Error
+	err := r.db.Where("source_id = ?", sourceID).Order("start_unix DESC").Limit(limit).Find(&logs).Error
 	return logs, err
 }
 
 // GetLogsByAdjacentNode returns transmission logs for a specific adjacent node
 func (r *TransmissionLogRepository) GetLogsByAdjacentNode(adjacentID int, limit int) ([]models.TransmissionLog, error) {
 	var logs []models.TransmissionLog
-	err := r.db.Where("adjacent_link_id = ?", adjacentID).Order("timestamp_start DESC").Limit(limit).Find(&logs).Error
+	err := r.db.Where("adjacent_link_id = ?", adjacentID).Order("start_unix DESC").Limit(limit).Find(&logs).Error
 	return logs, err
 }
 
@@ -79,7 +79,7 @@ func (r *TransmissionLogRepository) GetLogsByAdjacentNode(adjacentID int, limit 
 func (r *TransmissionLogRepository) GetLogsInTimeRange(start, end time.Time, limit int) ([]models.TransmissionLog, error) {
 	var logs []models.TransmissionLog
 	err := r.db.Where("start_unix >= ? AND start_unix <= ?", start.Unix(), end.Unix()).
-		Order("timestamp_start DESC").
+		Order("start_unix DESC").
 		Limit(limit).
 		Find(&logs).Error
 	return logs, err
@@ -88,7 +88,7 @@ func (r *TransmissionLogRepository) GetLogsInTimeRange(start, end time.Time, lim
 // GetLogsBetween returns transmission logs within the specified time range, grouped by callsign
 func (r *TransmissionLogRepository) GetLogsBetween(from, to time.Time) (map[string][]models.TransmissionLog, error) {
 	var logs []models.TransmissionLog
-	err := r.db.Where("start_unix >= ? AND start_unix < ?", from.Unix(), to.Unix()).Order("timestamp_start").Find(&logs).Error
+	err := r.db.Where("start_unix >= ? AND start_unix < ?", from.Unix(), to.Unix()).Order("start_unix").Find(&logs).Error
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (r *TransmissionLogRepository) DeleteOldLogs(before time.Time) (int64, erro
 func (r *TransmissionLogRepository) GetLogsSince(since time.Time) (map[string][]models.TransmissionLog, error) {
 	var logs []models.TransmissionLog
 	err := r.db.Where("start_unix >= ?", since.Unix()).
-		Order("callsign ASC, timestamp_start ASC").
+		Order("callsign ASC, start_unix ASC").
 		Find(&logs).Error
 
 	if err != nil {
