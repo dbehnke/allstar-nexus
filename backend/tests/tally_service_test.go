@@ -122,7 +122,7 @@ func TestTallyService_ProcessOnce(t *testing.T) {
 		t.Fatalf("process tally: %v", err)
 	}
 
-	// Reload profile and check XP bounded by daily cap (<= 120)
+	// Reload profile and check that the cap was enforced based on seconds (not XP)
 	prof, err = profileRepo.GetByCallsign(context.Background(), callsign)
 	if err != nil {
 		t.Fatalf("reload profile: %v", err)
@@ -130,8 +130,14 @@ func TestTallyService_ProcessOnce(t *testing.T) {
 	if prof.ExperiencePoints <= 0 {
 		t.Fatalf("expected some XP to be awarded, got %d", prof.ExperiencePoints)
 	}
-	if prof.ExperiencePoints > cfg.DailyCapSeconds {
-		t.Fatalf("awarded XP %d exceeds daily cap %d", prof.ExperiencePoints, cfg.DailyCapSeconds)
+	// The cap is on seconds, not XP. With multipliers (rested, DR, kerchunk),
+	// XP can be higher than the cap value. Check that raw seconds are capped.
+	dailySeconds, err := activityRepo.GetDailySeconds(context.Background(), callsign)
+	if err != nil {
+		t.Fatalf("get daily seconds: %v", err)
+	}
+	if dailySeconds > cfg.DailyCapSeconds {
+		t.Fatalf("daily seconds %d exceeds cap %d", dailySeconds, cfg.DailyCapSeconds)
 	}
 
 	// Activity logs should exist reflecting capped awards

@@ -63,6 +63,32 @@ func (r *XPActivityRepo) GetDailyXP(ctx context.Context, callsign string) (int, 
 	return int(totalXP), err
 }
 
+// GetWeeklySeconds returns total talk time seconds (raw_xp) for a callsign in current week
+// Used for XP cap calculations (caps are based on seconds, not XP)
+func (r *XPActivityRepo) GetWeeklySeconds(ctx context.Context, callsign string) (int, error) {
+	startOfWeek := getStartOfWeek()
+	var totalSeconds int64
+	err := r.db.WithContext(ctx).
+		Model(&models.XPActivityLog{}).
+		Where("callsign = ? AND hour_bucket >= ?", callsign, startOfWeek).
+		Select("COALESCE(SUM(raw_xp), 0)").
+		Scan(&totalSeconds).Error
+	return int(totalSeconds), err
+}
+
+// GetDailySeconds returns total talk time seconds (raw_xp) for a callsign today
+// Used for XP cap calculations (caps are based on seconds, not XP)
+func (r *XPActivityRepo) GetDailySeconds(ctx context.Context, callsign string) (int, error) {
+	startOfDay := time.Now().UTC().Truncate(24 * time.Hour)
+	var totalSeconds int64
+	err := r.db.WithContext(ctx).
+		Model(&models.XPActivityLog{}).
+		Where("callsign = ? AND hour_bucket >= ?", callsign, startOfDay).
+		Select("COALESCE(SUM(raw_xp), 0)").
+		Scan(&totalSeconds).Error
+	return int(totalSeconds), err
+}
+
 // GetLast24Hours returns all activity logs for a callsign in last 24 hours
 // Used for calculating diminishing returns
 func (r *XPActivityRepo) GetLast24Hours(ctx context.Context, callsign string) ([]models.XPActivityLog, error) {
