@@ -624,7 +624,7 @@ func (sm *StateManager) apply(m ami.Message) {
 		now := time.Now()
 		sm.state.BootedAt = &now
 	}
-	sm.state.UpdatedAt = time.Now()
+	sm.state.UpdatedAt = time.Now().UTC()
 	sm.state.Heartbeat = time.Now().UnixMilli()
 
 	// Process keying tracker timers on every event to ensure unkey timers expire properly
@@ -770,7 +770,7 @@ func (sm *StateManager) SeedLinkStats(list []LinkInfo) {
 		ids = append(ids, l.Node)
 	}
 	sm.state.Links = ids
-	sm.state.UpdatedAt = time.Now()
+	sm.state.UpdatedAt = time.Now().UTC()
 }
 
 // SetVersion updates the version string that will be reported in STATUS_UPDATE snapshots.
