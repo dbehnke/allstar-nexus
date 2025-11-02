@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	cfgpkg "github.com/dbehnke/allstar-nexus/backend/config"
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 	"go.uber.org/zap"
@@ -58,11 +59,13 @@ type TallyService struct {
 	stateRepo         *repository.TallyStateRepo
 	config            *Config
 	levelRequirements map[int]int // level -> xp_required
+	levelGroupings    []cfgpkg.LevelGrouping
 	tallyInterval     time.Duration
 	ticker            *time.Ticker
 	stopChan          chan struct{}
 	lastTallyTime     time.Time
 	logger            *zap.Logger
+	discordNotifier   *DiscordNotifier
 	// Optional hook invoked after each tally completes
 	OnTallyComplete func(summary TallySummary)
 }
@@ -85,6 +88,8 @@ func NewTallyService(
 	config *Config,
 	interval time.Duration,
 	logger *zap.Logger,
+	levelGroupings []cfgpkg.LevelGrouping,
+	discordNotifier *DiscordNotifier,
 ) *TallyService {
 	return &TallyService{
 		db:              db,
@@ -98,6 +103,8 @@ func NewTallyService(
 		stopChan:        make(chan struct{}),
 		lastTallyTime:   time.Now().Add(-interval), // Process logs from last interval on startup
 		logger:          logger,
+		levelGroupings:  levelGroupings,
+		discordNotifier: discordNotifier,
 	}
 }
 
@@ -256,9 +263,38 @@ func (s *TallyService) ProcessTally() error {
 				profile.LastTallyAt = time.Now().UTC()
 			}
 
-			leveledUp := s.processLevelUps(profile)
+			leveledUp, levelUpEvents := s.processLevelUps(profile)
 			if leveledUp {
 				s.logger.Info("Level up!", zap.String("callsign", profile.Callsign), zap.Int("level", profile.Level), zap.Int("renown", profile.RenownLevel))
+
+				// Send Discord notifications for level-up events
+				for _, event := range levelUpEvents {
+					if event.RenownGained {
+						// Notify renown gained
+						if s.discordNotifier != nil {
+							s.discordNotifier.NotifyRenownGained(event.Callsign, event.RenownLevel)
+						}
+					} else {
+						// Notify level up
+						if s.discordNotifier != nil {
+							s.discordNotifier.NotifyLevelUp(event.Callsign, event.NewLevel)
+						}
+
+						// Check if group changed
+						if event.NewGroup != nil && event.PreviousGroup != nil &&
+							event.NewGroup.Title != event.PreviousGroup.Title {
+							// Notify group change
+							if s.discordNotifier != nil {
+								s.discordNotifier.NotifyGroupChange(event.Callsign, event.NewGroup.Title)
+							}
+						} else if event.NewGroup != nil && event.PreviousGroup == nil {
+							// First time entering a group
+							if s.discordNotifier != nil {
+								s.discordNotifier.NotifyGroupChange(event.Callsign, event.NewGroup.Title)
+							}
+						}
+					}
+				}
 			}
 
 			if err := s.profileRepo.Upsert(ctx, profile); err != nil {
@@ -499,9 +535,25 @@ func (s *TallyService) calculateKerchunkPenalty(previousLogs []models.Transmissi
 	}
 }
 
+// LevelUpInfo contains details about level-up events
+type LevelUpInfo struct {
+	Callsign      string
+	PreviousLevel int
+	NewLevel      int
+	PreviousGroup *GroupingInfo
+	NewGroup      *GroupingInfo
+	RenownGained  bool
+	RenownLevel   int
+}
+
 // processLevelUps handles leveling up (including renown/prestige)
-func (s *TallyService) processLevelUps(profile *models.CallsignProfile) bool {
+func (s *TallyService) processLevelUps(profile *models.CallsignProfile) (bool, []LevelUpInfo) {
 	leveledUp := false
+	var levelUpEvents []LevelUpInfo
+
+	// Track the original level and grouping before processing
+	originalLevel := profile.Level
+	originalGroup := GetGroupingForLevel(originalLevel, s.levelGroupings)
 
 	// Loop to handle multiple level-ups at once
 	for {
@@ -528,6 +580,7 @@ func (s *TallyService) processLevelUps(profile *models.CallsignProfile) bool {
 		}
 
 		// Level up!
+		previousLevel := profile.Level
 		profile.ExperiencePoints -= requiredXP
 		profile.Level++
 		leveledUp = true
@@ -546,9 +599,36 @@ func (s *TallyService) processLevelUps(profile *models.CallsignProfile) bool {
 				zap.Int("renown", profile.RenownLevel),
 				zap.Int("carryover_xp", profile.ExperiencePoints),
 			)
+
+			// Record renown event
+			levelUpEvents = append(levelUpEvents, LevelUpInfo{
+				Callsign:      profile.Callsign,
+				PreviousLevel: previousLevel,
+				NewLevel:      profile.Level,
+				PreviousGroup: originalGroup,
+				NewGroup:      nil, // Renown resets level to 1, so group transitions not applicable here
+				RenownGained:  true,
+				RenownLevel:   profile.RenownLevel,
+			})
+
 			break // Stop after renown to avoid infinite loop
 		}
+
+		// Record regular level-up event
+		newGroup := GetGroupingForLevel(profile.Level, s.levelGroupings)
+
+		levelUpEvents = append(levelUpEvents, LevelUpInfo{
+			Callsign:      profile.Callsign,
+			PreviousLevel: previousLevel,
+			NewLevel:      profile.Level,
+			PreviousGroup: originalGroup,
+			NewGroup:      newGroup,
+			RenownGained:  false,
+		})
+
+		// Update originalGroup for next iteration
+		originalGroup = newGroup
 	}
 
-	return leveledUp
+	return leveledUp, levelUpEvents
 }

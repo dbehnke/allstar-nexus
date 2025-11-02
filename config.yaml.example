@@ -145,3 +145,9 @@ gamification:
 	# renown:
 	#   enabled: true
 	#   xp_per_level: 36000
+
+	# Discord Notifications
+	# Send notifications to Discord when users level up or enter new level groupings
+	# discord:
+	#   enabled: false
+	#   webhook_url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_URL_HERE"
