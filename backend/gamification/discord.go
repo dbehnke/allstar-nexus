@@ -51,7 +51,7 @@ func (d *DiscordNotifier) NotifyGroupChange(callsign string, groupTitle string) 
 		return
 	}
 
-	message := fmt.Sprintf("⭐ **%s** is now **%s**!", callsign, groupTitle)
+	message := fmt.Sprintf("🎖️ **%s** has reached new rank of **%s**!", callsign, groupTitle)
 	d.sendNotification(message)
 }
 

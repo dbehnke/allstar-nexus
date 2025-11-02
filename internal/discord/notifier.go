@@ -290,6 +290,9 @@ func (n *Notifier) notifyStateChange(oldState, newState ActivityState) {
 		if oldState == StateQSO {
 			// QSO ended first, then idle
 			n.sendNotification("👋 A QSO has ended!")
+			// Add a small delay before sending the second notification to ensure they appear
+			// as separate messages with distinct timestamps in Discord
+			time.Sleep(2 * time.Second)
 			n.sendNotification(fmt.Sprintf("💤 Node %s is now idle.", n.nodeName))
 		} else if oldState == StateActive {
 			// Just went from active to idle (no QSO)
