@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.0](https://github.com/dbehnke/allstar-nexus/compare/v0.9.0...v0.10.0) (2025-11-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* Requires database migration on startup. Existing databases will be automatically upgraded with new columns and indexes.
+
+### Bug Fixes
+
+* timestamp filtering with epoch-based queries ([#58](https://github.com/dbehnke/allstar-nexus/issues/58)) ([2d5aa0b](https://github.com/dbehnke/allstar-nexus/commit/2d5aa0bcbc7f408c9ccaad6aab167f8ef5b923bf))
+
 ## [0.9.0](https://github.com/dbehnke/allstar-nexus/compare/v0.8.0...v0.9.0) (2025-11-02)
 
 
