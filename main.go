@@ -21,6 +21,7 @@ import (
 	"github.com/dbehnke/allstar-nexus/backend/models"
 	"github.com/dbehnke/allstar-nexus/backend/repository"
 	"github.com/dbehnke/allstar-nexus/backend/server"
+	"github.com/dbehnke/allstar-nexus/backend/tools"
 	"github.com/dbehnke/allstar-nexus/internal/ami"
 	"github.com/dbehnke/allstar-nexus/internal/astdb"
 	"github.com/dbehnke/allstar-nexus/internal/core"
@@ -53,7 +54,7 @@ func main() {
 	}
 	flag.Parse()
 
-	// Handle optional subcommands: currently only `config validate`
+	// Handle optional subcommands: `config validate` and `db backfill-timestamps`
 	// We deliberately check os.Args to avoid interfering with standard flag parsing for the server.
 	if len(os.Args) >= 3 && os.Args[1] == "config" && os.Args[2] == "validate" {
 		// Allow --config to override the path; if not provided, Validate will search defaults.
@@ -62,6 +63,49 @@ func main() {
 			os.Exit(2)
 		}
 		log.Printf("config validation: PASS")
+		return
+	}
+
+	if len(os.Args) >= 3 && os.Args[1] == "db" && os.Args[2] == "backfill-timestamps" {
+		// Load config to resolve DB path (allow --config override or env)
+		cfg := config.Load(*configFile)
+		// Open DB
+		gormDB, err := gorm.Open(sqlite.New(sqlite.Config{
+			DriverName: "sqlite",
+			DSN:        cfg.DBPath,
+		}), &gorm.Config{})
+		if err != nil {
+			log.Fatalf("GORM database open error: %v", err)
+		}
+		// Basic logger to stdout
+		logger, _ := zap.NewProduction()
+		defer func() { _ = logger.Sync() }()
+		if err := tools.BackfillTransmissionLogTimestamps(cfg.DBPath, gormDB, logger); err != nil {
+			log.Fatalf("backfill failed: %v", err)
+		}
+		log.Printf("timestamp backfill completed successfully for %s", cfg.DBPath)
+		return
+	}
+
+	// Optional subcommand: `db backfill-epochs` to populate start_unix/end_unix from timestamps
+	if len(os.Args) >= 3 && os.Args[1] == "db" && os.Args[2] == "backfill-epochs" {
+		// Load config to resolve DB path (allow --config override or env)
+		cfg := config.Load(*configFile)
+		// Open DB
+		gormDB, err := gorm.Open(sqlite.New(sqlite.Config{
+			DriverName: "sqlite",
+			DSN:        cfg.DBPath,
+		}), &gorm.Config{})
+		if err != nil {
+			log.Fatalf("GORM database open error: %v", err)
+		}
+		// Basic logger to stdout
+		logger, _ := zap.NewProduction()
+		defer func() { _ = logger.Sync() }()
+		if err := tools.BackfillTransmissionEpochs(gormDB, logger); err != nil {
+			log.Fatalf("epoch backfill failed: %v", err)
+		}
+		log.Printf("epoch backfill completed successfully for %s", cfg.DBPath)
 		return
 	}
 
@@ -114,6 +158,11 @@ func main() {
 		log.Fatalf("GORM auto-migrate error: %v", err)
 	}
 	logger.Info("GORM database initialized successfully")
+
+	// Ensure epoch columns are populated for efficient time filtering
+	if err := tools.BackfillTransmissionEpochs(gormDB, logger); err != nil {
+		logger.Warn("failed to backfill epoch columns", zap.Error(err))
+	}
 
 	// Repository variables (declare so closures later can access)
 	var txLogRepo *repository.TransmissionLogRepository
@@ -451,7 +500,7 @@ func main() {
 		if len(cfg.Nodes) > 0 {
 			sm.SeedKeyingTrackerFromLinks(cfg.Nodes[0].NodeID)
 		}
-		
+
 		// Initialize Discord notifier if enabled (before starting hub loops)
 		var discordNotifier *discord.Notifier
 		if cfg.Discord.Enabled {
@@ -473,10 +522,10 @@ func main() {
 			}
 
 			discordNotifier = discord.NewNotifier(discordConfig, cfg.Nodes[0].NodeID, nodeName)
-			
+
 			// Set the node lookup service so Discord can enrich notifications with callsigns
 			discordNotifier.SetNodeLookup(nodeLookup)
-			
+
 			discordNotifier.Start()
 			logger.Info("Discord webhook notifier started",
 				zap.Int("node_id", cfg.Nodes[0].NodeID),
@@ -496,7 +545,7 @@ func main() {
 			hub.SetOnTalkerEvent(func(evt core.TalkerEvent) {
 				discordNotifier.ProcessTalkerEvent(evt)
 			})
-			
+
 			// Hook the Discord notifier into the hub's link TX event broadcast
 			// This is the primary source of per-node events
 			hub.SetOnLinkTxEvent(func(evt core.LinkTxEvent) {
@@ -507,7 +556,7 @@ func main() {
 			// Register cleanup on shutdown
 			defer discordNotifier.Stop()
 		}
-		
+
 		go hub.BroadcastLoop(sm.Updates())
 		go hub.TalkerLoop(sm.TalkerEvents())
 		go hub.LinkUpdateLoop(sm.LinkUpdates())

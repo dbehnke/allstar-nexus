@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"fmt"
+	"database/sql"
 	"time"
 
 	"github.com/dbehnke/allstar-nexus/backend/models"
@@ -20,6 +20,15 @@ func NewTransmissionLogRepository(db *gorm.DB) *TransmissionLogRepository {
 
 // Create inserts a new transmission log entry
 func (r *TransmissionLogRepository) Create(log *models.TransmissionLog) error {
+	// Normalize timestamps to UTC and strip monotonic component to avoid SQLite formatting issues
+	log.TimestampStart = log.TimestampStart.UTC().Round(0)
+	log.TimestampEnd = log.TimestampEnd.UTC().Round(0)
+	if log.StartUnix == 0 && !log.TimestampStart.IsZero() {
+		log.StartUnix = log.TimestampStart.Unix()
+	}
+	if log.EndUnix == 0 && !log.TimestampEnd.IsZero() {
+		log.EndUnix = log.TimestampEnd.Unix()
+	}
 	return r.db.Create(log).Error
 }
 
@@ -31,6 +40,8 @@ func (r *TransmissionLogRepository) LogTransmission(sourceID, adjacentLinkID int
 		Callsign:        callsign,
 		TimestampStart:  start,
 		TimestampEnd:    end,
+		StartUnix:       start.Unix(),
+		EndUnix:         end.Unix(),
 		DurationSeconds: durationSec,
 	}
 	return r.Create(log)
@@ -67,7 +78,7 @@ func (r *TransmissionLogRepository) GetLogsByAdjacentNode(adjacentID int, limit 
 // GetLogsInTimeRange returns logs within a specific time range
 func (r *TransmissionLogRepository) GetLogsInTimeRange(start, end time.Time, limit int) ([]models.TransmissionLog, error) {
 	var logs []models.TransmissionLog
-	err := r.db.Where("timestamp_start >= ? AND timestamp_start <= ?", start, end).
+	err := r.db.Where("start_unix >= ? AND start_unix <= ?", start.Unix(), end.Unix()).
 		Order("timestamp_start DESC").
 		Limit(limit).
 		Find(&logs).Error
@@ -77,7 +88,7 @@ func (r *TransmissionLogRepository) GetLogsInTimeRange(start, end time.Time, lim
 // GetLogsBetween returns transmission logs within the specified time range, grouped by callsign
 func (r *TransmissionLogRepository) GetLogsBetween(from, to time.Time) (map[string][]models.TransmissionLog, error) {
 	var logs []models.TransmissionLog
-	err := r.db.Where("datetime(timestamp_start) >= datetime(?) AND datetime(timestamp_start) < datetime(?)", from, to).Order("timestamp_start").Find(&logs).Error
+	err := r.db.Where("start_unix >= ? AND start_unix < ?", from.Unix(), to.Unix()).Order("timestamp_start").Find(&logs).Error
 	if err != nil {
 		return nil, err
 	}
@@ -91,32 +102,15 @@ func (r *TransmissionLogRepository) GetLogsBetween(from, to time.Time) (map[stri
 // GetOldestLogTime returns the earliest timestamp_start in the transmission_logs table.
 // If there are no logs, it returns a zero time and nil error.
 func (r *TransmissionLogRepository) GetOldestLogTime() (time.Time, error) {
-	// SQLite often returns datetime as TEXT; scan into string and parse flexibly
-	type row struct {
-		TS string `gorm:"column:ts"`
-	}
+	type row struct{ U sql.NullInt64 }
 	var out row
-	if err := r.db.Model(&models.TransmissionLog{}).
-		Select("MIN(timestamp_start) as ts").
-		Scan(&out).Error; err != nil {
+	if err := r.db.Model(&models.TransmissionLog{}).Select("MIN(start_unix) as u").Scan(&out).Error; err != nil {
 		return time.Time{}, err
 	}
-	if out.TS == "" {
+	if !out.U.Valid || out.U.Int64 == 0 {
 		return time.Time{}, nil
 	}
-	// Try multiple layouts commonly emitted by SQLite/GORM
-	layouts := []string{
-		time.RFC3339Nano,
-		"2006-01-02 15:04:05.999999999Z07:00",
-		"2006-01-02 15:04:05.999999999",
-		"2006-01-02 15:04:05",
-	}
-	for _, layout := range layouts {
-		if t, err := time.Parse(layout, out.TS); err == nil {
-			return t.UTC(), nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("unrecognized time format for oldest timestamp: %q", out.TS)
+	return time.Unix(out.U.Int64, 0).UTC(), nil
 }
 
 // GetTotalTransmissionTime returns the total transmission time for a callsign
@@ -131,14 +125,14 @@ func (r *TransmissionLogRepository) GetTotalTransmissionTime(callsign string) (i
 
 // DeleteOldLogs deletes logs older than the specified time
 func (r *TransmissionLogRepository) DeleteOldLogs(before time.Time) (int64, error) {
-	result := r.db.Where("timestamp_start < ?", before).Delete(&models.TransmissionLog{})
+	result := r.db.Where("start_unix < ?", before.Unix()).Delete(&models.TransmissionLog{})
 	return result.RowsAffected, result.Error
 }
 
 // GetLogsSince returns transmission logs since the specified time, grouped by callsign
 func (r *TransmissionLogRepository) GetLogsSince(since time.Time) (map[string][]models.TransmissionLog, error) {
 	var logs []models.TransmissionLog
-	err := r.db.Where("timestamp_start >= ?", since).
+	err := r.db.Where("start_unix >= ?", since.Unix()).
 		Order("callsign ASC, timestamp_start ASC").
 		Find(&logs).Error
 
