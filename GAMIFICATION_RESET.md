@@ -107,6 +107,56 @@ sqlite3 data/allstar.db "UPDATE tally_state SET last_tally_at = '2025-10-01 00:0
 
 ---
 
+## Individual Callsign Cap Reset
+
+If you need to reset the daily/weekly XP caps for a specific callsign without affecting their total XP or level:
+
+### Understanding Cap Calculation
+
+The dashboard cap display is calculated from `xp_activity_logs`, not from the `daily_xp`/`weekly_xp` columns in `callsign_profiles`:
+
+- **`callsign_profiles.daily_xp`** and **`weekly_xp`** - Cached values, not used for cap calculations
+- **`xp_activity_logs.raw_xp`** - Summed for current day/week to calculate actual cap usage
+- **`callsign_profiles.experience_points`** - Your actual XP total (unaffected by cap resets)
+
+### Reset Caps for One Callsign
+
+To reset caps for a specific callsign (e.g., N8DBF) while preserving their total XP and level:
+
+```bash
+sqlite3 data/allstar.db << 'EOF'
+-- Clear activity logs for current week (keeps total XP intact)
+DELETE FROM xp_activity_logs WHERE callsign = 'N8DBF';
+
+-- Optional: Also reset cached cap values
+UPDATE callsign_profiles
+SET daily_xp = 0, weekly_xp = 0
+WHERE callsign = 'N8DBF';
+EOF
+```
+
+**What this does:**
+- ✅ Resets cap display to 0/10000 (daily) and 0/40000 (weekly)
+- ✅ Clears activity history for that callsign
+- ✅ Preserves total XP and level in `callsign_profiles`
+- ❌ Does NOT affect other callsigns
+
+**Important:** This removes the hourly activity breakdown for the callsign. They will start fresh from the next transmission.
+
+### Reset Only Current Week/Day
+
+To preserve older activity history:
+
+```bash
+# Reset only today's caps
+sqlite3 data/allstar.db "DELETE FROM xp_activity_logs WHERE callsign = 'N8DBF' AND hour_bucket >= datetime('now', 'start of day');"
+
+# Reset only this week's caps (week starts Sunday at 00:00 UTC)
+sqlite3 data/allstar.db "DELETE FROM xp_activity_logs WHERE callsign = 'N8DBF' AND hour_bucket >= datetime('now', 'weekday 0', '-7 days', 'start of day');"
+```
+
+---
+
 ## Rollback
 
 If you need to restore the backup:
