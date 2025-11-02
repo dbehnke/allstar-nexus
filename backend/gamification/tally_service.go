@@ -245,17 +245,20 @@ func (s *TallyService) ProcessTally() error {
 				// We award full multiplied XP but only count raw seconds toward cap
 				cappedRawSeconds := rawXP
 				if s.config.CapsEnabled {
+					// Check both daily and weekly caps and use the most restrictive
 					remainingDaily := s.config.DailyCapSeconds - dailySeconds
+					remainingWeekly := s.config.WeeklyCapSeconds - weeklySeconds
+					
+					// Use the minimum of raw seconds and both remaining caps
 					if rawXP > remainingDaily {
 						cappedRawSeconds = remainingDaily
-						// Recalculate XP based on capped seconds
-						finalXP = float64(cappedRawSeconds) * restedMultiplier * drMultiplier * kerchunkPenalty
-						awardedXP = int(finalXP)
 					}
-					remainingWeekly := s.config.WeeklyCapSeconds - weeklySeconds
-					if rawXP > remainingWeekly {
+					if cappedRawSeconds > remainingWeekly {
 						cappedRawSeconds = remainingWeekly
-						// Recalculate XP based on capped seconds
+					}
+					
+					// Recalculate XP based on capped seconds (if capped)
+					if cappedRawSeconds < rawXP {
 						finalXP = float64(cappedRawSeconds) * restedMultiplier * drMultiplier * kerchunkPenalty
 						awardedXP = int(finalXP)
 					}
