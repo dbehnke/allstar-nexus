@@ -304,7 +304,6 @@ func (s *TallyService) ProcessTally() error {
 	}
 
 	// Iterate windows from lastTallyTime to now
-	originalStart := s.lastTallyTime
 	cursor := s.lastTallyTime
 	if cursor.IsZero() || cursor.After(now) {
 		cursor = now.Add(-s.tallyInterval)
@@ -343,27 +342,9 @@ func (s *TallyService) ProcessTally() error {
 	summary.CallsignsProcessed = len(processed)
 	summary.CompletedAt = s.lastTallyTime
 
-	// Fallback: if no transmissions were handled (e.g., due to DB datetime format edge cases),
-	// run a single-batch tally using the legacy GetLogsSince path to preserve compatibility.
-	if summary.TransmissionsHandled == 0 {
-		s.logger.Info("Windowed tally handled 0 transmissions; falling back to single-batch GetLogsSince",
-			zap.Time("since", originalStart))
-		transmissions, err := s.txLogRepo.GetLogsSince(originalStart)
-		if err != nil {
-			return err
-		}
-		if len(transmissions) > 0 {
-			processGroup(transmissions)
-			s.lastTallyTime = now
-			summary.CompletedAt = s.lastTallyTime
-			if s.stateRepo != nil {
-				if err := s.stateRepo.UpdateLastTally(ctx, s.lastTallyTime); err != nil {
-					s.logger.Warn("failed to persist last tally time (fallback)", zap.Error(err))
-				}
-			}
-			summary.CallsignsProcessed = len(processed)
-		}
-	}
+	// Note: previously we fell back to a non-windowed GetLogsSince path when zero transmissions
+	// were found due to legacy datetime formats. After the one-time backfill migrates timestamps
+	// to RFC3339Nano UTC, the strict windowed path is sufficient and simpler.
 
 	// Process rested XP accumulation for ALL profiles (including idle ones)
 	// This ensures users who haven't transmitted recently still accumulate rested bonus
