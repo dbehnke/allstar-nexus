@@ -212,9 +212,13 @@ func (g *GamificationAPI) Profile(w http.ResponseWriter, r *http.Request) {
 	// Get total talk time
 	totalTime, _ := g.txLogRepo.GetTotalTransmissionTime(profile.Callsign)
 
-	// Get weekly/daily XP
+	// Get weekly/daily XP (experience points)
 	weeklyXP, _ := g.activityRepo.GetWeeklyXP(ctx, callsign)
 	dailyXP, _ := g.activityRepo.GetDailyXP(ctx, callsign)
+
+	// Get weekly/daily seconds (for cap display)
+	weeklySeconds, _ := g.activityRepo.GetWeeklySeconds(ctx, callsign)
+	dailySeconds, _ := g.activityRepo.GetDailySeconds(ctx, callsign)
 
 	// Get recent activity breakdown
 	breakdown, _ := g.activityRepo.GetDailyBreakdown(ctx, callsign, 7)
@@ -232,6 +236,8 @@ func (g *GamificationAPI) Profile(w http.ResponseWriter, r *http.Request) {
 		"last_transmission_at":    profile.LastTransmissionAt,
 		"weekly_xp":               weeklyXP,
 		"daily_xp":                dailyXP,
+		"weekly_seconds":          weeklySeconds,  // Seconds for cap comparison
+		"daily_seconds":           dailySeconds,   // Seconds for cap comparison
 		"daily_breakdown":         breakdown,
 	}); err != nil {
 		log.Printf("Failed to encode profile response: %v", err)

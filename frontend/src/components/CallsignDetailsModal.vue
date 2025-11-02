@@ -52,14 +52,14 @@
               <div class="stat-row">
                 <span class="label">Daily XP:</span>
                 <span class="value" :class="capStatusClass('daily')">
-                  {{ profile.daily_xp || 0 }} / {{ dailyCapSeconds || 0 }} seconds
+                  {{ profile.daily_seconds || 0 }} / {{ dailyCapSeconds || 0 }} seconds
                   <span v-if="isDailyCapped" class="badge capped">CAPPED</span>
                 </span>
               </div>
               <div class="stat-row">
                 <span class="label">Weekly XP:</span>
                 <span class="value" :class="capStatusClass('weekly')">
-                  {{ profile.weekly_xp || 0 }} / {{ weeklyCapSeconds || 0 }} seconds
+                  {{ profile.weekly_seconds || 0 }} / {{ weeklyCapSeconds || 0 }} seconds
                   <span v-if="isWeeklyCapped" class="badge capped">CAPPED</span>
                 </span>
               </div>
@@ -153,12 +153,12 @@ function close() {
 
 const isDailyCapped = computed(() => {
   if (!profile.value) return false
-  return (profile.value.daily_xp || 0) >= props.dailyCapSeconds
+  return (profile.value.daily_seconds || 0) >= props.dailyCapSeconds
 })
 
 const isWeeklyCapped = computed(() => {
   if (!profile.value) return false
-  return (profile.value.weekly_xp || 0) >= props.weeklyCapSeconds
+  return (profile.value.weekly_seconds || 0) >= props.weeklyCapSeconds
 })
 
 function capStatusClass(type) {
@@ -169,7 +169,7 @@ function capStatusClass(type) {
 
 const currentDRMultiplier = computed(() => {
   if (!profile.value || !props.drTiers || props.drTiers.length === 0) return '1.0'
-  const dailySeconds = profile.value.daily_xp || 0
+  const dailySeconds = profile.value.daily_seconds || 0
   for (const tier of props.drTiers) {
     if (tier && tier.max_seconds != null && dailySeconds <= tier.max_seconds) {
       return (tier.multiplier != null ? tier.multiplier : 1.0).toFixed(2)
@@ -181,7 +181,7 @@ const currentDRMultiplier = computed(() => {
 
 function isActiveTier(tier) {
   if (!profile.value || !tier || tier.max_seconds == null) return false
-  const dailySeconds = profile.value.daily_xp || 0
+  const dailySeconds = profile.value.daily_seconds || 0
   return dailySeconds <= tier.max_seconds
 }
 
