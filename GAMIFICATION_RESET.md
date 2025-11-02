@@ -82,6 +82,16 @@ sqlite3 data/allstar.db "SELECT * FROM tally_state;"
 - **Processing time depends on log volume** - expect ~1-2 seconds per 1000 transmissions
 - **Safe to interrupt** - if you stop the server mid-catch-up, it will resume from `last_tally_at` on next start
 
+#### Tip: Epoch backfill after timestamp normalization
+
+If you recently normalized legacy timestamp strings (e.g., by running the `db backfill-timestamps` command), it’s recommended to also populate the epoch columns for efficient and correct time-window queries:
+
+```bash
+go run . db backfill-epochs
+```
+
+This fills `start_unix`/`end_unix` from the normalized `timestamp_start`/`timestamp_end` values. It’s safe to run multiple times and can be done before or after the full reset steps above.
+
 ---
 
 ## Partial Reset (Backdate Only)
