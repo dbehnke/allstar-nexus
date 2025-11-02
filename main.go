@@ -284,6 +284,17 @@ func main() {
 			}
 		}
 
+		// Initialize Discord notifier if enabled
+		var discordNotifier *gamification.DiscordNotifier
+		if cfg.Gamification.Discord.Enabled && cfg.Gamification.Discord.WebhookURL != "" {
+			discordNotifier = gamification.NewDiscordNotifier(
+				cfg.Gamification.Discord.WebhookURL,
+				true, // Already checked enabled above
+				logger,
+			)
+			logger.Info("Discord notifications enabled for gamification")
+		}
+
 		// Initialize and start TallyService
 		tallyInterval := time.Duration(cfg.Gamification.TallyIntervalMinutes) * time.Minute
 		tallyService = gamification.NewTallyService(
@@ -296,6 +307,8 @@ func main() {
 			gameCfg,
 			tallyInterval,
 			logger,
+			levelGroupings,
+			discordNotifier,
 		)
 
 		if err := tallyService.Start(); err != nil {
