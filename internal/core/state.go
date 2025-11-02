@@ -330,7 +330,7 @@ func (sm *StateManager) apply(m ami.Message) {
 		log.Printf("[ALINKS DEBUG] parsed ids=%v keyed=%v previous_links=%v", ids, keyedMap, prev)
 
 		// Process keying trackers for each configured source node
-		now := time.Now()
+		now := time.Now().UTC()
 		for sourceNodeID, tracker := range sm.keyingTrackers {
 			// Process ALINKS for this source node's tracker
 			tracker.ProcessALinks(ids, keyedMap, now)
@@ -397,7 +397,7 @@ func (sm *StateManager) apply(m ami.Message) {
 		// FALLBACK: If RPT_ALINKS not available, use RPT_LINKS to at least populate the node list
 		// (without keying status information)
 		// Skip if we just processed ALINKS within the last 500ms to avoid duplicate processing
-		now := time.Now()
+		now := time.Now().UTC()
 		shouldSkip := !sm.lastALinksProcessedAt.IsZero() && now.Sub(sm.lastALinksProcessedAt) < 500*time.Millisecond
 
 		if !shouldSkip {
@@ -829,7 +829,7 @@ func (sm *StateManager) SeedKeyingTrackerFromLinks(sourceNodeID int) {
 
 	// Process with empty keying map (no keying status available yet)
 	emptyKeyedMap := make(map[int]bool)
-	now := time.Now()
+	now := time.Now().UTC()
 	tracker.ProcessALinks(linkIDs, emptyKeyedMap, now)
 
 	// Enrich with node lookup data and link details
