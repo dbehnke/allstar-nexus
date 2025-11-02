@@ -16,8 +16,9 @@ import (
 
 // AdminAPI handles administrative endpoints
 type AdminAPI struct {
-	AuditLogger *admin.AuditLogger
-	UserRepo    *repository.UserRepo
+	AuditLogger   *admin.AuditLogger
+	UserRepo      *repository.UserRepo
+	ConfigManager *admin.ConfigManager
 }
 
 // NewAdminAPI creates a new admin API instance
@@ -328,6 +329,217 @@ func (a *AdminAPI) GetSystemStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, 200, status)
+}
+
+// ===============================================
+// Config Management Endpoints
+// ===============================================
+
+// GetConfig returns the current config file contents
+// GET /api/admin/config
+func (a *AdminAPI) GetConfig(w http.ResponseWriter, r *http.Request) {
+	if a.ConfigManager == nil {
+		writeError(w, 500, "not_configured", "config manager not initialized")
+		return
+	}
+
+	content, err := a.ConfigManager.Read()
+	if err != nil {
+		writeError(w, 500, "read_error", "failed to read config")
+		return
+	}
+
+	// Audit log
+	ctx := r.Context()
+	if a.AuditLogger != nil {
+		if currentUser, ok := middleware.UserFromContext(ctx); ok {
+			_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, models.AuditActionConfigRead,
+				"config.yaml", nil, middleware.GetClientIP(r), r.UserAgent())
+		}
+	}
+
+	writeJSON(w, 200, map[string]interface{}{
+		"content": content,
+		"path":    a.ConfigManager.ConfigPath,
+	})
+}
+
+// UpdateConfig updates the config file with validation
+// POST /api/admin/config
+func (a *AdminAPI) UpdateConfig(w http.ResponseWriter, r *http.Request) {
+	if a.ConfigManager == nil {
+		writeError(w, 500, "not_configured", "config manager not initialized")
+		return
+	}
+
+	type req struct {
+		Content string `json:"content"`
+		Comment string `json:"comment"`
+	}
+
+	var body req
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, 400, "bad_request", "invalid json body")
+		return
+	}
+
+	if body.Content == "" {
+		writeError(w, 400, "validation_error", "content is required")
+		return
+	}
+
+	ctx := r.Context()
+	currentUser, _ := middleware.UserFromContext(ctx)
+
+	// Write config (validates and creates backup)
+	backupID, err := a.ConfigManager.Write(body.Content, body.Comment)
+	if err != nil {
+		// Audit failure
+		if a.AuditLogger != nil && currentUser != nil {
+			_ = a.AuditLogger.LogFailure(ctx, currentUser.Email, currentUser.ID, models.AuditActionConfigUpdate,
+				"config.yaml", err.Error(), nil, middleware.GetClientIP(r), r.UserAgent())
+		}
+		writeError(w, 400, "validation_error", err.Error())
+		return
+	}
+
+	// Audit success
+	if a.AuditLogger != nil && currentUser != nil {
+		_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, models.AuditActionConfigUpdate,
+			"config.yaml", map[string]interface{}{"backup_id": backupID, "comment": body.Comment},
+			middleware.GetClientIP(r), r.UserAgent())
+	}
+
+	writeJSON(w, 200, map[string]interface{}{
+		"success":   true,
+		"backup_id": backupID,
+	})
+}
+
+// CreateConfigBackup creates a manual backup
+// POST /api/admin/config/backup
+func (a *AdminAPI) CreateConfigBackup(w http.ResponseWriter, r *http.Request) {
+	if a.ConfigManager == nil {
+		writeError(w, 500, "not_configured", "config manager not initialized")
+		return
+	}
+
+	type req struct {
+		Comment string `json:"comment"`
+	}
+
+	var body req
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		// Allow empty body
+		body.Comment = ""
+	}
+
+	ctx := r.Context()
+	currentUser, _ := middleware.UserFromContext(ctx)
+
+	backupID, err := a.ConfigManager.CreateBackup(body.Comment)
+	if err != nil {
+		writeError(w, 500, "backup_error", err.Error())
+		return
+	}
+
+	// Audit log
+	if a.AuditLogger != nil && currentUser != nil {
+		_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, models.AuditActionConfigBackup,
+			"config.yaml", map[string]interface{}{"backup_id": backupID, "comment": body.Comment},
+			middleware.GetClientIP(r), r.UserAgent())
+	}
+
+	writeJSON(w, 200, map[string]interface{}{
+		"backup_id": backupID,
+	})
+}
+
+// ListConfigBackups returns all available backups
+// GET /api/admin/config/backups
+func (a *AdminAPI) ListConfigBackups(w http.ResponseWriter, r *http.Request) {
+	if a.ConfigManager == nil {
+		writeError(w, 500, "not_configured", "config manager not initialized")
+		return
+	}
+
+	backups, err := a.ConfigManager.ListBackups()
+	if err != nil {
+		writeError(w, 500, "list_error", err.Error())
+		return
+	}
+
+	writeJSON(w, 200, backups)
+}
+
+// RestoreConfigBackup restores a config from backup
+// POST /api/admin/config/restore/:id
+func (a *AdminAPI) RestoreConfigBackup(w http.ResponseWriter, r *http.Request) {
+	if a.ConfigManager == nil {
+		writeError(w, 500, "not_configured", "config manager not initialized")
+		return
+	}
+
+	// Extract backup ID from path
+	backupID := r.URL.Path[len("/api/admin/config/restore/"):]
+	if backupID == "" {
+		writeError(w, 400, "bad_request", "backup ID required")
+		return
+	}
+
+	ctx := r.Context()
+	currentUser, _ := middleware.UserFromContext(ctx)
+
+	if err := a.ConfigManager.Restore(backupID); err != nil {
+		// Audit failure
+		if a.AuditLogger != nil && currentUser != nil {
+			_ = a.AuditLogger.LogFailure(ctx, currentUser.Email, currentUser.ID, models.AuditActionConfigRestore,
+				"config.yaml", err.Error(), map[string]interface{}{"backup_id": backupID},
+				middleware.GetClientIP(r), r.UserAgent())
+		}
+		writeError(w, 400, "restore_error", err.Error())
+		return
+	}
+
+	// Audit success
+	if a.AuditLogger != nil && currentUser != nil {
+		_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, models.AuditActionConfigRestore,
+			"config.yaml", map[string]interface{}{"backup_id": backupID},
+			middleware.GetClientIP(r), r.UserAgent())
+	}
+
+	writeJSON(w, 200, map[string]interface{}{
+		"success": true,
+	})
+}
+
+// GetConfigDiff returns a diff between two configs
+// GET /api/admin/config/diff?from=<id>&to=<id>
+func (a *AdminAPI) GetConfigDiff(w http.ResponseWriter, r *http.Request) {
+	if a.ConfigManager == nil {
+		writeError(w, 500, "not_configured", "config manager not initialized")
+		return
+	}
+
+	fromID := r.URL.Query().Get("from")
+	toID := r.URL.Query().Get("to")
+
+	if fromID == "" || toID == "" {
+		writeError(w, 400, "bad_request", "from and to parameters required")
+		return
+	}
+
+	diff, err := a.ConfigManager.Diff(fromID, toID)
+	if err != nil {
+		writeError(w, 400, "diff_error", err.Error())
+		return
+	}
+
+	writeJSON(w, 200, map[string]interface{}{
+		"diff": diff,
+		"from": fromID,
+		"to":   toID,
+	})
 }
 
 // ===============================================

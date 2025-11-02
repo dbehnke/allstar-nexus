@@ -179,7 +179,9 @@ func main() {
 
 	// Initialize admin API
 	auditLogger := admin.NewAuditLogger(gormDB)
+	configManager := admin.NewConfigManager(*configFile, "data/config-backups")
 	adminAPI := api.NewAdminAPI(auditLogger, userRepo)
+	adminAPI.ConfigManager = configManager
 
 	// Admin routes (require superadmin role)
 	mux.Handle("/api/admin/audit", authMW(superadminMW(http.HandlerFunc(adminAPI.GetAuditLogs))))
@@ -201,6 +203,24 @@ func main() {
 		}))).ServeHTTP(w, r)
 	})
 	mux.Handle("/api/admin/system/status", authMW(superadminMW(http.HandlerFunc(adminAPI.GetSystemStatus))))
+
+	// Config management routes (require superadmin role)
+	mux.Handle("/api/admin/config", authMW(superadminMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminAPI.GetConfig(w, r)
+		case http.MethodPost:
+			adminAPI.UpdateConfig(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))))
+	mux.Handle("/api/admin/config/backup", authMW(superadminMW(http.HandlerFunc(adminAPI.CreateConfigBackup))))
+	mux.Handle("/api/admin/config/backups", authMW(superadminMW(http.HandlerFunc(adminAPI.ListConfigBackups))))
+	mux.HandleFunc("/api/admin/config/restore/", func(w http.ResponseWriter, r *http.Request) {
+		authMW(superadminMW(http.HandlerFunc(adminAPI.RestoreConfigBackup))).ServeHTTP(w, r)
+	})
+	mux.Handle("/api/admin/config/diff", authMW(superadminMW(http.HandlerFunc(adminAPI.GetConfigDiff))))
 
 	// Node lookup and talker log APIs - can be public or require auth based on config
 	if cfg.AllowAnonDashboard {

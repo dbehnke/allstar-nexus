@@ -6,7 +6,10 @@ require modernc.org/sqlite v1.39.1
 
 require github.com/coder/websocket v1.8.14
 
-require golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
+require (
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

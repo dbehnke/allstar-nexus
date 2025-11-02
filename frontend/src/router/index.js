@@ -6,6 +6,7 @@ import RptStats from '../views/RptStats.vue'
 import VoterDisplay from '../views/VoterDisplay.vue'
 import NetworkMap from '../views/NetworkMap.vue'
 import AdminDashboard from '../views/Admin/AdminDashboard.vue'
+import ConfigEditor from '../views/Admin/ConfigEditor.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -38,6 +39,12 @@ const routes = [
     path: '/admin',
     name: 'Admin',
     component: AdminDashboard,
+    meta: { requiresSuperAdmin: true }
+  },
+  {
+    path: '/admin/config',
+    name: 'ConfigEditor',
+    component: ConfigEditor,
     meta: { requiresSuperAdmin: true }
   }
 ]
