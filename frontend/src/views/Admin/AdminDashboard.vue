@@ -46,8 +46,16 @@
       <div class="admin-card">
         <div class="card-icon">💻</div>
         <h3>Command Panel</h3>
-        <p>Execute AMI commands and manage nodes</p>
+        <p>Execute AMI commands</p>
         <button @click="$router.push('/admin/commands')" class="btn-card">Open Panel</button>
+      </div>
+
+      <!-- Node Control Card -->
+      <div class="admin-card">
+        <div class="card-icon">🔗</div>
+        <h3>Node Control</h3>
+        <p>Link and unlink nodes via AMI</p>
+        <button @click="$router.push('/admin/nodes')" class="btn-card">Manage Nodes</button>
       </div>
 
       <!-- Audit Logs Card -->

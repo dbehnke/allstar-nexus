@@ -7,6 +7,9 @@ import VoterDisplay from '../views/VoterDisplay.vue'
 import NetworkMap from '../views/NetworkMap.vue'
 import AdminDashboard from '../views/Admin/AdminDashboard.vue'
 import ConfigEditor from '../views/Admin/ConfigEditor.vue'
+import CommandPanel from '../views/Admin/CommandPanel.vue'
+import NodeControl from '../views/Admin/NodeControl.vue'
+import UserManager from '../views/Admin/UserManager.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -45,6 +48,24 @@ const routes = [
     path: '/admin/config',
     name: 'ConfigEditor',
     component: ConfigEditor,
+    meta: { requiresSuperAdmin: true }
+  },
+  {
+    path: '/admin/commands',
+    name: 'CommandPanel',
+    component: CommandPanel,
+    meta: { requiresSuperAdmin: true }
+  },
+  {
+    path: '/admin/nodes',
+    name: 'NodeControl',
+    component: NodeControl,
+    meta: { requiresSuperAdmin: true }
+  },
+  {
+    path: '/admin/users',
+    name: 'UserManager',
+    component: UserManager,
     meta: { requiresSuperAdmin: true }
   }
 ]

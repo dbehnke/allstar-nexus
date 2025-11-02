@@ -183,6 +183,8 @@ func main() {
 	adminAPI := api.NewAdminAPI(auditLogger, userRepo)
 	adminAPI.ConfigManager = configManager
 
+	// AMI connector will be set later after it's initialized (if AMI is enabled)
+
 	// Admin routes (require superadmin role)
 	mux.Handle("/api/admin/audit", authMW(superadminMW(http.HandlerFunc(adminAPI.GetAuditLogs))))
 	mux.Handle("/api/admin/audit/recent", authMW(superadminMW(http.HandlerFunc(adminAPI.GetRecentAuditLogs))))
@@ -221,6 +223,12 @@ func main() {
 		authMW(superadminMW(http.HandlerFunc(adminAPI.RestoreConfigBackup))).ServeHTTP(w, r)
 	})
 	mux.Handle("/api/admin/config/diff", authMW(superadminMW(http.HandlerFunc(adminAPI.GetConfigDiff))))
+
+	// AMI command routes (require superadmin role) - will be registered after AMI connector is initialized
+	mux.Handle("/api/admin/ami/execute", authMW(superadminMW(http.HandlerFunc(adminAPI.ExecuteAMICommand))))
+	mux.Handle("/api/admin/ami/link", authMW(superadminMW(http.HandlerFunc(adminAPI.LinkNode))))
+	mux.Handle("/api/admin/ami/unlink", authMW(superadminMW(http.HandlerFunc(adminAPI.UnlinkNode))))
+	mux.Handle("/api/admin/ami/commands", authMW(superadminMW(http.HandlerFunc(adminAPI.GetPredefinedCommands))))
 
 	// Node lookup and talker log APIs - can be public or require auth based on config
 	if cfg.AllowAnonDashboard {
@@ -570,6 +578,15 @@ func main() {
 		// Pass AMI connector and StateManager to API layer
 		apiLayer.SetAMIConnector(conn)
 		apiLayer.SetStateManager(sm)
+
+		// Initialize CommandExecutor for admin API
+		nodeIDs := make([]int, len(cfg.Nodes))
+		for i, node := range cfg.Nodes {
+			nodeIDs[i] = node.NodeID
+		}
+		commandExecutor := admin.NewCommandExecutor(conn, nodeIDs)
+		adminAPI.CommandExecutor = commandExecutor
+		logger.Info("AMI command executor initialized", zap.Ints("node_ids", nodeIDs))
 		ctxAMI, cancelAMI := context.WithCancel(context.Background())
 
 		// Monitor AMI connection status changes

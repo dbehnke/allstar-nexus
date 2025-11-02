@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,9 +17,10 @@ import (
 
 // AdminAPI handles administrative endpoints
 type AdminAPI struct {
-	AuditLogger   *admin.AuditLogger
-	UserRepo      *repository.UserRepo
-	ConfigManager *admin.ConfigManager
+	AuditLogger     *admin.AuditLogger
+	UserRepo        *repository.UserRepo
+	ConfigManager   *admin.ConfigManager
+	CommandExecutor *admin.CommandExecutor
 }
 
 // NewAdminAPI creates a new admin API instance
@@ -540,6 +542,174 @@ func (a *AdminAPI) GetConfigDiff(w http.ResponseWriter, r *http.Request) {
 		"from": fromID,
 		"to":   toID,
 	})
+}
+
+// ===============================================
+// AMI Command Endpoints
+// ===============================================
+
+// ExecuteAMICommand executes a raw AMI command
+// POST /api/admin/ami/command
+func (a *AdminAPI) ExecuteAMICommand(w http.ResponseWriter, r *http.Request) {
+	if a.CommandExecutor == nil {
+		writeError(w, 500, "not_configured", "command executor not initialized")
+		return
+	}
+
+	type req struct {
+		Command string `json:"command"`
+	}
+
+	var body req
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, 400, "bad_request", "invalid json body")
+		return
+	}
+
+	if body.Command == "" {
+		writeError(w, 400, "validation_error", "command is required")
+		return
+	}
+
+	ctx := r.Context()
+	currentUser, _ := middleware.UserFromContext(ctx)
+
+	result, err := a.CommandExecutor.ExecuteCommand(body.Command)
+
+	// Audit log
+	if a.AuditLogger != nil && currentUser != nil {
+		if err != nil || !result.Success {
+			_ = a.AuditLogger.LogFailure(ctx, currentUser.Email, currentUser.ID, models.AuditActionCommandExecute,
+				"ami", result.Error, map[string]interface{}{"command": body.Command},
+				middleware.GetClientIP(r), r.UserAgent())
+		} else {
+			_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, models.AuditActionCommandExecute,
+				"ami", map[string]interface{}{"command": body.Command, "output": result.Output},
+				middleware.GetClientIP(r), r.UserAgent())
+		}
+	}
+
+	if err != nil && !result.Success {
+		writeError(w, 400, "execution_error", err.Error())
+		return
+	}
+
+	writeJSON(w, 200, result)
+}
+
+// LinkNode links two nodes via AMI
+// POST /api/admin/ami/link
+func (a *AdminAPI) LinkNode(w http.ResponseWriter, r *http.Request) {
+	if a.CommandExecutor == nil {
+		writeError(w, 500, "not_configured", "command executor not initialized")
+		return
+	}
+
+	type req struct {
+		LocalNode  int  `json:"local_node"`
+		RemoteNode int  `json:"remote_node"`
+		Permanent  bool `json:"permanent"`
+	}
+
+	var body req
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, 400, "bad_request", "invalid json body")
+		return
+	}
+
+	if body.LocalNode == 0 || body.RemoteNode == 0 {
+		writeError(w, 400, "validation_error", "local_node and remote_node are required")
+		return
+	}
+
+	ctx := r.Context()
+	currentUser, _ := middleware.UserFromContext(ctx)
+
+	result, err := a.CommandExecutor.LinkNode(body.LocalNode, body.RemoteNode, body.Permanent)
+
+	// Audit log
+	if a.AuditLogger != nil && currentUser != nil {
+		resource := fmt.Sprintf("node:%d->%d", body.LocalNode, body.RemoteNode)
+		if err != nil || !result.Success {
+			_ = a.AuditLogger.LogFailure(ctx, currentUser.Email, currentUser.ID, models.AuditActionNodeLink,
+				resource, result.Error, map[string]interface{}{"permanent": body.Permanent},
+				middleware.GetClientIP(r), r.UserAgent())
+		} else {
+			_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, models.AuditActionNodeLink,
+				resource, map[string]interface{}{"permanent": body.Permanent},
+				middleware.GetClientIP(r), r.UserAgent())
+		}
+	}
+
+	if err != nil && !result.Success {
+		writeError(w, 400, "execution_error", err.Error())
+		return
+	}
+
+	writeJSON(w, 200, result)
+}
+
+// UnlinkNode disconnects two nodes via AMI
+// POST /api/admin/ami/unlink
+func (a *AdminAPI) UnlinkNode(w http.ResponseWriter, r *http.Request) {
+	if a.CommandExecutor == nil {
+		writeError(w, 500, "not_configured", "command executor not initialized")
+		return
+	}
+
+	type req struct {
+		LocalNode  int `json:"local_node"`
+		RemoteNode int `json:"remote_node"`
+	}
+
+	var body req
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, 400, "bad_request", "invalid json body")
+		return
+	}
+
+	if body.LocalNode == 0 || body.RemoteNode == 0 {
+		writeError(w, 400, "validation_error", "local_node and remote_node are required")
+		return
+	}
+
+	ctx := r.Context()
+	currentUser, _ := middleware.UserFromContext(ctx)
+
+	result, err := a.CommandExecutor.UnlinkNode(body.LocalNode, body.RemoteNode)
+
+	// Audit log
+	if a.AuditLogger != nil && currentUser != nil {
+		resource := fmt.Sprintf("node:%d->%d", body.LocalNode, body.RemoteNode)
+		if err != nil || !result.Success {
+			_ = a.AuditLogger.LogFailure(ctx, currentUser.Email, currentUser.ID, models.AuditActionNodeUnlink,
+				resource, result.Error, nil,
+				middleware.GetClientIP(r), r.UserAgent())
+		} else {
+			_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, models.AuditActionNodeUnlink,
+				resource, nil,
+				middleware.GetClientIP(r), r.UserAgent())
+		}
+	}
+
+	if err != nil && !result.Success {
+		writeError(w, 400, "execution_error", err.Error())
+		return
+	}
+
+	writeJSON(w, 200, result)
+}
+
+// GetPredefinedCommands returns a list of safe predefined commands
+// GET /api/admin/ami/commands/predefined
+func (a *AdminAPI) GetPredefinedCommands(w http.ResponseWriter, r *http.Request) {
+	if a.CommandExecutor == nil {
+		writeError(w, 500, "not_configured", "command executor not initialized")
+		return
+	}
+
+	commands := a.CommandExecutor.GetPredefinedCommands()
+	writeJSON(w, 200, commands)
 }
 
 // ===============================================
