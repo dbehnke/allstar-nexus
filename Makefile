@@ -6,7 +6,14 @@ VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_TIME=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS=-X 'main.buildVersion=$(VERSION)' -X 'main.buildTime=$(BUILD_TIME)'
 
-.PHONY: frontend backend build frontend-install backend-install build-dashboard build run test test-e2e clean lint tools cgnat-whitelist
+# Installation paths
+PREFIX=/usr/local
+BINDIR=$(PREFIX)/bin
+SYSCONFDIR=/etc
+SYSTEMDDIR=/etc/systemd/system
+STATEDIR=/var/lib/$(APP_NAME)
+
+.PHONY: frontend backend build frontend-install backend-install build-dashboard build run test test-e2e clean lint tools cgnat-whitelist install uninstall
 
 .PHONY: validate-config
 
@@ -60,3 +67,62 @@ tools: cgnat-whitelist
 
 cgnat-whitelist:
 	cd tools/cgnat-whitelist && go build -o cgnat-whitelist .
+
+# Install the application (requires root/sudo)
+install: build
+	@echo "Installing $(APP_NAME) to $(BINDIR)..."
+	install -d $(BINDIR)
+	install -m 755 $(APP_NAME) $(BINDIR)/$(APP_NAME)
+	@echo "Creating configuration directory at $(SYSCONFDIR)/$(APP_NAME)..."
+	install -d $(SYSCONFDIR)/$(APP_NAME)
+	@if [ ! -f $(SYSCONFDIR)/$(APP_NAME)/config.yaml ]; then \
+		echo "Installing example config to $(SYSCONFDIR)/$(APP_NAME)/config.yaml..."; \
+		install -m 644 config.yaml.example $(SYSCONFDIR)/$(APP_NAME)/config.yaml; \
+		echo "*** Please edit $(SYSCONFDIR)/$(APP_NAME)/config.yaml before enabling the service ***"; \
+	else \
+		echo "Config file already exists at $(SYSCONFDIR)/$(APP_NAME)/config.yaml (not overwriting)"; \
+	fi
+	@echo "Creating state directory at $(STATEDIR)..."
+	install -d -m 755 $(STATEDIR)
+	@if id allstar-nexus >/dev/null 2>&1; then \
+		echo "User allstar-nexus already exists"; \
+	else \
+		echo "Creating system user allstar-nexus..."; \
+		useradd --system --no-create-home --shell /sbin/nologin allstar-nexus || echo "Note: Could not create user (may require root)"; \
+	fi
+	@if [ -d $(STATEDIR) ]; then \
+		chown allstar-nexus:allstar-nexus $(STATEDIR) 2>/dev/null || echo "Note: Could not set ownership on $(STATEDIR) (may require root)"; \
+	fi
+	@echo "Installing systemd service to $(SYSTEMDDIR)/$(APP_NAME).service..."
+	install -d $(SYSTEMDDIR)
+	install -m 644 $(APP_NAME).service $(SYSTEMDDIR)/$(APP_NAME).service
+	@echo ""
+	@echo "Installation complete!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Edit the configuration file: $(SYSCONFDIR)/$(APP_NAME)/config.yaml"
+	@echo "  2. Reload systemd: sudo systemctl daemon-reload"
+	@echo "  3. Enable the service (optional): sudo systemctl enable $(APP_NAME)"
+	@echo "  4. Start the service: sudo systemctl start $(APP_NAME)"
+	@echo "  5. Check status: sudo systemctl status $(APP_NAME)"
+	@echo ""
+
+# Uninstall the application (requires root/sudo)
+uninstall:
+	@echo "Stopping and disabling service (if running)..."
+	-systemctl stop $(APP_NAME).service 2>/dev/null
+	-systemctl disable $(APP_NAME).service 2>/dev/null
+	@echo "Removing systemd service file..."
+	rm -f $(SYSTEMDDIR)/$(APP_NAME).service
+	systemctl daemon-reload 2>/dev/null || true
+	@echo "Removing binary from $(BINDIR)..."
+	rm -f $(BINDIR)/$(APP_NAME)
+	@echo ""
+	@echo "Uninstallation complete!"
+	@echo ""
+	@echo "Note: Configuration files in $(SYSCONFDIR)/$(APP_NAME) and"
+	@echo "      data in $(STATEDIR) were preserved."
+	@echo "      Remove them manually if desired:"
+	@echo "        sudo rm -rf $(SYSCONFDIR)/$(APP_NAME)"
+	@echo "        sudo rm -rf $(STATEDIR)"
+	@echo ""
