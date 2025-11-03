@@ -66,6 +66,34 @@
         <button @click="$router.push('/admin/database')" class="btn-card">Manage Backups</button>
       </div>
 
+      <!-- Node Groups Card -->
+      <div class="admin-card">
+        <div class="card-icon">📦</div>
+        <h3>Node Groups</h3>
+        <p>Organize nodes into logical collections</p>
+        <div class="card-stats" v-if="nodeGroupCount !== null">
+          <div class="stat">
+            <span class="label">Groups:</span>
+            <span class="value">{{ nodeGroupCount }}</span>
+          </div>
+        </div>
+        <button @click="$router.push('/admin/node-groups')" class="btn-card">Manage Groups</button>
+      </div>
+
+      <!-- Scheduled Tasks Card -->
+      <div class="admin-card">
+        <div class="card-icon">⏰</div>
+        <h3>Scheduled Tasks</h3>
+        <p>Automate operations with cron scheduling</p>
+        <div class="card-stats" v-if="scheduledTaskCount !== null">
+          <div class="stat">
+            <span class="label">Active Tasks:</span>
+            <span class="value">{{ scheduledTaskCount }}</span>
+          </div>
+        </div>
+        <button @click="$router.push('/admin/scheduled-tasks')" class="btn-card">Manage Tasks</button>
+      </div>
+
       <!-- Audit Logs Card -->
       <div class="admin-card">
         <div class="card-icon">📋</div>
@@ -117,6 +145,8 @@ import { logger } from '../../utils/logger'
 
 const systemStatus = ref(null)
 const userCount = ref(null)
+const nodeGroupCount = ref(null)
+const scheduledTaskCount = ref(null)
 const recentAudits = ref([])
 
 async function loadSystemStatus() {
@@ -148,6 +178,39 @@ async function loadUsers() {
     }
   } catch (e) {
     logger.error('Failed to load users', e)
+  }
+}
+
+async function loadNodeGroups() {
+  try {
+    const response = await fetch('/api/admin/node-groups', {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    })
+    const data = await response.json()
+    if (data.ok !== false && data.data) {
+      nodeGroupCount.value = data.data.length
+    }
+  } catch (e) {
+    logger.error('Failed to load node groups', e)
+  }
+}
+
+async function loadScheduledTasks() {
+  try {
+    const response = await fetch('/api/admin/scheduled-tasks', {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    })
+    const data = await response.json()
+    if (data.ok !== false && data.data) {
+      // Count only active tasks
+      scheduledTaskCount.value = data.data.filter(task => task.is_active).length
+    }
+  } catch (e) {
+    logger.error('Failed to load scheduled tasks', e)
   }
 }
 
@@ -200,6 +263,8 @@ function formatTime(timestamp) {
 onMounted(() => {
   loadSystemStatus()
   loadUsers()
+  loadNodeGroups()
+  loadScheduledTasks()
   loadRecentAudits()
 })
 </script>

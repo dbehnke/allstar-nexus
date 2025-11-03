@@ -12,6 +12,8 @@ import NodeControl from '../views/Admin/NodeControl.vue'
 import UserManager from '../views/Admin/UserManager.vue'
 import DatabaseBackup from '../views/Admin/DatabaseBackup.vue'
 import SystemMonitor from '../views/Admin/SystemMonitor.vue'
+import NodeGroups from '../views/Admin/NodeGroups.vue'
+import ScheduledTasks from '../views/Admin/ScheduledTasks.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -80,6 +82,18 @@ const routes = [
     path: '/admin/system',
     name: 'SystemMonitor',
     component: SystemMonitor,
+    meta: { requiresSuperAdmin: true }
+  },
+  {
+    path: '/admin/node-groups',
+    name: 'NodeGroups',
+    component: NodeGroups,
+    meta: { requiresSuperAdmin: true }
+  },
+  {
+    path: '/admin/scheduled-tasks',
+    name: 'ScheduledTasks',
+    component: ScheduledTasks,
     meta: { requiresSuperAdmin: true }
   }
 ]

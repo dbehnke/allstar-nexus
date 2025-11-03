@@ -77,6 +77,84 @@
       {{ message.text }}
     </div>
 
+    <!-- Bulk Operations Section -->
+    <div class="bulk-operations-section">
+      <h3>Bulk Operations</h3>
+      <p class="subtitle">Link or unlink multiple nodes at once</p>
+      
+      <div class="bulk-panel">
+        <div class="form-group">
+          <label for="bulk-local-nodes">Local Nodes (comma-separated):</label>
+          <input
+            id="bulk-local-nodes"
+            v-model="bulkForm.localNodes"
+            type="text"
+            placeholder="e.g., 12345, 54321, 99999"
+          />
+          <small>Enter node numbers separated by commas</small>
+        </div>
+        
+        <div class="form-group">
+          <label for="bulk-target-nodes">Target Nodes (comma-separated):</label>
+          <input
+            id="bulk-target-nodes"
+            v-model="bulkForm.targetNodes"
+            type="text"
+            placeholder="e.g., 11111, 22222"
+          />
+          <small>Each local node will be linked/unlinked to each target node</small>
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" v-model="bulkForm.permanent" />
+            Permanent Links (for bulk link only)
+          </label>
+        </div>
+
+        <div class="bulk-actions">
+          <button
+            @click="bulkLinkNodes"
+            :disabled="!canBulkOperate || bulkLinking"
+            class="btn-primary"
+          >
+            <span v-if="bulkLinking">Bulk Linking...</span>
+            <span v-else>Bulk Link</span>
+          </button>
+          <button
+            @click="bulkUnlinkNodes"
+            :disabled="!canBulkOperate || bulkUnlinking"
+            class="btn-danger"
+          >
+            <span v-if="bulkUnlinking">Bulk Unlinking...</span>
+            <span v-else>Bulk Unlink</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Bulk Results -->
+      <div v-if="bulkResults.length > 0" class="bulk-results">
+        <h4>Bulk Operation Results</h4>
+        <div class="results-list">
+          <div
+            v-for="(result, index) in bulkResults"
+            :key="index"
+            :class="['result-item', result.success ? 'success' : 'error']"
+          >
+            <div class="result-header">
+              <span class="node-info">{{ result.localNode }} ↔ {{ result.targetNode }}</span>
+              <span :class="['status-badge', result.success ? 'success' : 'error']">
+                {{ result.success ? '✓ Success' : '✗ Failed' }}
+              </span>
+            </div>
+            <div v-if="result.message" class="result-message">
+              <small>{{ result.message }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="nodeHistory.length > 0" class="history-section">
       <h3>Recent Actions</h3>
       <div class="history-list">
@@ -143,6 +221,19 @@ interface HistoryItem {
   message?: string
 }
 
+interface BulkForm {
+  localNodes: string
+  targetNodes: string
+  permanent: boolean
+}
+
+interface BulkResult {
+  localNode: number
+  targetNode: number
+  success: boolean
+  message: string
+}
+
 const linkForm = ref<LinkForm>({
   localNode: '',
   remoteNode: '',
@@ -154,10 +245,19 @@ const unlinkForm = ref<UnlinkForm>({
   remoteNode: ''
 })
 
+const bulkForm = ref<BulkForm>({
+  localNodes: '',
+  targetNodes: '',
+  permanent: false
+})
+
 const linking = ref(false)
 const unlinking = ref(false)
+const bulkLinking = ref(false)
+const bulkUnlinking = ref(false)
 const message = ref<Message | null>(null)
 const nodeHistory = ref<HistoryItem[]>([])
+const bulkResults = ref<BulkResult[]>([])
 
 const canLink = computed(() => {
   return linkForm.value.localNode.trim() !== '' && linkForm.value.remoteNode.trim() !== ''
@@ -165,6 +265,10 @@ const canLink = computed(() => {
 
 const canUnlink = computed(() => {
   return unlinkForm.value.localNode.trim() !== '' && unlinkForm.value.remoteNode.trim() !== ''
+})
+
+const canBulkOperate = computed(() => {
+  return bulkForm.value.localNodes.trim() !== '' && bulkForm.value.targetNodes.trim() !== ''
 })
 
 const linkNode = async () => {
@@ -276,6 +380,113 @@ const unlinkNode = async () => {
     }
   } finally {
     unlinking.value = false
+  }
+}
+
+const parseNodeIds = (input: string): number[] => {
+  if (!input) return []
+  return input
+    .split(',')
+    .map(id => parseInt(id.trim()))
+    .filter(id => !isNaN(id) && id > 0)
+}
+
+const bulkLinkNodes = async () => {
+  if (!canBulkOperate.value) return
+
+  bulkLinking.value = true
+  bulkResults.value = []
+  message.value = null
+
+  try {
+    const localNodes = parseNodeIds(bulkForm.value.localNodes)
+    const targetNodes = parseNodeIds(bulkForm.value.targetNodes)
+
+    if (localNodes.length === 0 || targetNodes.length === 0) {
+      message.value = {
+        type: 'error',
+        text: 'Please enter valid node numbers'
+      }
+      return
+    }
+
+    const response = await apiRequest<{ results: BulkResult[] }>(
+      '/api/admin/nodes/bulk-link',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          local_nodes: localNodes,
+          target_nodes: targetNodes,
+          permanent: bulkForm.value.permanent
+        })
+      }
+    )
+
+    bulkResults.value = response.results || []
+    
+    const successCount = bulkResults.value.filter(r => r.success).length
+    const totalCount = bulkResults.value.length
+    
+    message.value = {
+      type: successCount === totalCount ? 'success' : (successCount > 0 ? 'warning' : 'error'),
+      text: `Bulk link completed: ${successCount}/${totalCount} operations succeeded`
+    }
+  } catch (error: any) {
+    message.value = {
+      type: 'error',
+      text: error.message || 'Failed to perform bulk link operation'
+    }
+  } finally {
+    bulkLinking.value = false
+  }
+}
+
+const bulkUnlinkNodes = async () => {
+  if (!canBulkOperate.value) return
+
+  bulkUnlinking.value = true
+  bulkResults.value = []
+  message.value = null
+
+  try {
+    const localNodes = parseNodeIds(bulkForm.value.localNodes)
+    const targetNodes = parseNodeIds(bulkForm.value.targetNodes)
+
+    if (localNodes.length === 0 || targetNodes.length === 0) {
+      message.value = {
+        type: 'error',
+        text: 'Please enter valid node numbers'
+      }
+      return
+    }
+
+    const response = await apiRequest<{ results: BulkResult[] }>(
+      '/api/admin/nodes/bulk-unlink',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          local_nodes: localNodes,
+          target_nodes: targetNodes
+        })
+      }
+    )
+
+    bulkResults.value = response.results || []
+    
+    const successCount = bulkResults.value.filter(r => r.success).length
+    const totalCount = bulkResults.value.length
+    
+    message.value = {
+      type: successCount === totalCount ? 'success' : (successCount > 0 ? 'warning' : 'error'),
+      text: `Bulk unlink completed: ${successCount}/${totalCount} operations succeeded`
+    }
+  } catch (error: any) {
+    message.value = {
+      type: 'error',
+      text: error.message || 'Failed to perform bulk unlink operation'
+    }
+  } finally {
+    bulkUnlinking.value = false
   }
 }
 
@@ -542,5 +753,97 @@ const formatTimestamp = (date: Date) => {
 
 .info-section li strong {
   color: #2c3e50;
+}
+
+/* Bulk Operations Styles */
+.bulk-operations-section {
+  margin-top: 40px;
+  padding-top: 30px;
+  border-top: 2px solid #ecf0f1;
+}
+
+.bulk-operations-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 22px;
+  color: #2c3e50;
+}
+
+.bulk-operations-section > .subtitle {
+  margin: 0 0 20px 0;
+}
+
+.bulk-panel {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 25px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.bulk-panel .form-group small {
+  display: block;
+  margin-top: 5px;
+  color: #7f8c8d;
+  font-size: 12px;
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.bulk-results {
+  margin-top: 25px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.bulk-results h4 {
+  margin: 0 0 15px 0;
+  font-size: 16px;
+  color: #2c3e50;
+}
+
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.result-item {
+  background: white;
+  border-radius: 6px;
+  padding: 15px;
+  border-left: 4px solid #bdc3c7;
+}
+
+.result-item.success {
+  border-left-color: #27ae60;
+  background: #f0fdf4;
+}
+
+.result-item.error {
+  border-left-color: #e74c3c;
+  background: #fef2f2;
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.result-message {
+  font-size: 12px;
+  color: #7f8c8d;
+  margin-top: 5px;
+}
+
+.message-box.warning {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
 }
 </style>
