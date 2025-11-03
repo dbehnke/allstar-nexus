@@ -22,6 +22,7 @@ type AdminAPI struct {
 	ConfigManager   *admin.ConfigManager
 	CommandExecutor *admin.CommandExecutor
 	DBBackupManager *admin.DBBackupManager
+	SystemMonitor   *admin.SystemMonitor
 }
 
 // NewAdminAPI creates a new admin API instance
@@ -878,6 +879,59 @@ func (a *AdminAPI) GetDBBackupStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, 200, stats)
+}
+
+// ===============================================
+// System Monitoring Endpoints
+// ===============================================
+
+// GetSystemMetrics returns current system health metrics
+// GET /api/admin/system/metrics
+func (a *AdminAPI) GetSystemMetrics(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	if a.SystemMonitor == nil {
+		writeError(w, 500, "not_configured", "system monitor not initialized")
+		return
+	}
+
+	metrics, err := a.SystemMonitor.GetMetrics(ctx)
+	if err != nil {
+		writeError(w, 500, "metrics_failed", fmt.Sprintf("failed to get metrics: %v", err))
+		return
+	}
+
+	writeJSON(w, 200, metrics)
+}
+
+// GetSystemHealth performs health checks and returns system status
+// GET /api/admin/system/health
+func (a *AdminAPI) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	if a.SystemMonitor == nil {
+		writeError(w, 500, "not_configured", "system monitor not initialized")
+		return
+	}
+
+	health, err := a.SystemMonitor.GetHealth(ctx)
+	if err != nil {
+		writeError(w, 500, "health_check_failed", fmt.Sprintf("failed to get health: %v", err))
+		return
+	}
+
+	// Return appropriate HTTP status based on health
+	statusCode := 200
+	switch health.Status {
+	case "degraded":
+		statusCode = 200 // Still OK but degraded
+	case "unhealthy":
+		statusCode = 503 // Service Unavailable
+	}
+
+	writeJSON(w, statusCode, health)
 }
 
 // ===============================================

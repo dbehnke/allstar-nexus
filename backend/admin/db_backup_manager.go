@@ -219,7 +219,7 @@ func (bm *DBBackupManager) GetBackupStats(backupID string) (map[string]interface
 
 	return map[string]interface{}{
 		"size":       info.Size(),
-		"size_human": formatBytes(info.Size()),
+		"size_human": FormatBytes(info.Size()),
 		"modified":   info.ModTime(),
 	}, nil
 }
@@ -289,18 +289,4 @@ func copyFile(src, dst string) error {
 	}
 
 	return destFile.Sync()
-}
-
-// formatBytes formats bytes as human-readable string
-func formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

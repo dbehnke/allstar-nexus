@@ -230,9 +230,11 @@ func main() {
 	auditLogger := admin.NewAuditLogger(gormDB)
 	configManager := admin.NewConfigManager(*configFile, "data/config-backups")
 	dbBackupManager := admin.NewDBBackupManager(cfg.DBPath, "data/db-backups", gormDB)
+	systemMonitor := admin.NewSystemMonitor(gormDB)
 	adminAPI := api.NewAdminAPI(auditLogger, userRepo)
 	adminAPI.ConfigManager = configManager
 	adminAPI.DBBackupManager = dbBackupManager
+	adminAPI.SystemMonitor = systemMonitor
 
 	// AMI connector will be set later after it's initialized (if AMI is enabled)
 
@@ -256,6 +258,8 @@ func main() {
 		}))).ServeHTTP(w, r)
 	})
 	mux.Handle("/api/admin/system/status", authMW(superadminMW(http.HandlerFunc(adminAPI.GetSystemStatus))))
+	mux.Handle("/api/admin/system/metrics", authMW(superadminMW(http.HandlerFunc(adminAPI.GetSystemMetrics))))
+	mux.Handle("/api/admin/system/health", authMW(superadminMW(http.HandlerFunc(adminAPI.GetSystemHealth))))
 
 	// Config management routes (require superadmin role)
 	mux.Handle("/api/admin/config", authMW(superadminMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
