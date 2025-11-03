@@ -86,55 +86,10 @@ nfpms:
           owner: allstar-nexus
           group: allstar-nexus
     scripts:
-      preinstall: |
-        #!/bin/sh
-        # Create allstar-nexus user if it doesn't exist
-        if ! id allstar-nexus >/dev/null 2>&1; then
-          useradd --system --no-create-home --shell /sbin/nologin allstar-nexus
-        fi
-      postinstall: |
-        #!/bin/sh
-        # Reload systemd daemon
-        if command -v systemctl >/dev/null 2>&1; then
-          systemctl daemon-reload
-        fi
-        # Set ownership on data directory
-        if [ -d /var/lib/allstar-nexus ]; then
-          chown allstar-nexus:allstar-nexus /var/lib/allstar-nexus
-        fi
-        echo ""
-        echo "Allstar Nexus has been installed!"
-        echo ""
-        echo "Next steps:"
-        echo "  1. Edit the configuration: /etc/allstar-nexus/config.yaml"
-        echo "  2. Enable the service: sudo systemctl enable allstar-nexus"
-        echo "  3. Start the service: sudo systemctl start allstar-nexus"
-        echo "  4. Check status: sudo systemctl status allstar-nexus"
-        echo ""
-      preremove: |
-        #!/bin/sh
-        # Stop service if running
-        if command -v systemctl >/dev/null 2>&1; then
-          systemctl stop allstar-nexus.service 2>/dev/null || true
-          systemctl disable allstar-nexus.service 2>/dev/null || true
-        fi
-      postremove: |
-        #!/bin/sh
-        # Reload systemd daemon
-        if command -v systemctl >/dev/null 2>&1; then
-          systemctl daemon-reload
-        fi
-        echo ""
-        echo "Allstar Nexus has been removed."
-        echo ""
-        echo "Configuration and data were preserved:"
-        echo "  /etc/allstar-nexus/config.yaml"
-        echo "  /var/lib/allstar-nexus"
-        echo ""
-        echo "Remove them manually if desired:"
-        echo "  sudo rm -rf /etc/allstar-nexus"
-        echo "  sudo rm -rf /var/lib/allstar-nexus"
-        echo ""
+      preinstall: scripts/preinstall.sh
+      postinstall: scripts/postinstall.sh
+      preremove: scripts/preremove.sh
+      postremove: scripts/postremove.sh
     overrides:
       deb:
         dependencies:
