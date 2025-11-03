@@ -14,6 +14,7 @@ import DatabaseBackup from '../views/Admin/DatabaseBackup.vue'
 import SystemMonitor from '../views/Admin/SystemMonitor.vue'
 import NodeGroups from '../views/Admin/NodeGroups.vue'
 import ScheduledTasks from '../views/Admin/ScheduledTasks.vue'
+import LogViewer from '../views/Admin/LogViewer.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -94,6 +95,12 @@ const routes = [
     path: '/admin/scheduled-tasks',
     name: 'ScheduledTasks',
     component: ScheduledTasks,
+    meta: { requiresSuperAdmin: true }
+  },
+  {
+    path: '/admin/logs',
+    name: 'LogViewer',
+    component: LogViewer,
     meta: { requiresSuperAdmin: true }
   }
 ]

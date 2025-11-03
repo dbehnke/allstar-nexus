@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -25,6 +26,7 @@ type AdminAPI struct {
 	SystemMonitor    *admin.SystemMonitor
 	NodeGroupManager *admin.NodeGroupManager
 	Scheduler        *admin.Scheduler
+	LogStreamer      *admin.LogStreamer
 }
 
 // NewAdminAPI creates a new admin API instance
@@ -1436,6 +1438,218 @@ func (a *AdminAPI) GetTaskExecutionLogs(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, 200, logs)
+}
+
+// ===============================================
+// Log Management Endpoints
+// ===============================================
+
+// GetLogSources returns available log sources
+// GET /api/admin/logs/sources
+func (a *AdminAPI) GetLogSources(w http.ResponseWriter, r *http.Request) {
+	sources := a.LogStreamer.GetSources()
+	writeJSON(w, 200, sources)
+}
+
+// StreamLogs streams log entries via Server-Sent Events (SSE)
+// GET /api/admin/logs/stream
+func (a *AdminAPI) StreamLogs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser, _ := middleware.UserFromContext(ctx)
+	userEmail := ""
+	if currentUser != nil {
+		userEmail = currentUser.Email
+	}
+	
+	// Parse query parameters
+	q := r.URL.Query()
+	source := q.Get("source")
+	if source == "" {
+		writeError(w, 400, "missing_parameter", "source parameter is required")
+		return
+	}
+
+	level := admin.LogLevel(q.Get("level"))
+	if level == "" {
+		level = admin.LogLevelAll
+	}
+
+	keyword := q.Get("keyword")
+	regexStr := q.Get("regex")
+	tailLines := 100 // default
+	if tl := q.Get("tail"); tl != "" {
+		if parsed, err := strconv.Atoi(tl); err == nil && parsed > 0 {
+			tailLines = parsed
+		}
+	}
+
+	follow := q.Get("follow") == "true"
+
+	// Parse time filters
+	var since, until time.Time
+	if sinceStr := q.Get("since"); sinceStr != "" {
+		if t, err := time.Parse(time.RFC3339, sinceStr); err == nil {
+			since = t
+		}
+	}
+	if untilStr := q.Get("until"); untilStr != "" {
+		if t, err := time.Parse(time.RFC3339, untilStr); err == nil {
+			until = t
+		}
+	}
+
+	// Build filter
+	filter := admin.LogFilter{
+		Level:      level,
+		Source:     source,
+		Keyword:    keyword,
+		Since:      since,
+		Until:      until,
+		TailLines:  tailLines,
+		FollowMode: follow,
+	}
+
+	if regexStr != "" {
+		if regex, err := regexp.Compile(regexStr); err == nil {
+			filter.Regex = regex
+		} else {
+			writeError(w, 400, "invalid_regex", "invalid regex pattern")
+			return
+		}
+	}
+
+	// Audit log access
+	a.LogStreamer.AuditLogStreamAccess(ctx, userEmail, source, filter)
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, 500, "sse_not_supported", "streaming not supported")
+		return
+	}
+
+	// Create output channel
+	output := make(chan admin.StreamLogEntry, 100)
+	errChan := make(chan error, 1)
+
+	// Start streaming in goroutine
+	go func() {
+		err := a.LogStreamer.StreamLogs(ctx, filter, output)
+		if err != nil && err != context.Canceled {
+			errChan <- err
+		}
+		close(output)
+	}()
+
+	// Stream entries to client
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-errChan:
+			// Send error as SSE event
+			fmt.Fprintf(w, "event: error\ndata: %s\n\n", err.Error())
+			flusher.Flush()
+			return
+		case entry, ok := <-output:
+			if !ok {
+				// Stream ended normally
+				fmt.Fprintf(w, "event: end\ndata: stream ended\n\n")
+				flusher.Flush()
+				return
+			}
+
+			// Send log entry as SSE event
+			data, err := json.Marshal(entry)
+			if err != nil {
+				continue
+			}
+			fmt.Fprintf(w, "event: log\ndata: %s\n\n", data)
+			flusher.Flush()
+		}
+	}
+}
+
+// ExportLogs exports filtered logs as a downloadable file
+// GET /api/admin/logs/export
+func (a *AdminAPI) ExportLogs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser, _ := middleware.UserFromContext(ctx)
+	userEmail := ""
+	if currentUser != nil {
+		userEmail = currentUser.Email
+	}
+
+	// Parse query parameters
+	q := r.URL.Query()
+	source := q.Get("source")
+	if source == "" {
+		writeError(w, 400, "missing_parameter", "source parameter is required")
+		return
+	}
+
+	level := admin.LogLevel(q.Get("level"))
+	if level == "" {
+		level = admin.LogLevelAll
+	}
+
+	keyword := q.Get("keyword")
+	regexStr := q.Get("regex")
+
+	// Parse time filters
+	var since, until time.Time
+	if sinceStr := q.Get("since"); sinceStr != "" {
+		if t, err := time.Parse(time.RFC3339, sinceStr); err == nil {
+			since = t
+		}
+	}
+	if untilStr := q.Get("until"); untilStr != "" {
+		if t, err := time.Parse(time.RFC3339, untilStr); err == nil {
+			until = t
+		}
+	}
+
+	// Build filter
+	filter := admin.LogFilter{
+		Level:   level,
+		Source:  source,
+		Keyword: keyword,
+		Since:   since,
+		Until:   until,
+	}
+
+	if regexStr != "" {
+		if regex, err := regexp.Compile(regexStr); err == nil {
+			filter.Regex = regex
+		} else {
+			writeError(w, 400, "invalid_regex", "invalid regex pattern")
+			return
+		}
+	}
+
+	// Audit log export
+	a.LogStreamer.AuditLogExport(ctx, userEmail, source, filter)
+
+	// Export logs
+	data, err := a.LogStreamer.ExportLogs(filter)
+	if err != nil {
+		writeError(w, 500, "export_failed", fmt.Sprintf("failed to export logs: %v", err))
+		return
+	}
+
+	// Set download headers
+	filename := fmt.Sprintf("%s-%s.log", source, time.Now().Format("20060102-150405"))
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+
+	w.WriteHeader(200)
+	w.Write(data)
 }
 
 // ===============================================
