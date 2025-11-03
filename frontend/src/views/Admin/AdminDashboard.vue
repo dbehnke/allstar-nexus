@@ -58,6 +58,14 @@
         <button @click="$router.push('/admin/nodes')" class="btn-card">Manage Nodes</button>
       </div>
 
+      <!-- Database Backup Card -->
+      <div class="admin-card">
+        <div class="card-icon">💾</div>
+        <h3>Database Backup</h3>
+        <p>Create and restore database backups</p>
+        <button @click="$router.push('/admin/database')" class="btn-card">Manage Backups</button>
+      </div>
+
       <!-- Audit Logs Card -->
       <div class="admin-card">
         <div class="card-icon">📋</div>
