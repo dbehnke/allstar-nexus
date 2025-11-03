@@ -32,7 +32,10 @@ For production deployment, see the **[Installation Guide](INSTALL.md)** which co
 
 Quick install on Debian/Ubuntu:
 ```bash
-wget https://github.com/dbehnke/allstar-nexus/releases/latest/download/allstar-nexus_*_linux_amd64.deb
+# Download the latest release (replace VERSION with actual version, e.g., v0.10.1)
+wget https://github.com/dbehnke/allstar-nexus/releases/download/VERSION/allstar-nexus_VERSION_linux_amd64.deb
+# Or download directly from the releases page:
+# https://github.com/dbehnke/allstar-nexus/releases/latest
 sudo dpkg -i allstar-nexus_*_linux_amd64.deb
 sudo nano /etc/allstar-nexus/config.yaml  # Configure your setup
 sudo systemctl enable allstar-nexus

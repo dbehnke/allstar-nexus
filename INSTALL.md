@@ -15,8 +15,11 @@ This guide covers different installation methods for Allstar Nexus.
 The easiest way to install on Debian-based systems is using the `.deb` package from releases:
 
 ```bash
-# Download the package from GitHub releases
-wget https://github.com/dbehnke/allstar-nexus/releases/latest/download/allstar-nexus_*_linux_amd64.deb
+# Download the package from GitHub releases page:
+# https://github.com/dbehnke/allstar-nexus/releases/latest
+# 
+# Replace <version> with the actual version (e.g., v0.10.1)
+wget https://github.com/dbehnke/allstar-nexus/releases/download/<version>/allstar-nexus_<version>_linux_amd64.deb
 
 # Install the package
 sudo dpkg -i allstar-nexus_*_linux_amd64.deb
@@ -36,8 +39,11 @@ After installation, see [Post-Installation Configuration](#post-installation-con
 For RPM-based distributions:
 
 ```bash
-# Download the package from GitHub releases
-wget https://github.com/dbehnke/allstar-nexus/releases/latest/download/allstar-nexus_*_linux_amd64.rpm
+# Download the package from GitHub releases page:
+# https://github.com/dbehnke/allstar-nexus/releases/latest
+#
+# Replace <version> with the actual version (e.g., v0.10.1)
+wget https://github.com/dbehnke/allstar-nexus/releases/download/<version>/allstar-nexus_<version>_linux_amd64.rpm
 
 # Install the package
 sudo rpm -i allstar-nexus_*_linux_amd64.rpm
@@ -75,8 +81,11 @@ After installation, see [Post-Installation Configuration](#post-installation-con
 Download and extract a pre-built archive:
 
 ```bash
-# Download for your platform
-wget https://github.com/dbehnke/allstar-nexus/releases/latest/download/allstar-nexus_*_Linux_x86_64.tar.gz
+# Download for your platform from:
+# https://github.com/dbehnke/allstar-nexus/releases/latest
+#
+# Replace <version> with the actual version (e.g., v0.10.1)
+wget https://github.com/dbehnke/allstar-nexus/releases/download/<version>/allstar-nexus_<version>_Linux_x86_64.tar.gz
 
 # Extract
 tar xzf allstar-nexus_*_Linux_x86_64.tar.gz
@@ -216,11 +225,11 @@ By default, the database is stored at `/var/lib/allstar-nexus/data/allstar.db`. 
 
 Download and install the new package version:
 ```bash
-# Debian/Ubuntu
-sudo dpkg -i allstar-nexus_NEW_VERSION_linux_amd64.deb
+# Debian/Ubuntu (replace <version> with actual version like v0.10.2)
+sudo dpkg -i allstar-nexus_<version>_linux_amd64.deb
 
 # RedHat/CentOS
-sudo rpm -U allstar-nexus_NEW_VERSION_linux_amd64.rpm
+sudo rpm -U allstar-nexus_<version>_linux_amd64.rpm
 ```
 
 The upgrade process preserves your configuration file.

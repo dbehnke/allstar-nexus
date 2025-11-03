@@ -71,7 +71,7 @@ nfpms:
     contents:
       - src: config.yaml.example
         dst: /etc/allstar-nexus/config.yaml
-        type: config|noreplace
+        type: config
         file_info:
           mode: 0644
       - src: allstar-nexus.service

@@ -88,10 +88,10 @@ install: build
 		echo "User allstar-nexus already exists"; \
 	else \
 		echo "Creating system user allstar-nexus..."; \
-		useradd --system --no-create-home --shell /sbin/nologin allstar-nexus || echo "Note: Could not create user (may require root)"; \
+		useradd --system --no-create-home --shell /sbin/nologin allstar-nexus 2>/dev/null || echo "Warning: Could not create user allstar-nexus (insufficient privileges or user creation failed)"; \
 	fi
 	@if [ -d $(STATEDIR) ]; then \
-		chown allstar-nexus:allstar-nexus $(STATEDIR) 2>/dev/null || echo "Note: Could not set ownership on $(STATEDIR) (may require root)"; \
+		chown allstar-nexus:allstar-nexus $(STATEDIR) 2>/dev/null || echo "Warning: Could not set ownership on $(STATEDIR) (insufficient privileges or user does not exist)"; \
 	fi
 	@echo "Installing systemd service to $(SYSTEMDDIR)/$(APP_NAME).service..."
 	install -d $(SYSTEMDDIR)
