@@ -1,0 +1,27 @@
+[Unit]
+Description=Allstar Nexus - Amateur Radio Node Management
+Documentation=https://github.com/dbehnke/allstar-nexus
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=allstar-nexus
+Group=allstar-nexus
+WorkingDirectory=/var/lib/allstar-nexus
+ExecStart=/usr/local/bin/allstar-nexus --config /etc/allstar-nexus/config.yaml
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=allstar-nexus
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/allstar-nexus
+
+[Install]
+WantedBy=multi-user.target
