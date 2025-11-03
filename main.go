@@ -336,12 +336,22 @@ func main() {
 		// Initialize Discord notifier if enabled
 		var discordNotifier *gamification.DiscordNotifier
 		if cfg.Gamification.Discord.Enabled && cfg.Gamification.Discord.WebhookURL != "" {
+			// Gamification-specific Discord webhook configured
 			discordNotifier = gamification.NewDiscordNotifier(
 				cfg.Gamification.Discord.WebhookURL,
 				true, // Already checked enabled above
 				logger,
 			)
-			logger.Info("Discord notifications enabled for gamification")
+			logger.Info("Discord notifications enabled for gamification (dedicated webhook)")
+		} else if cfg.Discord.Enabled && cfg.Discord.WebhookURL != "" {
+			// Fall back to main Discord webhook if gamification Discord not configured
+			// This allows users to use a single webhook for both node activity and gamification
+			discordNotifier = gamification.NewDiscordNotifier(
+				cfg.Discord.WebhookURL,
+				true,
+				logger,
+			)
+			logger.Info("Discord notifications enabled for gamification (using main Discord webhook)")
 		}
 
 		// Initialize and start TallyService
