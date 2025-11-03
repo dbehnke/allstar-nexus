@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/dbehnke/allstar-nexus/compare/v0.10.1...v0.11.0) (2025-11-03)
+
+
+### Features
+
+* add systemd service, Makefile install targets, and package generation ([#68](https://github.com/dbehnke/allstar-nexus/issues/68)) ([02ca554](https://github.com/dbehnke/allstar-nexus/commit/02ca5540018b02e6679dd7515a487895f5055cb5))
+
 ## [0.10.1](https://github.com/dbehnke/allstar-nexus/compare/v0.10.0...v0.10.1) (2025-11-03)
 
 
