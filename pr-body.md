@@ -1,7 +1,7 @@
-# feat: Admin Panel Phase 7 - Advanced Node Management & Task Scheduling (Backend)
+# feat: Admin Panel Phase 7 - Advanced Node Management & Task Scheduling (Complete)
 
 ## Summary
-Implements Phase 7 of the admin panel roadmap, adding advanced node management capabilities and a flexible task scheduling system. This PR focuses on **backend infrastructure** - full UI integration will follow in a subsequent PR.
+Implements Phase 7 of the admin panel roadmap, adding advanced node management capabilities and a flexible task scheduling system. This PR includes **both backend infrastructure and complete frontend UI** for node groups, scheduled tasks, and bulk node operations.
 
 ## Features
 
@@ -74,6 +74,58 @@ Implements Phase 7 of the admin panel roadmap, adding advanced node management c
 - `PUT /api/admin/scheduled-tasks/:id` - Update scheduled task (including pause/resume)
 - `DELETE /api/admin/scheduled-tasks/:id` - Delete scheduled task
 - `GET /api/admin/scheduled-tasks/:id/logs` - Get execution history for a task
+
+## Frontend Components (NEW)
+
+### NodeGroups.vue
+Complete UI for node group management:
+- **Grid card layout** displaying all groups with name, description, node count
+- **Create modal** with form for group name, description, and comma-separated node IDs
+- **Edit modal** pre-populated with existing group data
+- **Delete confirmation** modal with safety check
+- **Node badges** showing group membership in visual format
+- **Real-time feedback** with success/error messages
+- **Responsive design** with auto-adjusting grid columns
+
+### ScheduledTasks.vue
+Comprehensive task scheduling interface:
+- **Task cards** showing type, schedule, status (active/paused), next run time
+- **Create/Edit modal** with dynamic form fields based on task type:
+  - Link/Unlink nodes: local node, remote node, permanent option
+  - Execute AMI: action name, JSON parameters
+  - Database backup: comment field
+- **Cron expression input** with helpful examples and descriptions
+- **Pause/Resume toggle** for quick task control
+- **Execution logs viewer** modal showing history with timestamps, duration, success/failure
+- **Delete confirmation** with safety check
+- **Status badges** (active/paused) with color coding
+- **Per-task type icons** and descriptions
+
+### NodeControl.vue (Enhanced)
+Extended with bulk operations:
+- **New bulk operations section** below existing link/unlink panels
+- **Comma-separated input** for multiple local and target nodes
+- **Bulk link button** with permanent option
+- **Bulk unlink button** for batch disconnections
+- **Results display** showing per-node success/failure with details
+- **Progress indicators** during bulk operations
+- **Detailed error reporting** for each node pair
+- **Maintains existing** single-node functionality
+
+### AdminDashboard.vue (Updated)
+Added Phase 7 cards:
+- **Node Groups card** (📦 icon)
+  - Shows total group count
+  - "Manage Groups" button → `/admin/node-groups`
+- **Scheduled Tasks card** (⏰ icon)
+  - Shows active task count
+  - "Manage Tasks" button → `/admin/scheduled-tasks`
+- **Auto-loading** of counts on mount
+
+### Router Updates
+- Added `/admin/node-groups` route with superadmin guard
+- Added `/admin/scheduled-tasks` route with superadmin guard
+- Imported new components
 
 ### Integration
 - **Database migrations**: Auto-migrate new tables on startup ([main.go:159-162](main.go#L159-L162))
@@ -383,12 +435,6 @@ curl -X POST http://localhost:8080/api/admin/nodes/bulk-link \
 
 ## Known Limitations
 
-### Frontend Not Included
-This PR implements **backend infrastructure only**. Frontend components will be added in a follow-up PR:
-- `NodeGroups.vue` - Node group management UI
-- `ScheduledTasks.vue` - Task scheduler UI
-- Updates to `NodeControl.vue` for bulk selection
-
 ### Task Types
 Currently supports 4 task types. Additional types can be added by:
 1. Implementing handler in `TaskExecutor`
@@ -439,7 +485,10 @@ Updated `go.mod` and `go.sum` included in this PR.
 - [x] No secrets committed
 - [x] Dependencies added to `go.mod`
 - [x] Code follows existing patterns
-- [ ] Frontend UI (deferred to follow-up PR)
+- [x] Frontend UI complete (NodeGroups.vue, ScheduledTasks.vue, bulk ops)
+- [x] Router configured with new routes
+- [x] Admin dashboard updated with Phase 7 cards
+- [x] Frontend builds successfully
 - [ ] Integration tests (deferred)
 
 ## Related Issues/PRs
