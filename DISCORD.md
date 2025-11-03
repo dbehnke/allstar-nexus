@@ -199,6 +199,62 @@ If you're hitting rate limits, the Discord notifier will log warnings. Consider:
   ```
 - If your webhook URL is compromised, delete it in Discord and create a new one
 
+## Gamification Notifications
+
+If you have the [gamification system](GAMIFICATION.md) enabled, Discord notifications can also be sent when users level up, gain renown, or reach new rank groupings (like "Technician" → "General").
+
+### Single Webhook Setup (Recommended)
+
+**By default**, if you have `discord.enabled: true` and `discord.webhook_url` configured, gamification notifications will automatically use the same webhook. You don't need any additional configuration!
+
+```yaml
+# Node activity + Gamification (single webhook)
+discord:
+  enabled: true
+  webhook_url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
+  # ... other discord settings
+
+gamification:
+  enabled: true
+  # No discord section needed - will use main webhook above
+```
+
+### Separate Webhook Setup (Optional)
+
+If you want gamification notifications in a different channel, you can configure a separate webhook:
+
+```yaml
+# Node activity notifications
+discord:
+  enabled: true
+  webhook_url: "https://discord.com/api/webhooks/ACTIVITY_WEBHOOK"
+
+# Gamification notifications (optional - separate webhook)
+gamification:
+  enabled: true
+  discord:
+    enabled: true
+    webhook_url: "https://discord.com/api/webhooks/GAMIFICATION_WEBHOOK"
+```
+
+### Gamification Notification Types
+
+When enabled, you'll receive notifications for:
+
+1. **Level Up**: "🎉 **AD8OD** has achieved level **20**!"
+2. **Rank Change**: "🎖️ **AD8OD** has reached new rank of **General**!" (when crossing level group boundaries like 10→20, 20→30, etc.)
+3. **Renown Gained**: "🌟 **AD8OD** has achieved **Renown Level 1**!" (when reaching level 60 and beyond)
+
+**Note**: Rank changes occur when crossing into these level groups:
+- Level 10-19: Technician (notification at level 10)
+- Level 20-29: General (notification at level 20)
+- Level 30-39: Advanced (notification at level 30)
+- Level 40-49: Extra (notification at level 40)
+- Level 50-55: Elmer (notification at level 50)
+- Level 56-60: Professor (notification at level 56)
+
+For example, reaching level 20 from level 19 will trigger: "🎖️ **AD8OD** has reached new rank of **General**!"
+
 ## Example Configuration
 
 Here's a complete example configuration:
