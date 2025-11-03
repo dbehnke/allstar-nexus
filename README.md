@@ -20,7 +20,29 @@ Allstar Nexus is a full-stack application: a Go backend that serves APIs and an 
 - **Multi-Node Support**: Monitor multiple Allstar nodes from a single dashboard
 - **Authentication**: Secure admin interface with role-based access control
 
-## Quickstart
+## Installation
+
+For production deployment, see the **[Installation Guide](INSTALL.md)** which covers:
+
+- **Package Installation**: Pre-built Debian (.deb) and RedHat (.rpm) packages with systemd service
+- **Binary Installation**: Download and run pre-built binaries
+- **Source Installation**: Build and install using `make install`
+- **Configuration**: Setting up AMI credentials, node numbers, and other options
+- **Systemd Service**: Automatic service management with proper security hardening
+
+Quick install on Debian/Ubuntu:
+```bash
+# Download the latest release (replace VERSION with actual version, e.g., v0.10.1)
+wget https://github.com/dbehnke/allstar-nexus/releases/download/VERSION/allstar-nexus_VERSION_linux_amd64.deb
+# Or download directly from the releases page:
+# https://github.com/dbehnke/allstar-nexus/releases/latest
+sudo dpkg -i allstar-nexus_*_linux_amd64.deb
+sudo nano /etc/allstar-nexus/config.yaml  # Configure your setup
+sudo systemctl enable allstar-nexus
+sudo systemctl start allstar-nexus
+```
+
+## Development Quickstart
 
 Prerequisites
 

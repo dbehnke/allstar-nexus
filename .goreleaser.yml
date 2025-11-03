@@ -55,6 +55,93 @@ archives:
     files:
       - README.md
       - config.yaml.example
+      - allstar-nexus.service
+
+nfpms:
+  - id: allstar-nexus
+    package_name: allstar-nexus
+    homepage: https://github.com/dbehnke/allstar-nexus
+    maintainer: David Behnke <dbehnke@gmail.com>
+    description: Amateur Radio Node Management System for AllStarLink
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/local/bin
+    contents:
+      - src: config.yaml.example
+        dst: /etc/allstar-nexus/config.yaml
+        type: config
+        file_info:
+          mode: 0644
+      - src: allstar-nexus.service
+        dst: /etc/systemd/system/allstar-nexus.service
+        type: config
+        file_info:
+          mode: 0644
+      - dst: /var/lib/allstar-nexus
+        type: dir
+        file_info:
+          mode: 0755
+          owner: allstar-nexus
+          group: allstar-nexus
+    scripts:
+      preinstall: |
+        #!/bin/sh
+        # Create allstar-nexus user if it doesn't exist
+        if ! id allstar-nexus >/dev/null 2>&1; then
+          useradd --system --no-create-home --shell /sbin/nologin allstar-nexus
+        fi
+      postinstall: |
+        #!/bin/sh
+        # Reload systemd daemon
+        if command -v systemctl >/dev/null 2>&1; then
+          systemctl daemon-reload
+        fi
+        # Set ownership on data directory
+        if [ -d /var/lib/allstar-nexus ]; then
+          chown allstar-nexus:allstar-nexus /var/lib/allstar-nexus
+        fi
+        echo ""
+        echo "Allstar Nexus has been installed!"
+        echo ""
+        echo "Next steps:"
+        echo "  1. Edit the configuration: /etc/allstar-nexus/config.yaml"
+        echo "  2. Enable the service: sudo systemctl enable allstar-nexus"
+        echo "  3. Start the service: sudo systemctl start allstar-nexus"
+        echo "  4. Check status: sudo systemctl status allstar-nexus"
+        echo ""
+      preremove: |
+        #!/bin/sh
+        # Stop service if running
+        if command -v systemctl >/dev/null 2>&1; then
+          systemctl stop allstar-nexus.service 2>/dev/null || true
+          systemctl disable allstar-nexus.service 2>/dev/null || true
+        fi
+      postremove: |
+        #!/bin/sh
+        # Reload systemd daemon
+        if command -v systemctl >/dev/null 2>&1; then
+          systemctl daemon-reload
+        fi
+        echo ""
+        echo "Allstar Nexus has been removed."
+        echo ""
+        echo "Configuration and data were preserved:"
+        echo "  /etc/allstar-nexus/config.yaml"
+        echo "  /var/lib/allstar-nexus"
+        echo ""
+        echo "Remove them manually if desired:"
+        echo "  sudo rm -rf /etc/allstar-nexus"
+        echo "  sudo rm -rf /var/lib/allstar-nexus"
+        echo ""
+    overrides:
+      deb:
+        dependencies:
+          - systemd
+      rpm:
+        dependencies:
+          - systemd
 
 checksum:
   name_template: 'checksums.txt'
@@ -87,8 +174,29 @@ release:
   footer: |
     ## Installation
 
+    ### Binary Installation (All Platforms)
     Download the appropriate archive for your platform, extract it,
     and run the binary.
 
-    For configuration, see the included sample config file or visit
+    ### Debian/Ubuntu (.deb package)
+    ```bash
+    sudo dpkg -i allstar-nexus_*_linux_amd64.deb
+    # Edit configuration
+    sudo nano /etc/allstar-nexus/config.yaml
+    # Enable and start service
+    sudo systemctl enable allstar-nexus
+    sudo systemctl start allstar-nexus
+    ```
+
+    ### RedHat/CentOS (.rpm package)
+    ```bash
+    sudo rpm -i allstar-nexus_*_linux_amd64.rpm
+    # Edit configuration
+    sudo nano /etc/allstar-nexus/config.yaml
+    # Enable and start service
+    sudo systemctl enable allstar-nexus
+    sudo systemctl start allstar-nexus
+    ```
+
+    For configuration details, see the included sample config file or visit
     the [documentation](https://github.com/dbehnke/allstar-nexus).
