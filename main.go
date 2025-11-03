@@ -229,8 +229,10 @@ func main() {
 	// Initialize admin API
 	auditLogger := admin.NewAuditLogger(gormDB)
 	configManager := admin.NewConfigManager(*configFile, "data/config-backups")
+	dbBackupManager := admin.NewDBBackupManager(cfg.DBPath, "data/db-backups", gormDB)
 	adminAPI := api.NewAdminAPI(auditLogger, userRepo)
 	adminAPI.ConfigManager = configManager
+	adminAPI.DBBackupManager = dbBackupManager
 
 	// AMI connector will be set later after it's initialized (if AMI is enabled)
 
@@ -272,6 +274,30 @@ func main() {
 		authMW(superadminMW(http.HandlerFunc(adminAPI.RestoreConfigBackup))).ServeHTTP(w, r)
 	})
 	mux.Handle("/api/admin/config/diff", authMW(superadminMW(http.HandlerFunc(adminAPI.GetConfigDiff))))
+
+	// Database backup routes (require superadmin role)
+	mux.Handle("/api/admin/db/backup", authMW(superadminMW(http.HandlerFunc(adminAPI.CreateDBBackup))))
+	mux.Handle("/api/admin/db/backups", authMW(superadminMW(http.HandlerFunc(adminAPI.ListDBBackups))))
+	mux.HandleFunc("/api/admin/db/restore/", func(w http.ResponseWriter, r *http.Request) {
+		authMW(superadminMW(http.HandlerFunc(adminAPI.RestoreDBBackup))).ServeHTTP(w, r)
+	})
+	mux.HandleFunc("/api/admin/db/backups/", func(w http.ResponseWriter, r *http.Request) {
+		authMW(superadminMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodDelete:
+				adminAPI.DeleteDBBackup(w, r)
+			case http.MethodGet:
+				// Check if it's a stats request
+				if r.URL.Path[len(r.URL.Path)-6:] == "/stats" {
+					adminAPI.GetDBBackupStats(w, r)
+				} else {
+					http.Error(w, "not found", http.StatusNotFound)
+				}
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))).ServeHTTP(w, r)
+	})
 
 	// AMI command routes (require superadmin role) - will be registered after AMI connector is initialized
 	mux.Handle("/api/admin/ami/execute", authMW(superadminMW(http.HandlerFunc(adminAPI.ExecuteAMICommand))))

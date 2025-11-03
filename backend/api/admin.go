@@ -21,6 +21,7 @@ type AdminAPI struct {
 	UserRepo        *repository.UserRepo
 	ConfigManager   *admin.ConfigManager
 	CommandExecutor *admin.CommandExecutor
+	DBBackupManager *admin.DBBackupManager
 }
 
 // NewAdminAPI creates a new admin API instance
@@ -710,6 +711,173 @@ func (a *AdminAPI) GetPredefinedCommands(w http.ResponseWriter, r *http.Request)
 
 	commands := a.CommandExecutor.GetPredefinedCommands()
 	writeJSON(w, 200, commands)
+}
+
+// ===============================================
+// Database Backup Endpoints
+// ===============================================
+
+// CreateDBBackup creates a manual database backup
+// POST /api/admin/db/backup
+func (a *AdminAPI) CreateDBBackup(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	if a.DBBackupManager == nil {
+		writeError(w, 500, "not_configured", "database backup manager not initialized")
+		return
+	}
+
+	var req struct {
+		Comment string `json:"comment"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Allow empty body
+		req.Comment = "Manual backup"
+	}
+
+	// Get user from context for audit logging
+	user, ok := middleware.UserFromContext(ctx)
+	if !ok {
+		writeError(w, 401, "unauthorized", "user not found in context")
+		return
+	}
+
+	backupID, err := a.DBBackupManager.CreateBackup(req.Comment, "manual")
+	if err != nil {
+		_ = a.AuditLogger.LogFailure(ctx, user.Email, user.ID, models.AuditActionDBBackupCreate, "", err.Error(), nil, r.RemoteAddr, r.UserAgent())
+		writeError(w, 500, "backup_failed", fmt.Sprintf("failed to create backup: %v", err))
+		return
+	}
+
+	_ = a.AuditLogger.LogSuccess(ctx, user.Email, user.ID, models.AuditActionDBBackupCreate, backupID, nil, r.RemoteAddr, r.UserAgent())
+
+	writeJSON(w, 200, map[string]interface{}{
+		"backup_id": backupID,
+		"comment":   req.Comment,
+	})
+}
+
+// ListDBBackups returns all available database backups
+// GET /api/admin/db/backups
+func (a *AdminAPI) ListDBBackups(w http.ResponseWriter, r *http.Request) {
+	if a.DBBackupManager == nil {
+		writeError(w, 500, "not_configured", "database backup manager not initialized")
+		return
+	}
+
+	backups, err := a.DBBackupManager.ListBackups()
+	if err != nil {
+		writeError(w, 500, "list_failed", fmt.Sprintf("failed to list backups: %v", err))
+		return
+	}
+
+	writeJSON(w, 200, backups)
+}
+
+// RestoreDBBackup restores database from a backup
+// POST /api/admin/db/restore/:id
+// WARNING: This requires application restart
+func (a *AdminAPI) RestoreDBBackup(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	if a.DBBackupManager == nil {
+		writeError(w, 500, "not_configured", "database backup manager not initialized")
+		return
+	}
+
+	// Extract backup ID from URL path
+	backupID := r.PathValue("id")
+	if backupID == "" {
+		writeError(w, 400, "invalid_request", "backup ID required")
+		return
+	}
+
+	// Get user from context for audit logging
+	user, ok := middleware.UserFromContext(ctx)
+	if !ok {
+		writeError(w, 401, "unauthorized", "user not found in context")
+		return
+	}
+
+	// Restore the backup
+	if err := a.DBBackupManager.Restore(backupID); err != nil {
+		_ = a.AuditLogger.LogFailure(ctx, user.Email, user.ID, models.AuditActionDBBackupRestore, backupID, err.Error(), nil, r.RemoteAddr, r.UserAgent())
+		writeError(w, 500, "restore_failed", fmt.Sprintf("failed to restore backup: %v", err))
+		return
+	}
+
+	_ = a.AuditLogger.LogSuccess(ctx, user.Email, user.ID, models.AuditActionDBBackupRestore, backupID, nil, r.RemoteAddr, r.UserAgent())
+
+	writeJSON(w, 200, map[string]interface{}{
+		"restored":  true,
+		"backup_id": backupID,
+		"message":   "Database restored. Application restart required.",
+	})
+}
+
+// DeleteDBBackup deletes a database backup
+// DELETE /api/admin/db/backups/:id
+func (a *AdminAPI) DeleteDBBackup(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	if a.DBBackupManager == nil {
+		writeError(w, 500, "not_configured", "database backup manager not initialized")
+		return
+	}
+
+	// Extract backup ID from URL path
+	backupID := r.PathValue("id")
+	if backupID == "" {
+		writeError(w, 400, "invalid_request", "backup ID required")
+		return
+	}
+
+	// Get user from context for audit logging
+	user, ok := middleware.UserFromContext(ctx)
+	if !ok {
+		writeError(w, 401, "unauthorized", "user not found in context")
+		return
+	}
+
+	if err := a.DBBackupManager.DeleteBackup(backupID); err != nil {
+		_ = a.AuditLogger.LogFailure(ctx, user.Email, user.ID, models.AuditActionDBBackupDelete, backupID, err.Error(), nil, r.RemoteAddr, r.UserAgent())
+		writeError(w, 500, "delete_failed", fmt.Sprintf("failed to delete backup: %v", err))
+		return
+	}
+
+	_ = a.AuditLogger.LogSuccess(ctx, user.Email, user.ID, models.AuditActionDBBackupDelete, backupID, nil, r.RemoteAddr, r.UserAgent())
+
+	writeJSON(w, 200, map[string]interface{}{
+		"deleted":   true,
+		"backup_id": backupID,
+	})
+}
+
+// GetDBBackupStats returns statistics about a database backup
+// GET /api/admin/db/backups/:id/stats
+func (a *AdminAPI) GetDBBackupStats(w http.ResponseWriter, r *http.Request) {
+	if a.DBBackupManager == nil {
+		writeError(w, 500, "not_configured", "database backup manager not initialized")
+		return
+	}
+
+	// Extract backup ID from URL path
+	backupID := r.PathValue("id")
+	if backupID == "" {
+		writeError(w, 400, "invalid_request", "backup ID required")
+		return
+	}
+
+	stats, err := a.DBBackupManager.GetBackupStats(backupID)
+	if err != nil {
+		writeError(w, 404, "not_found", fmt.Sprintf("failed to get backup stats: %v", err))
+		return
+	}
+
+	writeJSON(w, 200, stats)
 }
 
 // ===============================================

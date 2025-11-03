@@ -39,4 +39,7 @@ const (
 	AuditActionUserReset      = "user.password_reset"
 	AuditActionLogin          = "auth.login"
 	AuditActionLoginFailed    = "auth.login_failed"
+	AuditActionDBBackupCreate = "db.backup.create"
+	AuditActionDBBackupRestore = "db.backup.restore"
+	AuditActionDBBackupDelete = "db.backup.delete"
 )

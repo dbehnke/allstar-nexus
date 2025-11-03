@@ -10,6 +10,7 @@ import ConfigEditor from '../views/Admin/ConfigEditor.vue'
 import CommandPanel from '../views/Admin/CommandPanel.vue'
 import NodeControl from '../views/Admin/NodeControl.vue'
 import UserManager from '../views/Admin/UserManager.vue'
+import DatabaseBackup from '../views/Admin/DatabaseBackup.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
@@ -66,6 +67,12 @@ const routes = [
     path: '/admin/users',
     name: 'UserManager',
     component: UserManager,
+    meta: { requiresSuperAdmin: true }
+  },
+  {
+    path: '/admin/database',
+    name: 'DatabaseBackup',
+    component: DatabaseBackup,
     meta: { requiresSuperAdmin: true }
   }
 ]
