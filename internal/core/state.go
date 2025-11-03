@@ -98,7 +98,7 @@ type StateManager struct {
 
 func NewStateManager() *StateManager {
 	sm := &StateManager{
-		state:              NodeState{UpdatedAt: time.Now(), Version: "0.1.0", SessionStart: time.Now()},
+		state:              NodeState{UpdatedAt: time.Now().UTC(), Version: "0.1.0", SessionStart: time.Now().UTC()},
 		out:                make(chan NodeState, 8),
 		talkerOut:          make(chan TalkerEvent, 16),
 		log:                NewTalkerLog(200, 10*time.Minute),
@@ -330,7 +330,7 @@ func (sm *StateManager) apply(m ami.Message) {
 		log.Printf("[ALINKS DEBUG] parsed ids=%v keyed=%v previous_links=%v", ids, keyedMap, prev)
 
 		// Process keying trackers for each configured source node
-		now := time.Now()
+		now := time.Now().UTC().UTC()
 		for sourceNodeID, tracker := range sm.keyingTrackers {
 			// Process ALINKS for this source node's tracker
 			tracker.ProcessALinks(ids, keyedMap, now)
@@ -397,7 +397,7 @@ func (sm *StateManager) apply(m ami.Message) {
 		// FALLBACK: If RPT_ALINKS not available, use RPT_LINKS to at least populate the node list
 		// (without keying status information)
 		// Skip if we just processed ALINKS within the last 500ms to avoid duplicate processing
-		now := time.Now()
+		now := time.Now().UTC().UTC()
 		shouldSkip := !sm.lastALinksProcessedAt.IsZero() && now.Sub(sm.lastALinksProcessedAt) < 500*time.Millisecond
 
 		if !shouldSkip {
@@ -495,7 +495,7 @@ func (sm *StateManager) apply(m ami.Message) {
 		for i := range sm.state.LinksDetailed {
 			existing[sm.state.LinksDetailed[i].Node] = &sm.state.LinksDetailed[i]
 		}
-		now := time.Now()
+		now := time.Now().UTC()
 		newDetails := make([]LinkInfo, 0, len(links))
 		var added []LinkInfo
 		currentSet := map[int]struct{}{}
@@ -621,15 +621,15 @@ func (sm *StateManager) apply(m ami.Message) {
 		}
 	}
 	if ev, ok := m.Headers["Event"]; ok && ev == "FullyBooted" && sm.state.BootedAt == nil {
-		now := time.Now()
+		now := time.Now().UTC().UTC()
 		sm.state.BootedAt = &now
 	}
-	sm.state.UpdatedAt = time.Now()
-	sm.state.Heartbeat = time.Now().UnixMilli()
+	sm.state.UpdatedAt = time.Now().UTC().UTC()
+	sm.state.Heartbeat = time.Now().UTC().UTC().UnixMilli()
 
 	// Process keying tracker timers on every event to ensure unkey timers expire properly
 	// This is critical because timers need to be checked even when no ALINKS events arrive
-	now := time.Now()
+	now := time.Now().UTC().UTC()
 	for sourceNodeID, tracker := range sm.keyingTrackers {
 		// Process the tracker's timer queue
 		if tracker.ProcessTimers(now) {
@@ -660,7 +660,7 @@ func (sm *StateManager) apply(m ami.Message) {
 }
 
 func (sm *StateManager) emitTalker(kind string, node int) {
-	now := time.Now()
+	now := time.Now().UTC()
 	evt := TalkerEvent{At: now, Kind: kind, Node: node}
 
 	// Enrich with node information if available
@@ -711,7 +711,7 @@ func (sm *StateManager) emitTalkerFromLink(kind string, link *LinkInfo) {
 		return
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	evt := TalkerEvent{
 		At:          now,
 		Kind:        kind,
@@ -770,7 +770,7 @@ func (sm *StateManager) SeedLinkStats(list []LinkInfo) {
 		ids = append(ids, l.Node)
 	}
 	sm.state.Links = ids
-	sm.state.UpdatedAt = time.Now()
+	sm.state.UpdatedAt = time.Now().UTC().UTC()
 }
 
 // SetVersion updates the version string that will be reported in STATUS_UPDATE snapshots.
@@ -829,7 +829,7 @@ func (sm *StateManager) SeedKeyingTrackerFromLinks(sourceNodeID int) {
 
 	// Process with empty keying map (no keying status available yet)
 	emptyKeyedMap := make(map[int]bool)
-	now := time.Now()
+	now := time.Now().UTC().UTC()
 	tracker.ProcessALinks(linkIDs, emptyKeyedMap, now)
 
 	// Enrich with node lookup data and link details
@@ -982,7 +982,7 @@ func (sm *StateManager) GetSourceNodeSnapshot(nodeID int) (SourceNodeKeyingUpdat
 		RxKeyed:       sm.state.RxKeyed,
 		NumLinks:      perLinks,
 		NumALinks:     perALinks,
-		Timestamp:     time.Now(),
+		Timestamp:     time.Now().UTC(),
 	}, true
 }
 
@@ -1022,7 +1022,7 @@ func (sm *StateManager) ApplyCombinedStatus(combined *ami.CombinedNodeStatus) {
 		}
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	newDetails := make([]LinkInfo, 0, len(combined.Connections))
 	var added []LinkInfo
 	currentSet := map[linkKey]struct{}{}

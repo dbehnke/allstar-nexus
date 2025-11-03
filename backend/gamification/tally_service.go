@@ -201,11 +201,11 @@ func (s *TallyService) ProcessTally() error {
 			// Update rested bonus accumulation
 			s.updateRestedBonus(profile)
 
-			// Caps context
-			weeklyXP, dailyXP := 0, 0
+			// Caps context - track seconds for cap checks
+			weeklySeconds, dailySeconds := 0, 0
 			if s.config.CapsEnabled {
-				weeklyXP, _ = s.activityRepo.GetWeeklyXP(ctx, callsign)
-				dailyXP, _ = s.activityRepo.GetDailyXP(ctx, callsign)
+				weeklySeconds, _ = s.activityRepo.GetWeeklySeconds(ctx, callsign)
+				dailySeconds, _ = s.activityRepo.GetDailySeconds(ctx, callsign)
 			}
 
 			// DR context
@@ -222,11 +222,13 @@ func (s *TallyService) ProcessTally() error {
 				rawXP := tx.DurationSeconds
 				summary.TransmissionsHandled++
 
-				if s.config.CapsEnabled && weeklyXP >= s.config.WeeklyCapSeconds {
+				// Check if weekly cap (in seconds) is reached
+				if s.config.CapsEnabled && weeklySeconds >= s.config.WeeklyCapSeconds {
 					_ = s.activityRepo.LogActivity(ctx, callsign, rawXP, 0, 0, 0, 0)
 					continue
 				}
-				if s.config.CapsEnabled && dailyXP >= s.config.DailyCapSeconds {
+				// Check if daily cap (in seconds) is reached
+				if s.config.CapsEnabled && dailySeconds >= s.config.DailyCapSeconds {
 					_ = s.activityRepo.LogActivity(ctx, callsign, rawXP, 0, 0, 0, 0)
 					continue
 				}
@@ -239,23 +241,35 @@ func (s *TallyService) ProcessTally() error {
 				finalXP := float64(rawXP) * restedMultiplier * drMultiplier * kerchunkPenalty
 				awardedXP := int(finalXP)
 
+				// Cap the raw seconds (not XP) that count toward the cap
+				// We award full multiplied XP but only count raw seconds toward cap
+				cappedRawSeconds := rawXP
 				if s.config.CapsEnabled {
-					remainingDaily := s.config.DailyCapSeconds - dailyXP
-					if awardedXP > remainingDaily {
-						awardedXP = remainingDaily
+					// Check both daily and weekly caps and use the most restrictive
+					remainingDaily := s.config.DailyCapSeconds - dailySeconds
+					remainingWeekly := s.config.WeeklyCapSeconds - weeklySeconds
+					
+					// Use the minimum of raw seconds and both remaining caps
+					if rawXP > remainingDaily {
+						cappedRawSeconds = remainingDaily
 					}
-					remainingWeekly := s.config.WeeklyCapSeconds - weeklyXP
-					if awardedXP > remainingWeekly {
-						awardedXP = remainingWeekly
+					if cappedRawSeconds > remainingWeekly {
+						cappedRawSeconds = remainingWeekly
+					}
+					
+					// Recalculate XP based on capped seconds (if capped)
+					if cappedRawSeconds < rawXP {
+						finalXP = float64(cappedRawSeconds) * restedMultiplier * drMultiplier * kerchunkPenalty
+						awardedXP = int(finalXP)
 					}
 				}
 
-				_ = s.activityRepo.LogActivity(ctx, callsign, rawXP, awardedXP, restedMultiplier, drMultiplier, kerchunkPenalty)
+				_ = s.activityRepo.LogActivity(ctx, callsign, cappedRawSeconds, awardedXP, restedMultiplier, drMultiplier, kerchunkPenalty)
 				profile.ExperiencePoints += awardedXP
 				profile.DailyXP += awardedXP
 				profile.WeeklyXP += awardedXP
-				weeklyXP += awardedXP
-				dailyXP += awardedXP
+				weeklySeconds += cappedRawSeconds
+				dailySeconds += cappedRawSeconds
 			}
 
 			if len(txLogs) > 0 {

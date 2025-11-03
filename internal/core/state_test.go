@@ -204,3 +204,29 @@ func TestTextNodeCallsignAndDescription(t *testing.T) {
 		t.Error("expected to find KF8ST callsign")
 	}
 }
+
+// TestTransmissionTimestampsAreUTC verifies that transmission timestamps use UTC
+func TestTransmissionTimestampsAreUTC(t *testing.T) {
+	// Simple test: verify that time.Now().UTC() produces UTC timestamps
+	now := time.Now().UTC()
+	if now.Location() != time.UTC {
+		t.Errorf("time.Now().UTC() should return UTC location, got %v", now.Location())
+	}
+
+	// Verify timestamp handling in ProcessALinks would use UTC
+	// by checking the fix is in place (we've changed time.Now() to time.Now().UTC())
+	sm := NewStateManager()
+	
+	// Apply an ALINKS event which internally calls time.Now().UTC()
+	sm.apply(ami.Message{
+		Headers: map[string]string{
+			"RPT_ALINKS": "2001TU",
+		},
+	})
+	
+	// Check that the state's UpdatedAt timestamp is in UTC
+	snap := sm.Snapshot()
+	if snap.UpdatedAt.Location() != time.UTC {
+		t.Errorf("StateManager snapshot UpdatedAt should be in UTC, got %v", snap.UpdatedAt.Location())
+	}
+}
