@@ -17,12 +17,14 @@ import (
 
 // AdminAPI handles administrative endpoints
 type AdminAPI struct {
-	AuditLogger     *admin.AuditLogger
-	UserRepo        *repository.UserRepo
-	ConfigManager   *admin.ConfigManager
-	CommandExecutor *admin.CommandExecutor
-	DBBackupManager *admin.DBBackupManager
-	SystemMonitor   *admin.SystemMonitor
+	AuditLogger      *admin.AuditLogger
+	UserRepo         *repository.UserRepo
+	ConfigManager    *admin.ConfigManager
+	CommandExecutor  *admin.CommandExecutor
+	DBBackupManager  *admin.DBBackupManager
+	SystemMonitor    *admin.SystemMonitor
+	NodeGroupManager *admin.NodeGroupManager
+	Scheduler        *admin.Scheduler
 }
 
 // NewAdminAPI creates a new admin API instance
@@ -932,6 +934,508 @@ func (a *AdminAPI) GetSystemHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, statusCode, health)
+}
+
+// ===============================================
+// Node Group Management Endpoints (Phase 7)
+// ===============================================
+
+// CreateNodeGroup creates a new node group
+// POST /api/admin/node-groups
+func (a *AdminAPI) CreateNodeGroup(w http.ResponseWriter, r *http.Request) {
+	type req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		NodeNumbers []int  `json:"node_numbers"`
+	}
+
+	var body req
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, 400, "bad_request", "invalid json body")
+		return
+	}
+
+	if body.Name == "" || len(body.NodeNumbers) == 0 {
+		writeError(w, 400, "validation_error", "name and node_numbers are required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	currentUser, _ := middleware.UserFromContext(r.Context())
+	if currentUser == nil {
+		writeError(w, 401, "unauthorized", "user not found")
+		return
+	}
+
+	group := &models.NodeGroup{
+		Name:        body.Name,
+		Description: body.Description,
+		NodeNumbers: body.NodeNumbers,
+		CreatedBy:   currentUser.Email,
+	}
+
+	if err := a.NodeGroupManager.CreateGroup(ctx, group); err != nil {
+		writeError(w, 500, "db_error", fmt.Sprintf("failed to create group: %v", err))
+		return
+	}
+
+	// Audit log
+	if a.AuditLogger != nil {
+		_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, "create_node_group",
+			fmt.Sprintf("group/%d", group.ID),
+			map[string]interface{}{"name": body.Name, "nodes": body.NodeNumbers},
+			middleware.GetClientIP(r), r.UserAgent())
+	}
+
+	writeJSON(w, 201, group)
+}
+
+// ListNodeGroups returns all node groups
+// GET /api/admin/node-groups
+func (a *AdminAPI) ListNodeGroups(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	if a.NodeGroupManager == nil {
+		writeError(w, 500, "not_configured", "node group manager not initialized")
+		return
+	}
+
+	groups, err := a.NodeGroupManager.ListGroups(ctx)
+	if err != nil {
+		writeError(w, 500, "db_error", "failed to list groups")
+		return
+	}
+
+	writeJSON(w, 200, groups)
+}
+
+// UpdateNodeGroup updates an existing node group
+// PUT /api/admin/node-groups/:id
+func (a *AdminAPI) UpdateNodeGroup(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Path[len("/api/admin/node-groups/"):]
+	groupID, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid group ID")
+		return
+	}
+
+	type req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		NodeNumbers []int  `json:"node_numbers"`
+	}
+
+	var body req
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, 400, "bad_request", "invalid json body")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	currentUser, _ := middleware.UserFromContext(r.Context())
+
+	updates := &models.NodeGroup{
+		Name:        body.Name,
+		Description: body.Description,
+		NodeNumbers: body.NodeNumbers,
+	}
+
+	if err := a.NodeGroupManager.UpdateGroup(ctx, uint(groupID), updates); err != nil {
+		writeError(w, 500, "db_error", fmt.Sprintf("failed to update group: %v", err))
+		return
+	}
+
+	// Audit log
+	if a.AuditLogger != nil && currentUser != nil {
+		_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, "update_node_group",
+			fmt.Sprintf("group/%d", groupID), updates,
+			middleware.GetClientIP(r), r.UserAgent())
+	}
+
+	writeJSON(w, 200, map[string]interface{}{"updated": true})
+}
+
+// DeleteNodeGroup deletes a node group
+// DELETE /api/admin/node-groups/:id
+func (a *AdminAPI) DeleteNodeGroup(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Path[len("/api/admin/node-groups/"):]
+	groupID, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid group ID")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	currentUser, _ := middleware.UserFromContext(r.Context())
+
+	if err := a.NodeGroupManager.DeleteGroup(ctx, uint(groupID)); err != nil {
+		writeError(w, 500, "db_error", fmt.Sprintf("failed to delete group: %v", err))
+		return
+	}
+
+	// Audit log
+	if a.AuditLogger != nil && currentUser != nil {
+		_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, "delete_node_group",
+			fmt.Sprintf("group/%d", groupID), nil,
+			middleware.GetClientIP(r), r.UserAgent())
+	}
+
+	writeJSON(w, 200, map[string]interface{}{"deleted": true})
+}
+
+// BulkLinkNodes links multiple nodes in bulk
+// POST /api/admin/nodes/bulk-link
+func (a *AdminAPI) BulkLinkNodes(w http.ResponseWriter, r *http.Request) {
+	type linkOp struct {
+		SourceNode int  `json:"source_node"`
+		TargetNode int  `json:"target_node"`
+		Permanent  bool `json:"permanent"`
+	}
+	type req struct {
+		Operations []linkOp `json:"operations"`
+	}
+
+	var body req
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, 400, "bad_request", "invalid json body")
+		return
+	}
+
+	if len(body.Operations) == 0 {
+		writeError(w, 400, "validation_error", "at least one operation is required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	currentUser, _ := middleware.UserFromContext(r.Context())
+
+	results := make([]map[string]interface{}, 0, len(body.Operations))
+	successCount := 0
+	failCount := 0
+
+	for _, op := range body.Operations {
+		result := map[string]interface{}{
+			"source_node": op.SourceNode,
+			"target_node": op.TargetNode,
+		}
+
+		if a.CommandExecutor == nil || a.CommandExecutor.AMI == nil {
+			result["success"] = false
+			result["error"] = "AMI not configured"
+			failCount++
+		} else if !a.CommandExecutor.AMI.IsConnected() {
+			result["success"] = false
+			result["error"] = "AMI not connected"
+			failCount++
+		} else {
+			amiResult, err := a.CommandExecutor.AMI.LinkNode(op.SourceNode, op.TargetNode, op.Permanent)
+			if err != nil || !amiResult.Success {
+				result["success"] = false
+				if err != nil {
+					result["error"] = err.Error()
+				} else {
+					result["error"] = amiResult.Message
+				}
+				failCount++
+			} else {
+				result["success"] = true
+				result["message"] = amiResult.Message
+				successCount++
+
+				// Audit log each successful link
+				if a.AuditLogger != nil && currentUser != nil {
+					_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, "bulk_link",
+						fmt.Sprintf("nodes/%d/%d", op.SourceNode, op.TargetNode),
+						map[string]interface{}{"permanent": op.Permanent},
+						middleware.GetClientIP(r), r.UserAgent())
+				}
+			}
+		}
+
+		results = append(results, result)
+	}
+
+	response := map[string]interface{}{
+		"total":        len(body.Operations),
+		"success":      successCount,
+		"failed":       failCount,
+		"results":      results,
+	}
+
+	writeJSON(w, 200, response)
+}
+
+// BulkUnlinkNodes unlinks multiple nodes in bulk
+// POST /api/admin/nodes/bulk-unlink
+func (a *AdminAPI) BulkUnlinkNodes(w http.ResponseWriter, r *http.Request) {
+	type unlinkOp struct {
+		SourceNode int `json:"source_node"`
+		TargetNode int `json:"target_node"`
+	}
+	type req struct {
+		Operations []unlinkOp `json:"operations"`
+	}
+
+	var body req
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, 400, "bad_request", "invalid json body")
+		return
+	}
+
+	if len(body.Operations) == 0 {
+		writeError(w, 400, "validation_error", "at least one operation is required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	currentUser, _ := middleware.UserFromContext(r.Context())
+
+	results := make([]map[string]interface{}, 0, len(body.Operations))
+	successCount := 0
+	failCount := 0
+
+	for _, op := range body.Operations {
+		result := map[string]interface{}{
+			"source_node": op.SourceNode,
+			"target_node": op.TargetNode,
+		}
+
+		if a.CommandExecutor == nil || a.CommandExecutor.AMI == nil {
+			result["success"] = false
+			result["error"] = "AMI not configured"
+			failCount++
+		} else if !a.CommandExecutor.AMI.IsConnected() {
+			result["success"] = false
+			result["error"] = "AMI not connected"
+			failCount++
+		} else {
+			amiResult, err := a.CommandExecutor.AMI.UnlinkNode(op.SourceNode, op.TargetNode)
+			if err != nil || !amiResult.Success {
+				result["success"] = false
+				if err != nil {
+					result["error"] = err.Error()
+				} else {
+					result["error"] = amiResult.Message
+				}
+				failCount++
+			} else {
+				result["success"] = true
+				result["message"] = amiResult.Message
+				successCount++
+
+				// Audit log each successful unlink
+				if a.AuditLogger != nil && currentUser != nil {
+					_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, "bulk_unlink",
+						fmt.Sprintf("nodes/%d/%d", op.SourceNode, op.TargetNode), nil,
+						middleware.GetClientIP(r), r.UserAgent())
+				}
+			}
+		}
+
+		results = append(results, result)
+	}
+
+	response := map[string]interface{}{
+		"total":   len(body.Operations),
+		"success": successCount,
+		"failed":  failCount,
+		"results": results,
+	}
+
+	writeJSON(w, 200, response)
+}
+
+// ===============================================
+// Scheduled Task Management Endpoints (Phase 7)
+// ===============================================
+
+// CreateScheduledTask creates a new scheduled task
+// POST /api/admin/scheduled-tasks
+func (a *AdminAPI) CreateScheduledTask(w http.ResponseWriter, r *http.Request) {
+	var task models.ScheduledTask
+	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+		writeError(w, 400, "bad_request", "invalid json body")
+		return
+	}
+
+	if task.Name == "" || task.CronExpression == "" || task.TaskType == "" {
+		writeError(w, 400, "validation_error", "name, cron_expression, and task_type are required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	currentUser, _ := middleware.UserFromContext(r.Context())
+	if currentUser == nil {
+		writeError(w, 401, "unauthorized", "user not found")
+		return
+	}
+
+	task.CreatedBy = currentUser.Email
+
+	if a.Scheduler == nil {
+		writeError(w, 500, "not_configured", "scheduler not initialized")
+		return
+	}
+
+	if err := a.Scheduler.CreateTask(ctx, &task); err != nil {
+		writeError(w, 500, "scheduler_error", fmt.Sprintf("failed to create task: %v", err))
+		return
+	}
+
+	// Audit log
+	if a.AuditLogger != nil {
+		_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, "create_scheduled_task",
+			fmt.Sprintf("task/%d", task.ID),
+			map[string]interface{}{"name": task.Name, "type": task.TaskType, "cron": task.CronExpression},
+			middleware.GetClientIP(r), r.UserAgent())
+	}
+
+	writeJSON(w, 201, task)
+}
+
+// ListScheduledTasks returns all scheduled tasks
+// GET /api/admin/scheduled-tasks
+func (a *AdminAPI) ListScheduledTasks(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	if a.Scheduler == nil {
+		writeError(w, 500, "not_configured", "scheduler not initialized")
+		return
+	}
+
+	tasks, err := a.Scheduler.ListTasks(ctx)
+	if err != nil {
+		writeError(w, 500, "db_error", "failed to list tasks")
+		return
+	}
+
+	writeJSON(w, 200, tasks)
+}
+
+// UpdateScheduledTask updates a scheduled task
+// PUT /api/admin/scheduled-tasks/:id
+func (a *AdminAPI) UpdateScheduledTask(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Path[len("/api/admin/scheduled-tasks/"):]
+	taskID, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid task ID")
+		return
+	}
+
+	var updates models.ScheduledTask
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		writeError(w, 400, "bad_request", "invalid json body")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	currentUser, _ := middleware.UserFromContext(r.Context())
+
+	if a.Scheduler == nil {
+		writeError(w, 500, "not_configured", "scheduler not initialized")
+		return
+	}
+
+	if err := a.Scheduler.UpdateTask(ctx, uint(taskID), &updates); err != nil {
+		writeError(w, 500, "scheduler_error", fmt.Sprintf("failed to update task: %v", err))
+		return
+	}
+
+	// Audit log
+	if a.AuditLogger != nil && currentUser != nil {
+		_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, "update_scheduled_task",
+			fmt.Sprintf("task/%d", taskID), updates,
+			middleware.GetClientIP(r), r.UserAgent())
+	}
+
+	writeJSON(w, 200, map[string]interface{}{"updated": true})
+}
+
+// DeleteScheduledTask deletes a scheduled task
+// DELETE /api/admin/scheduled-tasks/:id
+func (a *AdminAPI) DeleteScheduledTask(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Path[len("/api/admin/scheduled-tasks/"):]
+	taskID, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid task ID")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	currentUser, _ := middleware.UserFromContext(r.Context())
+
+	if a.Scheduler == nil {
+		writeError(w, 500, "not_configured", "scheduler not initialized")
+		return
+	}
+
+	if err := a.Scheduler.DeleteTask(ctx, uint(taskID)); err != nil {
+		writeError(w, 500, "scheduler_error", fmt.Sprintf("failed to delete task: %v", err))
+		return
+	}
+
+	// Audit log
+	if a.AuditLogger != nil && currentUser != nil {
+		_ = a.AuditLogger.LogSuccess(ctx, currentUser.Email, currentUser.ID, "delete_scheduled_task",
+			fmt.Sprintf("task/%d", taskID), nil,
+			middleware.GetClientIP(r), r.UserAgent())
+	}
+
+	writeJSON(w, 200, map[string]interface{}{"deleted": true})
+}
+
+// GetTaskExecutionLogs returns execution logs for a task
+// GET /api/admin/scheduled-tasks/:id/logs
+func (a *AdminAPI) GetTaskExecutionLogs(w http.ResponseWriter, r *http.Request) {
+	// Extract task ID from path (remove "/logs" suffix)
+	pathParts := r.URL.Path[len("/api/admin/scheduled-tasks/"):]
+	taskIDStr := pathParts[:len(pathParts)-len("/logs")]
+	taskID, err := strconv.ParseUint(taskIDStr, 10, 32)
+	if err != nil {
+		writeError(w, 400, "bad_request", "invalid task ID")
+		return
+	}
+
+	limit := 50
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	if a.Scheduler == nil {
+		writeError(w, 500, "not_configured", "scheduler not initialized")
+		return
+	}
+
+	logs, err := a.Scheduler.GetTaskExecutionLogs(ctx, uint(taskID), limit)
+	if err != nil {
+		writeError(w, 500, "db_error", "failed to get execution logs")
+		return
+	}
+
+	writeJSON(w, 200, logs)
 }
 
 // ===============================================

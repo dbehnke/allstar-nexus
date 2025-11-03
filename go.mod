@@ -8,6 +8,7 @@ require github.com/coder/websocket v1.8.14
 
 require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/robfig/cron/v3 v3.0.1 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 )
 

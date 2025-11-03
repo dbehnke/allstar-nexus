@@ -156,6 +156,10 @@ func main() {
 		&models.XPActivityLog{},
 		&models.TallyState{},
 		&models.AuditLog{},
+		&models.NodeGroup{},
+		&models.NodeGroupConfig{},
+		&models.ScheduledTask{},
+		&models.TaskExecutionLog{},
 	); err != nil {
 		log.Fatalf("GORM auto-migrate error: %v", err)
 	}
@@ -231,12 +235,18 @@ func main() {
 	configManager := admin.NewConfigManager(*configFile, "data/config-backups")
 	dbBackupManager := admin.NewDBBackupManager(cfg.DBPath, "data/db-backups", gormDB)
 	systemMonitor := admin.NewSystemMonitor(gormDB)
+	nodeGroupManager := admin.NewNodeGroupManager(gormDB)
+
+	// Initialize scheduler (will be started after AMI connector is available)
+	var scheduler *admin.Scheduler
+
 	adminAPI := api.NewAdminAPI(auditLogger, userRepo)
 	adminAPI.ConfigManager = configManager
 	adminAPI.DBBackupManager = dbBackupManager
 	adminAPI.SystemMonitor = systemMonitor
+	adminAPI.NodeGroupManager = nodeGroupManager
 
-	// AMI connector will be set later after it's initialized (if AMI is enabled)
+	// AMI connector and scheduler will be set later after AMI is initialized (if AMI is enabled)
 
 	// Admin routes (require superadmin role)
 	mux.Handle("/api/admin/audit", authMW(superadminMW(http.HandlerFunc(adminAPI.GetAuditLogs))))
@@ -308,6 +318,69 @@ func main() {
 	mux.Handle("/api/admin/ami/link", authMW(superadminMW(http.HandlerFunc(adminAPI.LinkNode))))
 	mux.Handle("/api/admin/ami/unlink", authMW(superadminMW(http.HandlerFunc(adminAPI.UnlinkNode))))
 	mux.Handle("/api/admin/ami/commands", authMW(superadminMW(http.HandlerFunc(adminAPI.GetPredefinedCommands))))
+
+	// Phase 7: Node Group Management routes (require superadmin role)
+	mux.Handle("/api/admin/node-groups", authMW(superadminMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminAPI.ListNodeGroups(w, r)
+		case http.MethodPost:
+			adminAPI.CreateNodeGroup(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))))
+	mux.HandleFunc("/api/admin/node-groups/", func(w http.ResponseWriter, r *http.Request) {
+		authMW(superadminMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodPut:
+				adminAPI.UpdateNodeGroup(w, r)
+			case http.MethodDelete:
+				adminAPI.DeleteNodeGroup(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))).ServeHTTP(w, r)
+	})
+
+	// Phase 7: Bulk node operations (require superadmin role)
+	mux.Handle("/api/admin/nodes/bulk-link", authMW(superadminMW(http.HandlerFunc(adminAPI.BulkLinkNodes))))
+	mux.Handle("/api/admin/nodes/bulk-unlink", authMW(superadminMW(http.HandlerFunc(adminAPI.BulkUnlinkNodes))))
+
+	// Phase 7: Scheduled Task Management routes (require superadmin role)
+	mux.Handle("/api/admin/scheduled-tasks", authMW(superadminMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			adminAPI.ListScheduledTasks(w, r)
+		case http.MethodPost:
+			adminAPI.CreateScheduledTask(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))))
+	mux.HandleFunc("/api/admin/scheduled-tasks/", func(w http.ResponseWriter, r *http.Request) {
+		authMW(superadminMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if it's a logs request
+			if len(r.URL.Path) > len("/api/admin/scheduled-tasks/") &&
+			   r.URL.Path[len(r.URL.Path)-5:] == "/logs" {
+				if r.Method == http.MethodGet {
+					adminAPI.GetTaskExecutionLogs(w, r)
+				} else {
+					http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				}
+				return
+			}
+
+			switch r.Method {
+			case http.MethodPut:
+				adminAPI.UpdateScheduledTask(w, r)
+			case http.MethodDelete:
+				adminAPI.DeleteScheduledTask(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		}))).ServeHTTP(w, r)
+	})
 
 	// Node lookup and talker log APIs - can be public or require auth based on config
 	if cfg.AllowAnonDashboard {
@@ -676,6 +749,17 @@ func main() {
 		commandExecutor := admin.NewCommandExecutor(conn, nodeIDs)
 		adminAPI.CommandExecutor = commandExecutor
 		logger.Info("AMI command executor initialized", zap.Ints("node_ids", nodeIDs))
+
+		// Initialize Phase 7: Scheduler with task executor
+		taskExecutor := admin.NewDefaultTaskExecutor(conn, dbBackupManager, auditLogger)
+		scheduler = admin.NewScheduler(gormDB, taskExecutor)
+		adminAPI.Scheduler = scheduler
+		if err := scheduler.Start(); err != nil {
+			logger.Error("failed to start scheduler", zap.Error(err))
+		} else {
+			logger.Info("scheduler started successfully")
+		}
+
 		ctxAMI, cancelAMI := context.WithCancel(context.Background())
 
 		// Monitor AMI connection status changes
@@ -902,6 +986,12 @@ func main() {
 	// Stop gamification tally service
 	if tallyService != nil {
 		tallyService.Stop()
+	}
+
+	// Stop scheduler (Phase 7)
+	if scheduler != nil {
+		scheduler.Stop()
+		log.Printf("scheduler stopped")
 	}
 
 	ctxShutdown, cancel := context.WithTimeout(context.Background(), 8*time.Second)
