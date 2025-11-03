@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/dbehnke/allstar-nexus/compare/v0.10.0...v0.10.1) (2025-11-03)
+
+
+### Bug Fixes
+
+* use start_unix for transmission log sorting and add cap reset docs ([#64](https://github.com/dbehnke/allstar-nexus/issues/64)) ([ef2a8fb](https://github.com/dbehnke/allstar-nexus/commit/ef2a8fb4d0e3e79350af1e88089584b1d3df3144))
+
 ## [0.10.0](https://github.com/dbehnke/allstar-nexus/compare/v0.9.0...v0.10.0) (2025-11-02)
 
 
