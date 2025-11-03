@@ -92,16 +92,13 @@ function formatRelative(at) {
   } catch { return '' }
 }
 
-// Prefer showing time since END of transmission (start + duration)
+// Show time since START of transmission
 function formatRelativeRow(t) {
   try {
     const at = getTimestamp(t)
     const startMs = parseToMs(at)
     if (!Number.isFinite(startMs)) return '—'
-    const dur = Number(getDuration(t) || 0)
-    const endMs = startMs + (Number.isFinite(dur) ? dur * 1000 : 0)
-    const baseMs = endMs > 0 ? endMs : startMs
-    return formatRelative(baseMs)
+    return formatRelative(startMs)
   } catch { return '—' }
 }
 
