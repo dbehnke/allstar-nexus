@@ -236,6 +236,7 @@ func main() {
 	dbBackupManager := admin.NewDBBackupManager(cfg.DBPath, "data/db-backups", gormDB)
 	systemMonitor := admin.NewSystemMonitor(gormDB)
 	nodeGroupManager := admin.NewNodeGroupManager(gormDB)
+	logStreamer := admin.NewLogStreamer(auditLogger)
 
 	// Initialize scheduler (will be started after AMI connector is available)
 	var scheduler *admin.Scheduler
@@ -245,6 +246,7 @@ func main() {
 	adminAPI.DBBackupManager = dbBackupManager
 	adminAPI.SystemMonitor = systemMonitor
 	adminAPI.NodeGroupManager = nodeGroupManager
+	adminAPI.LogStreamer = logStreamer
 
 	// AMI connector and scheduler will be set later after AMI is initialized (if AMI is enabled)
 
@@ -381,6 +383,11 @@ func main() {
 			}
 		}))).ServeHTTP(w, r)
 	})
+
+	// Phase 8: Log Management routes (require superadmin role)
+	mux.Handle("/api/admin/logs/sources", authMW(superadminMW(http.HandlerFunc(adminAPI.GetLogSources))))
+	mux.Handle("/api/admin/logs/stream", authMW(superadminMW(http.HandlerFunc(adminAPI.StreamLogs))))
+	mux.Handle("/api/admin/logs/export", authMW(superadminMW(http.HandlerFunc(adminAPI.ExportLogs))))
 
 	// Node lookup and talker log APIs - can be public or require auth based on config
 	if cfg.AllowAnonDashboard {
