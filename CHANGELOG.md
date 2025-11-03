@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/dbehnke/allstar-nexus/compare/v0.11.0...v0.11.1) (2025-11-03)
+
+
+### Bug Fixes
+
+* GoReleaser nfpm scripts: use file paths instead of inline content ([#75](https://github.com/dbehnke/allstar-nexus/issues/75)) ([fb093d1](https://github.com/dbehnke/allstar-nexus/commit/fb093d1e290996a679cddcead15007405d2c9c89))
+
 ## [0.11.0](https://github.com/dbehnke/allstar-nexus/compare/v0.10.1...v0.11.0) (2025-11-03)
 
 
