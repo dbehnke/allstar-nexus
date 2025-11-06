@@ -11,7 +11,7 @@
     "test:e2e": "playwright test --project=chromium"
   },
   "dependencies": {
-    "pinia": "^3.0.3",
+    "pinia": "^3.0.4",
     "vue": "^3.4.0",
     "vue-router": "^4.6.3",
     "ws": "^8.18.3"
