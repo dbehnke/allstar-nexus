@@ -15,6 +15,7 @@ import (
 
 	"github.com/dbehnke/allstar-nexus/backend/api"
 	"github.com/dbehnke/allstar-nexus/backend/auth"
+	"github.com/dbehnke/allstar-nexus/backend/bootstrap"
 	"github.com/dbehnke/allstar-nexus/backend/config"
 	"github.com/dbehnke/allstar-nexus/backend/gamification"
 	"github.com/dbehnke/allstar-nexus/backend/middleware"
@@ -125,39 +126,11 @@ func main() {
 	logger, _ := zap.NewProduction()
 	defer func() { _ = logger.Sync() }()
 
-	// Initialize GORM database with modernc.org/sqlite (pure Go, no CGO)
-	gormDB, err := gorm.Open(sqlite.New(sqlite.Config{
-		DriverName: "sqlite",
-		DSN:        cfg.DBPath,
-	}), &gorm.Config{})
+	// Initialize GORM database
+	gormDB, err := bootstrap.InitDB(&cfg, logger)
 	if err != nil {
-		log.Fatalf("GORM database open error: %v", err)
+		log.Fatalf("database initialization error: %v", err)
 	}
-
-	// Set PRAGMA settings for optimized write performance
-	sqlDB, err := gormDB.DB()
-	if err != nil {
-		log.Fatalf("failed to get sql.DB from GORM: %v", err)
-	}
-	if _, err := sqlDB.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		logger.Warn("failed to set journal_mode=WAL", zap.Error(err))
-	}
-	if _, err := sqlDB.Exec("PRAGMA synchronous=NORMAL;"); err != nil {
-		logger.Warn("failed to set synchronous=NORMAL", zap.Error(err))
-	}
-	if err := gormDB.AutoMigrate(
-		&models.User{},
-		&models.TransmissionLog{},
-		&models.NodeInfo{},
-		&models.LinkStat{},
-		&models.CallsignProfile{},
-		&models.LevelConfig{},
-		&models.XPActivityLog{},
-		&models.TallyState{},
-	); err != nil {
-		log.Fatalf("GORM auto-migrate error: %v", err)
-	}
-	logger.Info("GORM database initialized successfully")
 
 	// Ensure epoch columns are populated for efficient time filtering
 	if err := tools.BackfillTransmissionEpochs(gormDB, logger); err != nil {
