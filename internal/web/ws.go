@@ -206,7 +206,7 @@ func (h *Hub) BroadcastLoop(updates <-chan core.NodeState) {
 func (h *Hub) TalkerLoop(events <-chan core.TalkerEvent) {
 	for evt := range events {
 		log.Printf("[HUB DEBUG] Received talker event: kind=%s node=%d callsign=%s", evt.Kind, evt.Node, evt.Callsign)
-		
+
 		// Forward to optional hook (e.g., Discord notifier)
 		if h.onTalkerEvent != nil {
 			log.Printf("[HUB DEBUG] Forwarding event to onTalkerEvent hook")
@@ -214,7 +214,7 @@ func (h *Hub) TalkerLoop(events <-chan core.TalkerEvent) {
 		} else {
 			log.Printf("[HUB DEBUG] No onTalkerEvent hook registered")
 		}
-		
+
 		env := messageEnvelope{MessageType: "TALKER_EVENT", Data: evt, Timestamp: time.Now().UnixMilli()}
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
@@ -266,8 +266,8 @@ func (h *Hub) LinkRemovalLoop(removals <-chan []int) {
 		h.mu.RLock()
 		for c := range h.clients {
 			go func(conn *websocket.Conn, p []byte) {
-			_ = conn.Write(context.Background(), websocket.MessageText, p)
-		}(c, payload)
+				_ = conn.Write(context.Background(), websocket.MessageText, p)
+			}(c, payload)
 		}
 		h.mu.RUnlock()
 		// Trigger a debounced poll after link removals to confirm state and enrich details.
@@ -283,8 +283,8 @@ func (h *Hub) LinkTxLoop(events <-chan core.LinkTxEvent) {
 		h.mu.RLock()
 		for c := range h.clients {
 			go func(conn *websocket.Conn, p []byte) {
-			_ = conn.Write(context.Background(), websocket.MessageText, p)
-		}(c, payload)
+				_ = conn.Write(context.Background(), websocket.MessageText, p)
+			}(c, payload)
 		}
 		h.mu.RUnlock()
 	}
@@ -306,8 +306,8 @@ func (h *Hub) LinkTxBatchLoop(events <-chan core.LinkTxEvent, window time.Durati
 		h.mu.RLock()
 		for c := range h.clients {
 			go func(conn *websocket.Conn, p []byte) {
-			_ = conn.Write(context.Background(), websocket.MessageText, p)
-		}(c, payload)
+				_ = conn.Write(context.Background(), websocket.MessageText, p)
+			}(c, payload)
 		}
 		h.mu.RUnlock()
 		buf = buf[:0]
@@ -319,7 +319,7 @@ func (h *Hub) LinkTxBatchLoop(events <-chan core.LinkTxEvent, window time.Durati
 				flush()
 				return
 			}
-			
+
 			// Forward to optional hook (e.g., Discord notifier) before buffering
 			h.mu.RLock()
 			hookFn := h.onLinkTxEvent
@@ -328,7 +328,7 @@ func (h *Hub) LinkTxBatchLoop(events <-chan core.LinkTxEvent, window time.Durati
 				log.Printf("[HUB DEBUG] Forwarding LinkTxEvent to hook: kind=%s node=%d", evt.Kind, evt.Node)
 				hookFn(evt)
 			}
-			
+
 			buf = append(buf, evt)
 			if len(buf) == 1 {
 				if !timer.Stop() {
@@ -403,8 +403,8 @@ func (h *Hub) TalkerLogRefreshLoop(sm *core.StateManager, interval time.Duration
 		h.mu.RLock()
 		for c := range h.clients {
 			go func(conn *websocket.Conn, p []byte) {
-			_ = conn.Write(context.Background(), websocket.MessageText, p)
-		}(c, payload)
+				_ = conn.Write(context.Background(), websocket.MessageText, p)
+			}(c, payload)
 		}
 		h.mu.RUnlock()
 	}
@@ -444,8 +444,8 @@ func (h *Hub) SourceNodeKeyingEventLoop(events <-chan core.SourceNodeKeyingEvent
 		h.mu.RLock()
 		for c := range h.clients {
 			go func(conn *websocket.Conn, p []byte) {
-			_ = conn.Write(context.Background(), websocket.MessageText, p)
-		}(c, payload)
+				_ = conn.Write(context.Background(), websocket.MessageText, p)
+			}(c, payload)
 		}
 		h.mu.RUnlock()
 	}

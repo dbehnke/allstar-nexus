@@ -236,8 +236,8 @@ func (g *GamificationAPI) Profile(w http.ResponseWriter, r *http.Request) {
 		"last_transmission_at":    profile.LastTransmissionAt,
 		"weekly_xp":               weeklyXP,
 		"daily_xp":                dailyXP,
-		"weekly_seconds":          weeklySeconds,  // Seconds for cap comparison
-		"daily_seconds":           dailySeconds,   // Seconds for cap comparison
+		"weekly_seconds":          weeklySeconds, // Seconds for cap comparison
+		"daily_seconds":           dailySeconds,  // Seconds for cap comparison
 		"daily_breakdown":         breakdown,
 	}); err != nil {
 		log.Printf("Failed to encode profile response: %v", err)
