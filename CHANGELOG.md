@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0](https://github.com/dbehnke/allstar-nexus/compare/v0.11.1...v0.12.0) (2025-11-23)
+
+
+### Features
+
+* AMI keying improvements and frontend polish ([#93](https://github.com/dbehnke/allstar-nexus/issues/93)) ([ec4e787](https://github.com/dbehnke/allstar-nexus/commit/ec4e787fe639784c148a253cea556126c8dcb992))
+
+
+### Bug Fixes
+
+* resolve critical stability issues and resource leaks ([#90](https://github.com/dbehnke/allstar-nexus/issues/90)) ([5b317eb](https://github.com/dbehnke/allstar-nexus/commit/5b317eb227948607a8ab70a57ecc06e761ace024))
+
 ## [0.11.1](https://github.com/dbehnke/allstar-nexus/compare/v0.11.0...v0.11.1) (2025-11-03)
 
 
