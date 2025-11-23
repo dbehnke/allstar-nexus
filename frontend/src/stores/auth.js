@@ -28,6 +28,27 @@ export const useAuthStore = defineStore('auth', () => {
     return { 'Authorization': `Bearer ${token.value}` }
   }
 
+  async function login(email, password) {
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.ok) {
+        throw new Error((data.error && data.error.message) || 'Login failed')
+      }
+
+      setToken(data.data.token, data.data.role)
+      return true
+    } catch (e) {
+      throw e
+    }
+  }
+
   return {
     token,
     userRole,
@@ -36,6 +57,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     setToken,
     clearAuth,
-    getAuthHeaders
+    getAuthHeaders,
+    login
   }
 })

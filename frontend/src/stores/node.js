@@ -32,6 +32,7 @@ export const useNodeStore = defineStore('node', () => {
   const status = ref({}) // most recent STATUS_UPDATE payload
   const connectionSeenAt = ref({}) // per-node first-seen timestamps (used by SourceNodeCard)
   const lastEnvelopes = ref([]) // small ring buffer of recent WS envelopes for debugging
+  const versionInfo = ref({ version: '', build_time: '' })
 
   let _scoreboardReloadTimer = null
   let _scoreboardPollTimer = null
@@ -39,7 +40,7 @@ export const useNodeStore = defineStore('node', () => {
   let _tickTimer = null
 
   function handleWSMessage(msg) {
-    try { logger.debug('[WS RECV]', msg && msg.messageType, msg) } catch (_) {}
+    try { logger.debug('[WS RECV]', msg && msg.messageType, msg) } catch (_) { }
     if (!msg || !msg.messageType) return
     // Handle several envelope types that update store state used by UI
     if (msg.messageType === 'STATUS_UPDATE') {
@@ -85,7 +86,7 @@ export const useNodeStore = defineStore('node', () => {
             if (!snapshot.linksDetailed && snapshot.links_detailed) snapshot.linksDetailed = snapshot.links_detailed
             if (!snapshot.links_detailed && snapshot.LinksDetailed) snapshot.links_detailed = snapshot.LinksDetailed
             if (!snapshot.LinksDetailed && snapshot.links_detailed) snapshot.LinksDetailed = snapshot.links_detailed
-          } catch (e) {}
+          } catch (e) { }
           // Ensure adjacent node entries include numeric NodeID for templates
           try {
             const map = snapshot.adjacentNodes || snapshot.adjacent_nodes || snapshot.AdjacentNodes
@@ -103,7 +104,7 @@ export const useNodeStore = defineStore('node', () => {
               // ensure snapshot.adjacentNodes points to the normalized map
               snapshot.adjacentNodes = map
             }
-          } catch (e) {}
+          } catch (e) { }
 
           // Opportunistic enrichment: if adjacent entries are missing Callsign/Description,
           // fill from the latest STATUS_UPDATE links_detailed when available.
@@ -173,19 +174,19 @@ export const useNodeStore = defineStore('node', () => {
     }
   }
 
-    // Record a brief summary of the envelope for debugging (keep last 20)
-    try {
-      const summary = { type: msg.messageType, ts: Date.now(), keys: msg && msg.data ? Object.keys(msg.data) : [] }
-      lastEnvelopes.value = lastEnvelopes.value.concat([summary]).slice(-20)
-    } catch (e) {}
+  // Record a brief summary of the envelope for debugging (keep last 20)
+  try {
+    const summary = { type: msg.messageType, ts: Date.now(), keys: msg && msg.data ? Object.keys(msg.data) : [] }
+    lastEnvelopes.value = lastEnvelopes.value.concat([summary]).slice(-20)
+  } catch (e) { }
 
   // Restore API expected by Dashboard.vue and other components
   function setTopLinks(arr) {
-    try { topLinks.value = Array.isArray(arr) ? arr : [] } catch (e) {}
+    try { topLinks.value = Array.isArray(arr) ? arr : [] } catch (e) { }
   }
 
   function loadTalkerHistory(events) {
-    try { talker.value = Array.isArray(events) ? events : [] } catch (e) {}
+    try { talker.value = Array.isArray(events) ? events : [] } catch (e) { }
   }
 
   function startTickTimer() {
@@ -208,13 +209,13 @@ export const useNodeStore = defineStore('node', () => {
     try {
       const v = getter()
       if (v !== undefined) targetRef.value = v
-    } catch (e) {}
+    } catch (e) { }
   }
 
   async function fetchScoreboard(limit = 50) {
     try {
       let headers = {}
-      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) {}
+      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) { }
       const res = await fetch(`/api/gamification/scoreboard?limit=${limit}`, { headers })
       const data = await res.json().catch(() => ({}))
       scoreboard.value = (data && (data.scoreboard || data.data || data.results)) || []
@@ -266,19 +267,19 @@ export const useNodeStore = defineStore('node', () => {
     _recentTxTimer = setTimeout(() => {
       try {
         let headers = {}
-        try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) {}
+        try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) { }
         fetch(`/api/gamification/recent-transmissions?limit=50&offset=0`, { headers })
           .then(r => r.json())
           .then(data => { recentTransmissions.value = (data && (data.transmissions || data.data || data.results)) || [] })
-          .catch(() => {})
-      } catch (e) {}
+          .catch(() => { })
+      } catch (e) { }
     }, 800)
   }
 
   async function fetchRecentTransmissions(limit = 50, offset = 0) {
     try {
       let headers = {}
-      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) {}
+      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) { }
       const res = await fetch(`/api/gamification/recent-transmissions?limit=${limit}&offset=${offset}`, { headers })
       const data = await res.json()
       recentTransmissions.value = (data && (data.transmissions || data.data || data.results)) || []
@@ -288,7 +289,7 @@ export const useNodeStore = defineStore('node', () => {
   async function fetchLevelConfig() {
     try {
       let headers = {}
-      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) {}
+      try { const auth = useAuthStore(); headers = (auth && typeof auth.getAuthHeaders === 'function') ? auth.getAuthHeaders() : {} } catch (e) { }
       const res = await fetch('/api/gamification/level-config', { headers })
       const data = await res.json()
       levelConfig.value = (data && (data.config || data.data)) || {}
@@ -306,6 +307,20 @@ export const useNodeStore = defineStore('node', () => {
       safeSet(dailyCapSeconds, () => (data.daily_cap_seconds != null) ? Number(data.daily_cap_seconds) : dailyCapSeconds.value)
       safeSet(drTiers, () => Array.isArray(data.dr_tiers) ? data.dr_tiers : drTiers.value)
     } catch (e) { logger.debug('fetchLevelConfig failed', e) }
+  }
+
+  async function fetchVersion() {
+    try {
+      const response = await fetch('/api/version')
+      const data = await response.json()
+      if (data.ok !== false && data.data) {
+        versionInfo.value = data.data
+      } else if (data.version) {
+        versionInfo.value = data
+      }
+    } catch (e) {
+      logger.debug('Failed to fetch version info', e)
+    }
   }
 
   return {
@@ -327,16 +342,18 @@ export const useNodeStore = defineStore('node', () => {
     triggerRecentTxRefresh,
     fetchRecentTransmissions,
     fetchLevelConfig,
-  renownEnabled,
-  renownXPPerLevel,
-  weeklyCapSeconds,
-  dailyCapSeconds,
-  restedEnabled,
-  restedAccumulationRate,
-  restedMaxHours,
-  restedMultiplier,
-  restedIdleThresholdSeconds,
-  drTiers,
+    renownEnabled,
+    renownXPPerLevel,
+    weeklyCapSeconds,
+    dailyCapSeconds,
+    restedEnabled,
+    restedAccumulationRate,
+    restedMaxHours,
+    restedMultiplier,
+    restedIdleThresholdSeconds,
+    drTiers,
+    versionInfo,
+    fetchVersion,
     // restored helpers
     setTopLinks,
     loadTalkerHistory,

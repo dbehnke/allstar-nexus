@@ -454,6 +454,10 @@ const adjacentList = computed(() => {
       const isTransmitting = raw.IsTransmitting || raw.is_transmitting || raw.current_tx || raw.currentTx || raw.current_tx || false
       const isKeyed = raw.IsKeyed || raw.is_keyed || raw.is_keyed || raw.isKeyed || raw.is_keyed || false
       const keyedStart = raw.KeyedStartTime || raw.keyed_start_time || raw.keyedStartTime || raw.keyed_start || raw.KeyedStart
+      const isTransmitting = raw.IsTransmitting || raw.is_transmitting || raw.current_tx || raw.currentTx || raw.current_tx || false
+      const isKeyed = raw.IsKeyed || raw.is_keyed || raw.is_keyed || raw.isKeyed || raw.is_keyed || false
+      const pendingUnkey = raw.PendingUnkey || raw.pending_unkey || raw.pendingUnkey || false
+      const keyedStart = raw.KeyedStartTime || raw.keyed_start_time || raw.keyedStartTime || raw.keyed_start || raw.KeyedStart
       const lastTxEnd = raw.LastTxEnd || raw.last_tx_end || raw.lastTxEnd || null
       // Determine connectedSince; server-provided ConnectedSince preferred. For stale entries use
       // the removal timestamp so the UI shows time-since-lost. For present nodes, use a persistent
@@ -560,6 +564,7 @@ const adjacentList = computed(() => {
         Location: location || '',
         IsTransmitting: !!isTransmitting,
         IsKeyed: !!isKeyed,
+        PendingUnkey: !!pendingUnkey,
     KeyedStartTime: keyedStart || null,
     LastTxEnd: lastTxEnd || null,
   ConnectedSince: connectedSince || null,
@@ -924,11 +929,13 @@ function formatSeconds(seconds) {
 
 function getStatusClass(node) {
   // Show keyed if transmitting, regardless of PendingUnkey state
+  if (node.PendingUnkey) return 'ending'
   if (node.IsTransmitting) return 'keyed'
   return 'idle'
 }
 
 function getStatusText(node) {
+  if (node.PendingUnkey) return 'Ending...'
   if (node.IsTransmitting) return 'Keyed'
   return 'Idle'
 }
@@ -1130,6 +1137,11 @@ td {
 .status-badge.idle {
   background: var(--bg-tertiary);
   color: var(--text-muted);
+}
+
+.status-badge.ending {
+  background: var(--warning);
+  color: #000; /* Black text for better contrast on yellow/orange */
 }
 
 .tx-active {

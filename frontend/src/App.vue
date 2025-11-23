@@ -70,11 +70,11 @@ const loginError = ref('')
 
 const status = computed(() => nodeStore.status)
 
-const versionInfo = ref({ version: '', build_time: '' })
+const status = computed(() => nodeStore.status)
 
 const version = computed(() => {
   // Prefer API version, fallback to status version, then default
-  return versionInfo.value.version || status.value?.version || 'v1.0.0'
+  return nodeStore.versionInfo.version || status.value?.version || 'v1.0.0'
 })
 
 const themeTooltip = computed(() => {
@@ -109,25 +109,12 @@ async function login() {
   loginError.value = ''
 
   try {
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.value, password: password.value })
-    })
-
-    const data = await response.json()
-
-    if (!response.ok || !data.ok) {
-      loginError.value = (data.error && data.error.message) || 'Login failed'
-      return
-    }
-
-    authStore.setToken(data.data.token, data.data.role)
+    await authStore.login(email.value, password.value)
     showLogin.value = false
     email.value = ''
     password.value = ''
   } catch (e) {
-    loginError.value = 'Network error'
+    loginError.value = e.message || 'Network error'
     logger.error('Login error:', e)
   } finally {
     loggingIn.value = false
@@ -145,18 +132,9 @@ if (authStore.token) {
 }
 
 // Fetch version info from API
-async function fetchVersion() {
-  try {
-    const response = await fetch('/api/version')
-    const data = await response.json()
-    if (data.ok !== false && data.data) {
-      versionInfo.value = data.data
-    } else if (data.version) {
-      versionInfo.value = data
-    }
-  } catch (e) {
-    logger.debug('Failed to fetch version info', e)
-  }
+// Check for existing token on mount
+if (authStore.token) {
+  authStore.authed = true
 }
 
 // Initialize global TX notifications so they work regardless of current view
@@ -164,7 +142,7 @@ onMounted(() => {
   try { initGlobalTxNotifications() } catch (e) { logger.debug('initGlobalTxNotifications failed', e) }
 
   // Fetch version information
-  fetchVersion()
+  nodeStore.fetchVersion()
 
   // Dynamically import dev-only test helpers in development builds. This keeps the
   // helper module out of production bundles.
