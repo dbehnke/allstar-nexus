@@ -453,9 +453,6 @@ const adjacentList = computed(() => {
       const location = raw.Location || raw.location || raw.node_location || raw.nodeLocation
       const isTransmitting = raw.IsTransmitting || raw.is_transmitting || raw.current_tx || raw.currentTx || raw.current_tx || false
       const isKeyed = raw.IsKeyed || raw.is_keyed || raw.is_keyed || raw.isKeyed || raw.is_keyed || false
-      const keyedStart = raw.KeyedStartTime || raw.keyed_start_time || raw.keyedStartTime || raw.keyed_start || raw.KeyedStart
-      const isTransmitting = raw.IsTransmitting || raw.is_transmitting || raw.current_tx || raw.currentTx || raw.current_tx || false
-      const isKeyed = raw.IsKeyed || raw.is_keyed || raw.is_keyed || raw.isKeyed || raw.is_keyed || false
       const pendingUnkey = raw.PendingUnkey || raw.pending_unkey || raw.pendingUnkey || false
       const keyedStart = raw.KeyedStartTime || raw.keyed_start_time || raw.keyedStartTime || raw.keyed_start || raw.KeyedStart
       const lastTxEnd = raw.LastTxEnd || raw.last_tx_end || raw.lastTxEnd || null
