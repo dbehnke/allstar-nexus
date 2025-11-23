@@ -70,8 +70,6 @@ const loginError = ref('')
 
 const status = computed(() => nodeStore.status)
 
-const status = computed(() => nodeStore.status)
-
 const version = computed(() => {
   // Prefer API version, fallback to status version, then default
   return nodeStore.versionInfo.version || status.value?.version || 'v1.0.0'
