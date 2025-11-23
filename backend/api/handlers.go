@@ -188,73 +188,50 @@ func (a *API) AdminSummary(w http.ResponseWriter, r *http.Request) {
 func (a *API) LinkStatsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
-	stats, err := a.LinkStats.GetAll(ctx)
-	if err != nil {
-		writeError(w, 500, "db_error", "failed to load link stats")
-		return
-	}
+
 	q := r.URL.Query()
-	// since can be RFC3339 or relative like -1h, -15m, -30s
+	filter := repository.LinkStatsFilter{}
+
+	// Parse 'since'
 	if sinceStr := q.Get("since"); sinceStr != "" {
-		var ref time.Time
 		if strings.HasPrefix(sinceStr, "-") { // relative
 			if d, perr := time.ParseDuration(strings.TrimPrefix(sinceStr, "-")); perr == nil {
-				ref = time.Now().Add(-d)
+				filter.Since = time.Now().Add(-d)
 			}
 		} else if t, perr := time.Parse(time.RFC3339, sinceStr); perr == nil {
-			ref = t
-		}
-		if !ref.IsZero() {
-			filtered := make([]models.LinkStat, 0, len(stats))
-			for _, s := range stats {
-				if !s.UpdatedAt.Before(ref) {
-					filtered = append(filtered, s)
-				}
-			}
-			stats = filtered
+			filter.Since = t
 		}
 	}
-	// node=123,456 filter
+
+	// Parse 'node'
 	if nodesStr := q.Get("node"); nodesStr != "" {
-		wanted := map[int]struct{}{}
 		for _, part := range strings.Split(nodesStr, ",") {
 			part = strings.TrimSpace(part)
 			if part == "" {
 				continue
 			}
 			if n, err := strconv.Atoi(part); err == nil {
-				wanted[n] = struct{}{}
+				filter.Nodes = append(filter.Nodes, n)
 			}
 		}
-		if len(wanted) > 0 {
-			filtered := make([]models.LinkStat, 0, len(stats))
-			for _, s := range stats {
-				if _, ok := wanted[s.Node]; ok {
-					filtered = append(filtered, s)
-				}
-			}
-			stats = filtered
-		}
 	}
-	// sort parameter
-	switch q.Get("sort") {
-	case "tx_seconds_desc":
-		sort.Slice(stats, func(i, j int) bool { return stats[i].TotalTxSeconds > stats[j].TotalTxSeconds })
-	case "tx_seconds_asc":
-		sort.Slice(stats, func(i, j int) bool { return stats[i].TotalTxSeconds < stats[j].TotalTxSeconds })
-	case "node_asc":
-		sort.Slice(stats, func(i, j int) bool { return stats[i].Node < stats[j].Node })
-	case "node_desc":
-		sort.Slice(stats, func(i, j int) bool { return stats[i].Node > stats[j].Node })
-	case "recent_desc":
-		sort.Slice(stats, func(i, j int) bool { return stats[i].UpdatedAt.After(stats[j].UpdatedAt) })
-	}
-	// limit
+
+	// Parse 'sort'
+	filter.SortBy = q.Get("sort")
+
+	// Parse 'limit'
 	if limStr := q.Get("limit"); limStr != "" {
-		if lim, err := strconv.Atoi(limStr); err == nil && lim > 0 && lim < len(stats) {
-			stats = stats[:lim]
+		if lim, err := strconv.Atoi(limStr); err == nil && lim > 0 {
+			filter.Limit = lim
 		}
 	}
+
+	stats, err := a.LinkStats.GetStats(ctx, filter)
+	if err != nil {
+		writeError(w, 500, "db_error", "failed to load link stats")
+		return
+	}
+
 	writeJSON(w, 200, map[string]any{"stats": stats, "generated_at": time.Now().UTC()})
 }
 
