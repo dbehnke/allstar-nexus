@@ -80,7 +80,7 @@ The project has completed the core monitoring and AMI integration features.
     - **Verify**: After editing, verify the build (`go build .` or `npm run build`).
     - **Test**: ALWAYS run frontend (`cd frontend && npm test`) and backend (`go test ./...`) tests before adding, committing, or pushing changes.
     - **Audit**: Run `npm audit` in `frontend/` to check for vulnerabilities before pushing.
-    - **CI Checks**: After pushing, run `gh pr checks` to monitor CI status and resolve any failures immediately.
+    - **CI Checks**: After pushing, run `gh pr checks --watch` to monitor CI status until completion and resolve any failures immediately.
 3. **Safety**:
     - **NEVER** commit secrets (API keys, passwords).
     - **NEVER** delete the database (`allstar.db`) without user permission.
