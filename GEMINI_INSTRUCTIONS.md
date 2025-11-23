@@ -79,6 +79,7 @@ The project has completed the core monitoring and AMI integration features.
     - Use `replace_file_content` for single blocks, `multi_replace_file_content` for scattered edits.
     - **Verify**: After editing, verify the build (`go build .` or `npm run build`).
     - **Test**: ALWAYS run frontend (`cd frontend && npm test`) and backend (`go test ./...`) tests before adding, committing, or pushing changes.
+    - **Audit**: Run `npm audit` in `frontend/` to check for vulnerabilities before pushing.
 3. **Safety**:
     - **NEVER** commit secrets (API keys, passwords).
     - **NEVER** delete the database (`allstar.db`) without user permission.
