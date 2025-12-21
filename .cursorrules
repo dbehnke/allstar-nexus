@@ -2,7 +2,9 @@
 
 ## 1. Interaction Rules
 
-- **GitHub**: Use `gh` CLI commands for all GitHub interactions (PRs, issues, checks, etc.). Do not attempt to use the browser for these tasks unless the CLI is unavailable.
+- **GitHub**: Use `gh` CLI commands for all GitHub interactions (PRs, issues, checks, etc.). 
+  - **PR Comments**: When adding comments or descriptions to PRs/issues via `gh`, always write the content to a temporary file first, post using the `--body-file` (or similar) flag, and then delete the temporary file.
+  - Do not attempt to use the browser for these tasks unless the CLI is unavailable.
 - **Build System**: Use `Taskfile.dev` (`task` command) for all CI, build, and recurring development tasks. The `Makefile` is deprecated and will be removed.
 
 ## 2. Development Workflow (Mandatory)
