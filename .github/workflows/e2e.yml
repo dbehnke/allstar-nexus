@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       browser:
-        description: 'Browser to run'
+        description: "Browser to run"
         required: false
-        default: 'chromium'
+        default: "chromium"
       run_build:
-        description: 'Build frontend before tests'
+        description: "Build frontend before tests"
         required: false
-        default: 'true'
+        default: "true"
 
 jobs:
   playwright-e2e:
@@ -22,29 +22,18 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install frontend deps
-        working-directory: frontend
-        run: npm ci
-
-      - name: Build frontend
-        if: ${{ inputs.run_build == 'true' }}
-        working-directory: frontend
-        run: npm run build
-
-      - name: Install Playwright Browsers
-        working-directory: frontend
-        run: npx playwright install --with-deps ${{ inputs.browser }}
+      - name: Install Task
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
 
       - name: Run Playwright E2E
-        working-directory: frontend
+        run: task test-e2e
         env:
           CI: "true"
-        run: |
-          npx playwright test --project=${{ inputs.browser }}
+          BROWSER: ${{ inputs.browser }}
 
       - name: Upload Playwright report
         if: always()

@@ -2,16 +2,16 @@ name: Frontend Dependency Audit
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'frontend/**'
+      - "frontend/**"
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'frontend/**'
+      - "frontend/**"
   schedule:
     # Run daily at 03:00 UTC
-    - cron: '0 3 * * *'
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: "24"
 
       - name: Cache Node modules
         uses: actions/cache@v4
@@ -37,15 +37,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
+      - name: Install Task
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
 
       - name: Run npm audit
-        working-directory: ./frontend
-        run: |
-          # Exit non-zero if moderate or higher vulnerabilities are found
-          npm audit --audit-level=moderate
+        run: task frontend-audit
 
       - name: Save npm audit report
         if: always()
