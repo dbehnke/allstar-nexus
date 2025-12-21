@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/dbehnke/allstar-nexus/compare/v0.12.0...v0.13.0) (2025-12-21)
+
+
+### Features
+
+* migrate build system to Taskfile.dev and establish development rules ([#108](https://github.com/dbehnke/allstar-nexus/issues/108)) ([66c7300](https://github.com/dbehnke/allstar-nexus/commit/66c7300723aae0b39eee7fe2bcdab935854fb0ae))
+
+
+### Bug Fixes
+
+* prevent callsign chopping for DVSwitch/text nodes ([#112](https://github.com/dbehnke/allstar-nexus/issues/112)) ([37e1252](https://github.com/dbehnke/allstar-nexus/commit/37e1252cf9bc5ecf9d1010fc2d82643a759cfa0b))
+
 ## [0.12.0](https://github.com/dbehnke/allstar-nexus/compare/v0.11.1...v0.12.0) (2025-11-23)
 
 
