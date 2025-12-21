@@ -1273,9 +1273,12 @@ func parseLinkIDs(payload string) []int {
 		// Strip mode prefix and status suffixes
 		cleaned := tk
 
-		// Always remove leading T if present (mode prefix)
-		if len(cleaned) > 0 && cleaned[0] == 'T' {
-			cleaned = cleaned[1:]
+		// Remove leading T if present (mode prefix) ONLY if followed by digits
+		if len(cleaned) > 1 && cleaned[0] == 'T' {
+			// Check if the rest is numeric
+			if _, err := strconv.Atoi(cleaned[1:]); err == nil {
+				cleaned = cleaned[1:]
+			}
 		}
 
 		// Strip status suffixes (TU, TK, TR, TC, TM)
@@ -1380,10 +1383,12 @@ func parseALinks(payload string) (ids []int, keyed map[int]bool) {
 		// No numeric match - must be text node (callsign, etc.)
 		// Strip mode prefix and status suffixes
 		cleaned := p
-
-		// Always remove leading T if present (mode prefix)
-		if len(cleaned) > 0 && cleaned[0] == 'T' {
-			cleaned = cleaned[1:]
+		// Remove leading T if present (mode prefix) ONLY if followed by digits
+		if len(cleaned) > 1 && cleaned[0] == 'T' {
+			// Check if the rest is numeric
+			if _, err := strconv.Atoi(cleaned[1:]); err == nil {
+				cleaned = cleaned[1:]
+			}
 		}
 
 		// Strip status suffixes (TU, TK, TR, TC, TM)

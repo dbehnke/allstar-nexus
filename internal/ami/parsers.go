@@ -139,9 +139,27 @@ func parseLinkedNodes(line string) []LinkedNode {
 			continue
 		}
 
-		// First character is mode (T/R/C/M)
-		mode := string(part[0])
-		nodeStr := part[1:]
+		// First character is mode (T/R/C/M) if followed by digits.
+		// If it's a callsign (starts with letter but not followed only by digits),
+		// we should treat the whole thing as a node.
+		mode := ""
+		nodeStr := part
+		firstChar := part[0]
+		isMode := firstChar == 'T' || firstChar == 'R' || firstChar == 'C' || firstChar == 'M' || firstChar == 'P' || firstChar == 'L'
+
+		if isMode && len(part) > 1 {
+			// Check if it's followed by digits (standard numeric node)
+			rest := part[1:]
+			if _, err := strconv.Atoi(rest); err == nil {
+				mode = string(firstChar)
+				nodeStr = rest
+			} else {
+				// It's a text node (callsign) with a mode prefix
+				// We still want to extract the mode but keep the callsign intact
+				mode = string(firstChar)
+				nodeStr = rest
+			}
+		}
 
 		nodeNum, err := strconv.Atoi(nodeStr)
 		if err != nil {
