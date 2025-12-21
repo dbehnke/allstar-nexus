@@ -1,0 +1,129 @@
+version: "3"
+
+vars:
+  FRONTEND_DIR: frontend
+  APP_NAME: allstar-nexus
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  BUILD_TIME:
+    sh: date -u +"%Y-%m-%dT%H:%M:%SZ"
+  LDFLAGS: -X 'main.buildVersion={{.VERSION}}' -X 'main.buildTime={{.BUILD_TIME}}'
+
+tasks:
+  default:
+    cmds:
+      - task: build
+
+  validate-config:
+    desc: Validate the configuration file
+    cmds:
+      - ./{{.APP_NAME}} config validate --config ./config.yaml
+
+  frontend-install:
+    desc: Install frontend dependencies (npm ci)
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm ci
+
+  backend-install:
+    desc: Download backend Go modules
+    cmds:
+      - go mod download
+
+  build-dashboard:
+    desc: Build the Vue dashboard
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm install
+      - npm run build
+
+  backend:
+    desc: Build the Go backend binary (depends on dashboard)
+    deps: [build-dashboard, backend-install]
+    cmds:
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.APP_NAME}} .
+
+  build:
+    desc: Build the entire application
+    cmds:
+      - task: backend
+
+  run:
+    desc: Run the application in development mode
+    deps: [build-dashboard]
+    cmds:
+      - go run -ldflags "{{.LDFLAGS}}" .
+
+  test:
+    desc: Run all tests (Backend and Frontend)
+    cmds:
+      - task: test-backend
+      - task: test-frontend
+
+  test-backend:
+    desc: Run Go tests
+    cmds:
+      - go test ./... -count=1
+
+  test-frontend:
+    desc: Run Vitest tests
+    dir: "{{.FRONTEND_DIR}}"
+    env:
+      CI: "TRUE"
+    cmds:
+      - npm test
+
+  test-e2e:
+    desc: Run end-to-end Playwright tests
+    dir: "{{.FRONTEND_DIR}}"
+    vars:
+      TARGET_BROWSER: '{{default "chromium" .BROWSER}}'
+    cmds:
+      - npm run build
+      - npx playwright install --with-deps {{.TARGET_BROWSER}}
+      - npx playwright test --project={{.TARGET_BROWSER}}
+
+  lint:
+    desc: Run static analysis (placeholder)
+    cmds:
+      - echo "(placeholder) add golangci-lint or staticcheck here"
+
+  clean:
+    desc: Clean build artifacts and distribution folders
+    cmds:
+      - rm -f {{.APP_NAME}}
+      - rm -rf {{.FRONTEND_DIR}}/out
+      - rm -rf {{.FRONTEND_DIR}}/dist
+
+  tools:
+    desc: Build all standalone tools
+    cmds:
+      - task: cgnat-whitelist
+
+  cgnat-whitelist:
+    desc: Build the cgnat-whitelist tool
+    dir: tools/cgnat-whitelist
+    cmds:
+      - go build -o cgnat-whitelist .
+
+  install:
+    desc: Install the application (stub, parity with Makefile requires root)
+    cmds:
+      - echo "Installation should be performed via Makefile or specialized script for now"
+      - echo "This Taskfile prioritizes development and CI tasks."
+
+  frontend-audit:
+    desc: Run npm audit on frontend dependencies
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm audit --audit-level=moderate
+
+  audit-rules:
+    desc: Perform a self-check on rule compliance and relevance
+    cmds:
+      - echo "Auditing .cursorrules..."
+      - echo "1. Plan approval check"
+      - echo "2. TDD verification"
+      - echo "3. gh CLI usage"
+      - echo "4. SSE Analysis presence"
+      - echo "Review complete. Propose updates if necessary."

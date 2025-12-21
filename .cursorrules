@@ -1,0 +1,60 @@
+# Allstar Nexus - Development Rules & Workflow
+
+## 1. Interaction Rules
+
+- **GitHub**: Use `gh` CLI commands for all GitHub interactions (PRs, issues, checks, etc.). Do not attempt to use the browser for these tasks unless the CLI is unavailable.
+- **Build System**: Use `Taskfile.dev` (`task` command) for all CI, build, and recurring development tasks. The `Makefile` is deprecated and will be removed.
+
+## 2. Development Workflow (Mandatory)
+
+All development must follow this sequence:
+
+1. **Planning**: Create a detailed implementation plan. Work cannot proceed until the plan is reviewed and approved by the human collaborator.
+2. **TDD (Test-Driven Development)**:
+   - Create failing tests first that define the desired behavior.
+   - Verification: Run tests to confirm they fail as expected.
+3. **Implementation**: Write the minimum code necessary to make the tests pass.
+4. **Refactoring**: Clean up the code while ensuring tests remain green.
+
+## 3. Review Process
+
+Before requesting a human review of any code changes:
+
+1. **SSE Analysis**: Generate a comprehensive analysis of the changes as if you were a Senior Software Engineer. This should include:
+   - Impact assessment.
+   - Potential edge cases handled.
+   - Security considerations.
+   - Performance implications.
+2. **Notification**: Request the human for review only after the analysis is provided.
+
+## 4. Coding Conventions
+
+### Backend (Go)
+
+- Prefer standard library over external dependencies.
+- Use `context` for cancellation and timeouts.
+- Error Handling: Return wrapped errors, handle gracefully.
+- Concurrency: Use channels and goroutines for AMI events.
+
+### Frontend (Vue 3)
+
+- Use Single File Components (`.vue`) with `<script setup lang="ts">`.
+- State Management: Use Pinia stores.
+- Styling: Utility-first Tailwind CSS.
+
+### Testing
+
+- Go: Table-driven tests in `_test.go` files.
+- Frontend: Vitest for component and logic testing.
+
+## 5. Safety & Environment
+
+- **Secrets**: NEVER commit secrets (API keys, passwords, etc.).
+- **Persistence**: Do not delete the database (`allstar.db`) without explicit permission.
+- **Tools**: Ensure `task` and `gh` are installed and configured.
+
+## 6. Rule Maintenance & Auditing
+
+- **Auditing**: Periodically audit this file to ensure rules remain aligned with the project's evolving needs.
+- **Updates**: When a workflow improvement is identified (e.g., via SSE analysis), propose an update to these rules.
+- **Taskfile**: Use `task audit-rules` to initiate a self-check of recent compliance.

@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
   push:
-    branches: [ main, feature/** ]
+    branches: [main, feature/**]
 
 jobs:
   test-and-build:
@@ -16,8 +16,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: "24"
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend deps
@@ -31,11 +31,16 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
           cache: true
 
-      - name: Go Test
-        run: go test ./...
+      - name: Install Task
+        run: sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
 
-      - name: Go Build
-        run: go build -ldflags "-X 'main.buildVersion=${{ github.sha }}' -X 'main.buildTime=$(date -u +"%Y-%m-%dT%H:%M:%SZ")'" -o allstar-nexus .
+      - name: Run Tests
+        run: task test
+
+      - name: Build Application
+        run: task build
+        env:
+          VERSION: ${{ github.sha }}
