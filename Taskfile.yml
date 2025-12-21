@@ -118,6 +118,12 @@ tasks:
     cmds:
       - npm audit --audit-level=moderate
 
+  vulncheck:
+    desc: Run Go vulnerability check
+    cmds:
+      - go install golang.org/x/vuln/cmd/govulncheck@latest
+      - govulncheck ./...
+
   audit-rules:
     desc: Perform a self-check on rule compliance and relevance
     cmds:
