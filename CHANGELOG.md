@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/dbehnke/allstar-nexus/compare/v0.13.0...v0.14.0) (2026-01-11)
+
+
+### Features
+
+* **urfd:** implement NNG control client for USRP registration ([#117](https://github.com/dbehnke/allstar-nexus/issues/117)) ([9465867](https://github.com/dbehnke/allstar-nexus/commit/9465867739441cdc4a28a5647d1c7bacfbd00706))
+
 ## [0.13.0](https://github.com/dbehnke/allstar-nexus/compare/v0.12.0...v0.13.0) (2025-12-21)
 
 
