@@ -8,42 +8,42 @@ import (
 // KeyingTracker implements jitter-compensated keying tracking with 2-second delay
 // Based on the AMI events analysis document specifications
 type KeyingTracker struct {
-	mu                sync.RWMutex
-	localNodeID       int                          // The local source node ID
-	adjacentNodes     map[int]*AdjacentNodeStatus  // Map of adjacent node ID -> status
-	timerQueue        []UnkeyCheckTimer            // Queue of pending unkey confirmations
-	delayMS           int                          // Delay in milliseconds (default 2000)
-	onTxStart         func(sourceNode, adjacentNode int, timestamp time.Time)
-	onTxEnd           func(sourceNode, adjacentNode int, timestamp time.Time, duration int)
+	mu            sync.RWMutex
+	localNodeID   int                         // The local source node ID
+	adjacentNodes map[int]*AdjacentNodeStatus // Map of adjacent node ID -> status
+	timerQueue    []UnkeyCheckTimer           // Queue of pending unkey confirmations
+	delayMS       int                         // Delay in milliseconds (default 2000)
+	onTxStart     func(sourceNode, adjacentNode int, timestamp time.Time, status AdjacentNodeStatus)
+	onTxEnd       func(sourceNode, adjacentNode int, timestamp time.Time, duration int, status AdjacentNodeStatus)
 }
 
 // AdjacentNodeStatus tracks the keying state of an adjacent node
 type AdjacentNodeStatus struct {
-	NodeID          int        `json:"NodeID"`
-	IsKeyed         bool       `json:"IsKeyed"`
-	KeyedStartTime  *time.Time `json:"KeyedStartTime,omitempty"`
-	IsTransmitting  bool       `json:"IsTransmitting"`
-	PendingUnkey    bool       `json:"PendingUnkey"` // True when unkey timer is scheduled (during 2s delay)
-	TotalTxSeconds  int        `json:"TotalTxSeconds"`
-	LastTxEnd       *time.Time `json:"LastTxEnd,omitempty"` // Timestamp of last transmission end
+	NodeID         int        `json:"NodeID"`
+	IsKeyed        bool       `json:"IsKeyed"`
+	KeyedStartTime *time.Time `json:"KeyedStartTime,omitempty"`
+	IsTransmitting bool       `json:"IsTransmitting"`
+	PendingUnkey   bool       `json:"PendingUnkey"` // True when unkey timer is scheduled (during 2s delay)
+	TotalTxSeconds int        `json:"TotalTxSeconds"`
+	LastTxEnd      *time.Time `json:"LastTxEnd,omitempty"` // Timestamp of last transmission end
 
 	// Node information for display
-	Callsign        string `json:"Callsign,omitempty"`
-	Description     string `json:"Description,omitempty"`
+	Callsign    string `json:"Callsign,omitempty"`
+	Description string `json:"Description,omitempty"`
 
 	// Link information
-	Mode            string    `json:"Mode,omitempty"`
-	Direction       string    `json:"Direction,omitempty"`
-	IP              string    `json:"IP,omitempty"`
-	ConnectedSince  time.Time `json:"ConnectedSince"`
+	Mode           string    `json:"Mode,omitempty"`
+	Direction      string    `json:"Direction,omitempty"`
+	IP             string    `json:"IP,omitempty"`
+	ConnectedSince time.Time `json:"ConnectedSince"`
 }
 
 // UnkeyCheckTimer represents a scheduled unkey confirmation check
 type UnkeyCheckTimer struct {
-	Action        string    // "UnkeyCheck"
-	SourceNodeID  int       // Local source node
-	AdjacentNodeID int      // Adjacent node to check
-	ExecutionTime time.Time // When to execute the check
+	Action         string    // "UnkeyCheck"
+	SourceNodeID   int       // Local source node
+	AdjacentNodeID int       // Adjacent node to check
+	ExecutionTime  time.Time // When to execute the check
 }
 
 // NewKeyingTracker creates a new keying tracker with jitter compensation
@@ -63,8 +63,8 @@ func NewKeyingTracker(localNodeID int, delayMS int) *KeyingTracker {
 // SetCallbacks sets the TX start/end callbacks
 // IMPORTANT: Callbacks are invoked while holding kt.mu lock, so they must not call methods that acquire kt.mu
 func (kt *KeyingTracker) SetCallbacks(
-	onStart func(sourceNode, adjacentNode int, timestamp time.Time),
-	onEnd func(sourceNode, adjacentNode int, timestamp time.Time, duration int),
+	onStart func(sourceNode, adjacentNode int, timestamp time.Time, status AdjacentNodeStatus),
+	onEnd func(sourceNode, adjacentNode int, timestamp time.Time, duration int, status AdjacentNodeStatus),
 ) {
 	kt.mu.Lock()
 	defer kt.mu.Unlock()
@@ -111,12 +111,12 @@ func (kt *KeyingTracker) ProcessALinks(adjacentNodeIDs []int, alinksKeyed map[in
 
 			// Emit TX_START callback
 			if kt.onTxStart != nil {
-				kt.onTxStart(kt.localNodeID, nodeID, timestamp)
+				kt.onTxStart(kt.localNodeID, nodeID, timestamp, *nodeStatus)
 			}
 		} else if !linkIsKeyed && nodeStatus.IsTransmitting {
 			// --- 2. Key-Down (Start Delay Timer) ---
 			// Node just unkeyed in the event, but we start the jitter compensation timer
-			nodeStatus.IsKeyed = false // Temporarily set to FALSE
+			nodeStatus.IsKeyed = false     // Temporarily set to FALSE
 			nodeStatus.PendingUnkey = true // Mark that we're in the unkey delay period
 			executionTime := timestamp.Add(time.Duration(kt.delayMS) * time.Millisecond)
 
@@ -130,7 +130,7 @@ func (kt *KeyingTracker) ProcessALinks(adjacentNodeIDs []int, alinksKeyed map[in
 		} else if linkIsKeyed && nodeStatus.IsTransmitting {
 			// --- 3. Ongoing Keying (Keep state true and clear timers) ---
 			// The node is still keyed, indicating the previous 'UnkeyCheck' was a jitter event.
-			nodeStatus.IsKeyed = true // Ensure state is true
+			nodeStatus.IsKeyed = true       // Ensure state is true
 			nodeStatus.PendingUnkey = false // Clear pending unkey flag
 			kt.removeFromQueue(nodeID)
 		}
@@ -198,7 +198,7 @@ func (kt *KeyingTracker) processTxEnd(endTime time.Time, adjacentNodeID int, nod
 
 	// Emit TX_END callback
 	if kt.onTxEnd != nil {
-		kt.onTxEnd(kt.localNodeID, adjacentNodeID, endTime, duration)
+		kt.onTxEnd(kt.localNodeID, adjacentNodeID, endTime, duration, *nodeStatus)
 	}
 }
 

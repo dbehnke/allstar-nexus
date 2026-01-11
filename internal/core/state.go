@@ -53,6 +53,11 @@ type SourceNodeKeyingEvent struct {
 	EndTime      *time.Time `json:"end_time,omitempty"`     // Only set for TX_END
 	DurationSec  int        `json:"duration_sec,omitempty"` // Only set for TX_END
 	Timestamp    time.Time  `json:"timestamp"`
+
+	// Enriched fields for external integrations (e.g. URFD Control)
+	Callsign    string `json:"callsign,omitempty"`
+	Description string `json:"description,omitempty"`
+	IP          string `json:"ip,omitempty"`
 }
 
 // TransmissionLogRepo defines the interface for transmission log persistence
@@ -865,7 +870,7 @@ func (sm *StateManager) AddSourceNode(nodeID int, delayMS int) {
 	// IMPORTANT: These callbacks are invoked from ProcessALinks which holds BOTH sm.mu and kt.mu locks
 	// Therefore callbacks must NOT call any methods that acquire locks
 	tracker.SetCallbacks(
-		func(sourceNode, adjacentNode int, timestamp time.Time) {
+		func(sourceNode, adjacentNode int, timestamp time.Time, status AdjacentNodeStatus) {
 			// TX START callback - called with locks already held
 			// Just emit the event; the keying update will be sent after ProcessALinks completes
 			sm.emitKeyingEventLocked(SourceNodeKeyingEvent{
@@ -874,9 +879,12 @@ func (sm *StateManager) AddSourceNode(nodeID int, delayMS int) {
 				NodeID:       adjacentNode,
 				StartTime:    timestamp,
 				Timestamp:    timestamp,
+				Callsign:     status.Callsign,
+				Description:  status.Description,
+				IP:           status.IP,
 			})
 		},
-		func(sourceNode, adjacentNode int, timestamp time.Time, duration int) {
+		func(sourceNode, adjacentNode int, timestamp time.Time, duration int, status AdjacentNodeStatus) {
 			// TX END callback - called with locks already held
 			// We can't call GetAdjacentNode here because it would try to acquire kt.mu again
 			// So we pass minimal info and rely on the keying update for full state
@@ -890,6 +898,9 @@ func (sm *StateManager) AddSourceNode(nodeID int, delayMS int) {
 				EndTime:      &endTime,
 				DurationSec:  duration,
 				Timestamp:    timestamp,
+				Callsign:     status.Callsign,
+				Description:  status.Description,
+				IP:           status.IP,
 			})
 
 			// Queue transmission log entry for async persistence
