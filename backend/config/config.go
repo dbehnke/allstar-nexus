@@ -97,8 +97,15 @@ type DiscordConfig struct {
 	WebhookURL            string `mapstructure:"webhook_url" yaml:"webhook_url"`
 	QSOInactiveSeconds    int    `mapstructure:"qso_inactive_seconds" yaml:"qso_inactive_seconds"`       // Time to wait after last TX before declaring QSO ended (default 120)
 	NodeIdleSeconds       int    `mapstructure:"node_idle_seconds" yaml:"node_idle_seconds"`             // Time to wait after last activity before declaring node idle (default 300)
-	MinTalkersForQSO      int    `mapstructure:"min_talkers_for_qso" yaml:"min_talkers_for_qso"`        // Minimum unique talkers to declare QSO started (default 2)
+	MinTalkersForQSO      int    `mapstructure:"min_talkers_for_qso" yaml:"min_talkers_for_qso"`         // Minimum unique talkers to declare QSO started (default 2)
 	NotifyIndividualTalks bool   `mapstructure:"notify_individual_talks" yaml:"notify_individual_talks"` // Whether to notify for each individual talker (default true)
+}
+
+// URFDConfig holds configuration for the URFD NNG Control Channel
+type URFDConfig struct {
+	Enabled       bool   `mapstructure:"enabled" yaml:"enabled"`
+	Address       string `mapstructure:"address" yaml:"address"`
+	ReportAddress string `mapstructure:"report_address" yaml:"report_address"` // Override IP sent to URFD (e.g. 127.0.0.1)
 }
 
 // Config holds runtime configuration values.
@@ -130,6 +137,7 @@ type Config struct {
 	Subtitle                string
 	Gamification            GamificationConfig
 	Discord                 DiscordConfig
+	URFD                    URFDConfig
 }
 
 // Load loads configuration from config file and environment variables using Viper
@@ -163,9 +171,9 @@ func Load(configPath ...string) Config {
 	// Discord webhook defaults (disabled by default)
 	viper.SetDefault("discord.enabled", false)
 	viper.SetDefault("discord.webhook_url", "")
-	viper.SetDefault("discord.qso_inactive_seconds", 120)   // 2 minutes
-	viper.SetDefault("discord.node_idle_seconds", 300)      // 5 minutes
-	viper.SetDefault("discord.min_talkers_for_qso", 2)      // 2 different talkers
+	viper.SetDefault("discord.qso_inactive_seconds", 120) // 2 minutes
+	viper.SetDefault("discord.node_idle_seconds", 300)    // 5 minutes
+	viper.SetDefault("discord.min_talkers_for_qso", 2)    // 2 different talkers
 	viper.SetDefault("discord.notify_individual_talks", true)
 
 	// Gamification defaults (low-activity hub configuration)
@@ -193,6 +201,11 @@ func Load(configPath ...string) Config {
 	// By default renown is enabled and each renown level requires 36,000 seconds (10 hours) of XP
 	viper.SetDefault("gamification.renown.enabled", true)
 	viper.SetDefault("gamification.renown.xp_per_level", 36000)
+
+	// URFD Defaults
+	viper.SetDefault("urfd.enabled", false)
+	viper.SetDefault("urfd.address", "tcp://127.0.0.1:6001")
+	viper.SetDefault("urfd.report_address", "")
 
 	// Config file search paths
 	if len(configPath) > 0 && configPath[0] != "" {
@@ -277,6 +290,11 @@ func Load(configPath ...string) Config {
 	// Load Discord configuration
 	if err := viper.UnmarshalKey("discord", &cfg.Discord); err != nil {
 		log.Printf("warning: failed to load discord config: %v (using defaults)", err)
+	}
+
+	// Load URFD configuration
+	if err := viper.UnmarshalKey("urfd", &cfg.URFD); err != nil {
+		log.Printf("warning: failed to load urfd config: %v (using defaults)", err)
 	}
 
 	// Load nodes configuration - supports multiple formats:

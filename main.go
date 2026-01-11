@@ -27,6 +27,7 @@ import (
 	"github.com/dbehnke/allstar-nexus/internal/astdb"
 	"github.com/dbehnke/allstar-nexus/internal/core"
 	"github.com/dbehnke/allstar-nexus/internal/discord"
+	"github.com/dbehnke/allstar-nexus/internal/urfd"
 	"github.com/dbehnke/allstar-nexus/internal/web"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
@@ -538,6 +539,41 @@ func main() {
 
 			// Register cleanup on shutdown
 			defer discordNotifier.Stop()
+		}
+
+		// Initialize URFD NNG Control Client (if enabled)
+		urfdClient := urfd.NewClient(cfg.URFD.Address, cfg.URFD.Enabled)
+		if cfg.URFD.Enabled {
+			if err := urfdClient.Connect(); err != nil {
+				logger.Warn("failed to connect to urfd control channel", zap.Error(err))
+			} else {
+				logger.Info("connected to urfd control channel", zap.String("address", cfg.URFD.Address))
+			}
+
+			// Hook into Hub's Keying Events to trigger registration
+			hub.SetOnKeyingEvent(func(evt core.SourceNodeKeyingEvent) {
+				// We only care about TX_START (Key-Up) events that have a valid IP and Callsign
+				if evt.Type == "TX_START" && evt.IP != "" && evt.Callsign != "" {
+					// Use configured ReportAddress if set, otherwise use the detected IP
+					targetIP := evt.IP
+					if cfg.URFD.ReportAddress != "" {
+						targetIP = cfg.URFD.ReportAddress
+					}
+
+					// Async call to avoid blocking the event loop
+					go func() {
+						if err := urfdClient.Register(targetIP, evt.Callsign); err != nil {
+							logger.Error("failed to register USRP client with urfd",
+								zap.String("ip", targetIP),
+								zap.String("original_ip", evt.IP),
+								zap.String("callsign", evt.Callsign),
+								zap.Error(err),
+							)
+						}
+					}()
+				}
+			})
+			defer urfdClient.Close()
 		}
 
 		go hub.BroadcastLoop(sm.Updates())

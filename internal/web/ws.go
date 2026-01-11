@@ -33,6 +33,8 @@ type Hub struct {
 	onTalkerEvent func(core.TalkerEvent)
 	// Optional hook to forward link TX events (e.g., to Discord notifier)
 	onLinkTxEvent func(core.LinkTxEvent)
+	// Optional hook for keying events (e.g., NNG control)
+	onKeyingEvent func(core.SourceNodeKeyingEvent)
 }
 
 type clientInfo struct {
@@ -62,6 +64,13 @@ func (h *Hub) SetOnLinkTxEvent(fn func(core.LinkTxEvent)) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.onLinkTxEvent = fn
+}
+
+// SetOnKeyingEvent sets an optional callback for keying events (e.g., NNG Control)
+func (h *Hub) SetOnKeyingEvent(fn func(core.SourceNodeKeyingEvent)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onKeyingEvent = fn
 }
 
 // TriggerPollDebounced requests a poll after a short delay (2s). Subsequent
@@ -439,6 +448,16 @@ func (h *Hub) SourceNodeKeyingLoop(updates <-chan core.SourceNodeKeyingUpdate) {
 // SourceNodeKeyingEventLoop broadcasts session edge events (TX_START/TX_END)
 func (h *Hub) SourceNodeKeyingEventLoop(events <-chan core.SourceNodeKeyingEvent) {
 	for event := range events {
+
+		// Trigger hook if registered (e.g. for URFD integration)
+		h.mu.RLock()
+		hook := h.onKeyingEvent
+		h.mu.RUnlock()
+		if hook != nil {
+			// Run hook in goroutine to avoid blocking the event loop
+			go hook(event)
+		}
+
 		env := messageEnvelope{MessageType: "SOURCE_NODE_KEYING_EVENT", Data: event, Timestamp: time.Now().UnixMilli()}
 		payload, _ := json.Marshal(env)
 		h.mu.RLock()
