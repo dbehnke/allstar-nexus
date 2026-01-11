@@ -2,14 +2,14 @@ module github.com/dbehnke/allstar-nexus
 
 go 1.25.5
 
-require modernc.org/sqlite v1.41.0
-
-require github.com/coder/websocket v1.8.14
+require modernc.org/sqlite v1.43.0
 
 require (
-	go.nanomsg.org/mangos/v3 v3.4.2 // indirect
-	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
+	github.com/coder/websocket v1.8.14
+	go.nanomsg.org/mangos/v3 v3.4.2
 )
+
+require golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
