@@ -195,6 +195,36 @@ sudo userdel allstar-nexus
 
 ## Troubleshooting
 
+### Configuration file not being read / AMI connecting to wrong host
+
+If your AMI connections are going to `127.0.0.1:5038` instead of your configured host, or your config settings are being ignored:
+
+1. **Check for YAML syntax errors** - YAML requires SPACES for indentation, NOT TABS:
+   ```bash
+   # Validate your config file
+   allstar-nexus config validate
+   ```
+
+2. **Check your config file for tabs**:
+   ```bash
+   cat -A /etc/allstar-nexus/config.yaml | grep "^I"
+   ```
+   If you see `^I` characters, those are tabs and need to be replaced with spaces.
+
+3. **Fix tabs automatically**:
+   ```bash
+   # Create a fixed version with 2-space indentation
+   expand -t 2 /etc/allstar-nexus/config.yaml > /tmp/config-fixed.yaml
+   sudo cp /tmp/config-fixed.yaml /etc/allstar-nexus/config.yaml
+   ```
+
+4. **Check startup logs** for parsing errors:
+   ```bash
+   sudo journalctl -u allstar-nexus -n 50 | grep -i "config\|ERROR"
+   ```
+
+When the config file fails to parse, the application falls back to default values including `ami_host: 127.0.0.1`.
+
 ### Service won't start
 
 Check logs:
