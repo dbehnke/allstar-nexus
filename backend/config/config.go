@@ -236,9 +236,13 @@ func Load(configPath ...string) Config {
 				configFilePath = configPath[0]
 			} else {
 				// Try to find which config file viper attempted to read from default locations
+				// Match all paths that viper searches (from lines 218-221)
+				homeDir, _ := os.UserHomeDir()
 				searchPaths := []string{
 					"./config.yaml",
 					"data/config.yaml",
+					homeDir + "/.allstar-nexus/config.yaml",
+					"/etc/allstar-nexus/config.yaml",
 				}
 				for _, path := range searchPaths {
 					if _, statErr := os.Stat(path); statErr == nil {
@@ -250,9 +254,38 @@ func Load(configPath ...string) Config {
 			
 			if configFilePath != "" {
 				if data, readErr := os.ReadFile(configFilePath); readErr == nil {
-					if bytes.Contains(data, []byte("\t")) {
+					// Check for tabs (literal tab characters)
+					hasTabs := bytes.Contains(data, []byte("\t"))
+					// Check for mixed indentation (lines with both leading spaces and tabs)
+					hasMixedIndent := false
+					scanner := bufio.NewScanner(bytes.NewReader(data))
+					for scanner.Scan() {
+						line := scanner.Text()
+						if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
+							// Line has leading whitespace - check if it's mixed
+							hasSpace := false
+							hasTab := false
+							for i := 0; i < len(line) && (line[i] == ' ' || line[i] == '\t'); i++ {
+								if line[i] == ' ' {
+									hasSpace = true
+								}
+								if line[i] == '\t' {
+									hasTab = true
+								}
+							}
+							if hasSpace && hasTab {
+								hasMixedIndent = true
+								break
+							}
+						}
+					}
+					
+					if hasTabs || hasMixedIndent {
 						log.Printf("ERROR: Your config file (%s) contains TAB characters!", configFilePath)
 						log.Printf("ERROR: YAML requires SPACES for indentation, not TABS.")
+						if hasMixedIndent {
+							log.Printf("ERROR: Your file also has mixed spaces and tabs on the same line!")
+						}
 						log.Printf("ERROR: Please replace all tabs with spaces (typically 2 spaces per indent level)")
 						log.Printf("HINT: You can use 'expand -t 2 %s > fixed.yaml' to fix tabs automatically", configFilePath)
 					}
