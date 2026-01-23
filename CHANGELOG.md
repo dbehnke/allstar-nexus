@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/dbehnke/allstar-nexus/compare/v0.14.0...v0.14.1) (2026-01-23)
+
+
+### Bug Fixes
+
+* config.yaml tab indentation causing AMI settings to be ignored ([#124](https://github.com/dbehnke/allstar-nexus/issues/124)) ([b2c4ce0](https://github.com/dbehnke/allstar-nexus/commit/b2c4ce0a9420da23815f185e93dc98d5fb88c4a4))
+
 ## [0.14.0](https://github.com/dbehnke/allstar-nexus/compare/v0.13.0...v0.14.0) (2026-01-11)
 
 
