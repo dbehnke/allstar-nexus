@@ -89,6 +89,14 @@ Before starting the server, you can lint and validate your YAML to catch common 
 ./allstar-nexus config validate --config ./config.yaml
 ```
 
+If validation fails due to tab characters, you can fix them automatically:
+
+```bash
+# Fix tabs by replacing with 2 spaces
+expand -t 2 config.yaml > config-fixed.yaml
+mv config-fixed.yaml config.yaml
+```
+
 If validation fails you can either fix the config or bypass validation at your own risk using `--force` when starting the server:
 
 ```bash
@@ -96,7 +104,7 @@ If validation fails you can either fix the config or bypass validation at your o
 ./allstar-nexus --config ./config.yaml --force
 ```
 
-Using `--force` will allow the server to continue startup even if linting/parsing detects issues; this is intended for temporary debugging only.
+**Warning**: Using `--force` will allow the server to continue startup even if linting/parsing detects issues. When config parsing fails, the application falls back to default values (including `ami_host: 127.0.0.1`), which may not be what you want. This is intended for temporary debugging only.
 
 
 Useful developer tasks
