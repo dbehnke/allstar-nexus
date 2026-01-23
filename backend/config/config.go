@@ -242,7 +242,7 @@ func Load(configPath ...string) Config {
 					"data/config.yaml",
 				}
 				// Add home directory path only if we can determine it
-				if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
+				if homeDir, err := os.UserHomeDir(); err == nil {
 					searchPaths = append(searchPaths, homeDir+"/.allstar-nexus/config.yaml")
 				}
 				searchPaths = append(searchPaths, "/etc/allstar-nexus/config.yaml")
@@ -290,7 +290,7 @@ func Load(configPath ...string) Config {
 							log.Printf("ERROR: Your file also has mixed spaces and tabs on the same line!")
 						}
 						log.Printf("ERROR: Please replace all tabs with spaces (typically 2 spaces per indent level)")
-						log.Printf("HINT: You can use 'expand -t 2 %s > fixed.yaml' to fix tabs automatically", configFilePath)
+						log.Printf("HINT: You can use 'expand -t 2 \"%s\" > fixed.yaml' to fix tabs automatically", configFilePath)
 					}
 				}
 			}
