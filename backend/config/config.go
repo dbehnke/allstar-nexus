@@ -237,13 +237,16 @@ func Load(configPath ...string) Config {
 			} else {
 				// Try to find which config file viper attempted to read from default locations
 				// Match all paths that viper searches (from lines 218-221)
-				homeDir, _ := os.UserHomeDir()
 				searchPaths := []string{
 					"./config.yaml",
 					"data/config.yaml",
-					homeDir + "/.allstar-nexus/config.yaml",
-					"/etc/allstar-nexus/config.yaml",
 				}
+				// Add home directory path only if we can determine it
+				if homeDir, err := os.UserHomeDir(); err == nil && homeDir != "" {
+					searchPaths = append(searchPaths, homeDir+"/.allstar-nexus/config.yaml")
+				}
+				searchPaths = append(searchPaths, "/etc/allstar-nexus/config.yaml")
+				
 				for _, path := range searchPaths {
 					if _, statErr := os.Stat(path); statErr == nil {
 						configFilePath = path
