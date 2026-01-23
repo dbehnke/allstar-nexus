@@ -161,6 +161,34 @@ allstar-nexus/
 
 ## 🐛 Troubleshooting
 
+### Configuration file issues (YAML syntax errors)
+
+If you're using `config.yaml` instead of environment variables and it's not being read:
+
+1. **Validate your config file**:
+   ```bash
+   ./allstar-nexus config validate
+   ```
+
+2. **Check for tabs in your config** - YAML requires SPACES, not TABS:
+   ```bash
+   cat -A config.yaml | grep "^I"
+   ```
+   If you see `^I`, those are tabs that need to be replaced with spaces.
+
+3. **Fix tabs automatically**:
+   ```bash
+   expand -t 2 config.yaml > config-fixed.yaml
+   mv config-fixed.yaml config.yaml
+   ```
+
+4. **Watch startup logs for config errors**:
+   ```bash
+   ./allstar-nexus 2>&1 | grep -i "config\|ERROR"
+   ```
+
+When config parsing fails, the app falls back to defaults (including `ami_host: 127.0.0.1`).
+
 ### Dashboard not loading?
 - Make sure you built the Vue app: `cd vue-dashboard && npm run build`
 - Check the `vue-dashboard/dist/` directory exists
