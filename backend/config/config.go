@@ -228,7 +228,40 @@ func Load(configPath ...string) Config {
 			log.Printf("No config file found, using defaults and environment variables")
 		} else {
 			// Config file found but error reading it
-			log.Printf("Error reading config file: %v", err)
+			log.Printf("ERROR: Failed to parse config file: %v", err)
+			
+			// Try to detect if tabs are the issue by checking the file we tried to read
+			var configFilePath string
+			if len(configPath) > 0 && configPath[0] != "" {
+				configFilePath = configPath[0]
+			} else {
+				// Try to find which config file viper attempted to read from default locations
+				searchPaths := []string{
+					"./config.yaml",
+					"data/config.yaml",
+				}
+				for _, path := range searchPaths {
+					if _, statErr := os.Stat(path); statErr == nil {
+						configFilePath = path
+						break
+					}
+				}
+			}
+			
+			if configFilePath != "" {
+				if data, readErr := os.ReadFile(configFilePath); readErr == nil {
+					if bytes.Contains(data, []byte("\t")) {
+						log.Printf("ERROR: Your config file (%s) contains TAB characters!", configFilePath)
+						log.Printf("ERROR: YAML requires SPACES for indentation, not TABS.")
+						log.Printf("ERROR: Please replace all tabs with spaces (typically 2 spaces per indent level)")
+						log.Printf("HINT: You can use 'expand -t 2 %s > fixed.yaml' to fix tabs automatically", configFilePath)
+					}
+				}
+			}
+			
+			log.Printf("HINT: Run 'allstar-nexus config validate' to check your config file for errors")
+			log.Printf("WARNING: Falling back to default values and environment variables")
+			log.Printf("WARNING: This means your AMI host/port/credentials will use defaults!")
 		}
 	} else {
 		log.Printf("Using config file: %s", viper.ConfigFileUsed())
@@ -281,6 +314,10 @@ func Load(configPath ...string) Config {
 		Title:                   viper.GetString("title"),
 		Subtitle:                viper.GetString("subtitle"),
 	}
+
+	// Log AMI configuration being used (helps diagnose connection issues)
+	log.Printf("AMI Configuration: enabled=%v, host=%s, port=%d, username=%s",
+		cfg.AMIEnabled, cfg.AMIHost, cfg.AMIPort, cfg.AMIUser)
 
 	// Load gamification configuration
 	if err := viper.UnmarshalKey("gamification", &cfg.Gamification); err != nil {
@@ -506,83 +543,83 @@ allow_anon_dashboard: true
 
 # Gamification System (Low-Activity defaults shown)
 gamification:
-	enabled: false            # Set to true to enable the gamification system
-	tally_interval_minutes: 30
+  enabled: false            # Set to true to enable the gamification system
+  tally_interval_minutes: 30
 
-	# Rested XP Bonus
-	rested_bonus:
-		enabled: true
-		accumulation_rate: 0.006  # ~1 hour of rested per week maximum (1/168)
-		idle_threshold_seconds: 300 # start accruing after 5 minutes idle
-		max_hours: 2             # 2 hours total cap
-		multiplier: 2.0          # 2x XP while rested
+  # Rested XP Bonus
+  rested_bonus:
+    enabled: true
+    accumulation_rate: 0.006  # ~1 hour of rested per week maximum (1/168)
+    idle_threshold_seconds: 300 # start accruing after 5 minutes idle
+    max_hours: 2             # 2 hours total cap
+    multiplier: 2.0          # 2x XP while rested
 
-	# Diminishing Returns (tiers in seconds with multipliers)
-	diminishing_returns:
-		enabled: true
-		tiers:
-			- { max_seconds: 1200, multiplier: 1.0 }
-			- { max_seconds: 2400, multiplier: 0.75 }
-			- { max_seconds: 3600, multiplier: 0.5 }
-			- { max_seconds: 999999, multiplier: 0.25 }
+  # Diminishing Returns (tiers in seconds with multipliers)
+  diminishing_returns:
+    enabled: true
+    tiers:
+      - { max_seconds: 1200, multiplier: 1.0 }
+      - { max_seconds: 2400, multiplier: 0.75 }
+      - { max_seconds: 3600, multiplier: 0.5 }
+      - { max_seconds: 999999, multiplier: 0.25 }
 
-	# Kerchunk / spam detection
-	kerchunk_detection:
-		enabled: true
-		threshold_seconds: 3
-		consecutive_window: 30
-		single: 0.5
-		two_to_three: 0.25
-		four_to_five: 0.1
-		six_plus: 0.0
+  # Kerchunk / spam detection
+  kerchunk_detection:
+    enabled: true
+    threshold_seconds: 3
+    consecutive_window: 30
+    single: 0.5
+    two_to_three: 0.25
+    four_to_five: 0.1
+    six_plus: 0.0
 
-	# Daily/weekly XP caps (seconds of talk time credited)
-	xp_caps:
-		enabled: true
-		daily_cap_seconds: 1200   # 20 minutes/day
-		weekly_cap_seconds: 7200  # 2 hours/week
-		reset_hour: 0
-		week_starts: sunday
+  # Daily/weekly XP caps (seconds of talk time credited)
+  xp_caps:
+    enabled: true
+    daily_cap_seconds: 1200   # 20 minutes/day
+    weekly_cap_seconds: 7200  # 2 hours/week
+    reset_hour: 0
+    week_starts: sunday
 
-	# Optional: Custom level scaling. If omitted, uses low-activity defaults (6 min levels 1-10, logarithmic 11-60 to 255,600s).
-	# level_scale:
-	#   - levels: "1-10"
-	#     xp_per_level: 360
-	#   - levels: "11-60"
-	#     scaling: "logarithmic"
-	#     target_total_seconds: 255600
+  # Optional: Custom level scaling. If omitted, uses low-activity defaults (6 min levels 1-10, logarithmic 11-60 to 255,600s).
+  # level_scale:
+  #   - levels: "1-10"
+  #     xp_per_level: 360
+  #   - levels: "11-60"
+  #     scaling: "logarithmic"
+  #     target_total_seconds: 255600
 
-	# Level groupings (badges and titles for level ranges)
-	# If omitted, uses sensible defaults
-	# level_groupings:
-	#   - levels: "1-9"
-	#     title: "Novice"
-	#     badge: "🌱"
-	#     color: "#10b981"
-	#   - levels: "10-19"
-	#     title: "Technician"
-	#     badge: "🔧"
-	#     color: "#3b82f6"
-	#   - levels: "20-29"
-	#     title: "General"
-	#     badge: "📡"
-	#     color: "#8b5cf6"
-	#   - levels: "30-39"
-	#     title: "Advanced"
-	#     badge: "🎯"
-	#     color: "#f59e0b"
-	#   - levels: "40-49"
-	#     title: "Extra"
-	#     badge: "💎"
-	#     color: "#ef4444"
-	#   - levels: "50-55"
-	#     title: "Elmer"
-	#     badge: "🧙"
-	#     color: "#ec4899"
-	#   - levels: "56-60"
-	#     title: "Professor"
-	#     badge: "🎓"
-	#     color: "#6366f1"
+  # Level groupings (badges and titles for level ranges)
+  # If omitted, uses sensible defaults
+  # level_groupings:
+  #   - levels: "1-9"
+  #     title: "Novice"
+  #     badge: "🌱"
+  #     color: "#10b981"
+  #   - levels: "10-19"
+  #     title: "Technician"
+  #     badge: "🔧"
+  #     color: "#3b82f6"
+  #   - levels: "20-29"
+  #     title: "General"
+  #     badge: "📡"
+  #     color: "#8b5cf6"
+  #   - levels: "30-39"
+  #     title: "Advanced"
+  #     badge: "🎯"
+  #     color: "#f59e0b"
+  #   - levels: "40-49"
+  #     title: "Extra"
+  #     badge: "💎"
+  #     color: "#ef4444"
+  #   - levels: "50-55"
+  #     title: "Elmer"
+  #     badge: "🧙"
+  #     color: "#ec4899"
+  #   - levels: "56-60"
+  #     title: "Professor"
+  #     badge: "🎓"
+  #     color: "#6366f1"
 `
 	return os.WriteFile(path, []byte(exampleConfig), 0644)
 }

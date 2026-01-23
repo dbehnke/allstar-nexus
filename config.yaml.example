@@ -64,90 +64,90 @@ discord:
 
 # Gamification System Configuration (Disabled by default)
 gamification:
-	enabled: false
-	tally_interval_minutes: 30
+  enabled: false
+  tally_interval_minutes: 30
 
-	rested_bonus:
-		enabled: true
-		accumulation_rate: 0.006  # ~1 hour of rested per week maximum (1/168)
-		idle_threshold_seconds: 300  # start accruing after 5 minutes idle
-		max_hours: 2  # 2 hours total cap
-		multiplier: 2.0
+  rested_bonus:
+    enabled: true
+    accumulation_rate: 0.006  # ~1 hour of rested per week maximum (1/168)
+    idle_threshold_seconds: 300  # start accruing after 5 minutes idle
+    max_hours: 2  # 2 hours total cap
+    multiplier: 2.0
 
-	diminishing_returns:
-		enabled: true
-		tiers:
-			- { max_seconds: 1200, multiplier: 1.0 }
-			- { max_seconds: 2400, multiplier: 0.75 }
-			- { max_seconds: 3600, multiplier: 0.5 }
-			- { max_seconds: 999999, multiplier: 0.25 }
+  diminishing_returns:
+    enabled: true
+    tiers:
+      - { max_seconds: 1200, multiplier: 1.0 }
+      - { max_seconds: 2400, multiplier: 0.75 }
+      - { max_seconds: 3600, multiplier: 0.5 }
+      - { max_seconds: 999999, multiplier: 0.25 }
 
-	kerchunk_detection:
-		enabled: true
-		threshold_seconds: 3
-		consecutive_window: 30
-		single: 0.5
-		two_to_three: 0.25
-		four_to_five: 0.1
-		six_plus: 0.0
+  kerchunk_detection:
+    enabled: true
+    threshold_seconds: 3
+    consecutive_window: 30
+    single: 0.5
+    two_to_three: 0.25
+    four_to_five: 0.1
+    six_plus: 0.0
 
-	xp_caps:
-		enabled: true
-		daily_cap_seconds: 1200
-		weekly_cap_seconds: 7200
-		reset_hour: 0
-		week_starts: sunday
+  xp_caps:
+    enabled: true
+    daily_cap_seconds: 1200
+    weekly_cap_seconds: 7200
+    reset_hour: 0
+    week_starts: sunday
 
-	# Optional custom level scaling (otherwise defaults are used)
-	# level_scale:
-	#   - levels: "1-10"
-	#     xp_per_level: 360
-	#   - levels: "11-60"
-	#     scaling: logarithmic
-	#     target_total_seconds: 255600
+  # Optional custom level scaling (otherwise defaults are used)
+  # level_scale:
+  #   - levels: "1-10"
+  #     xp_per_level: 360
+  #   - levels: "11-60"
+  #     scaling: logarithmic
+  #     target_total_seconds: 255600
 
-	# Level groupings (badges and titles for level ranges)
-	# If omitted, uses sensible defaults
-	# level_groupings:
-	#   - levels: "1-9"
-	#     title: "Novice"
-	#     badge: "🌱"
-	#     color: "#10b981"
-	#   - levels: "10-19"
-	#     title: "Technician"
-	#     badge: "🔧"
-	#     color: "#3b82f6"
-	#   - levels: "20-29"
-	#     title: "General"
-	#     badge: "📡"
-	#     color: "#8b5cf6"
-	#   - levels: "30-39"
-	#     title: "Advanced"
-	#     badge: "🎯"
-	#     color: "#f59e0b"
-	#   - levels: "40-49"
-	#     title: "Extra"
-	#     badge: "💎"
-	#     color: "#ef4444"
-	#   - levels: "50-55"
-	#     title: "Elmer"
-	#     badge: "🧙"
-	#     color: "#ec4899"
-	#   - levels: "56-60"
-	#     title: "Professor"
-	#     badge: "🎓"
-	#     color: "#6366f1"
+  # Level groupings (badges and titles for level ranges)
+  # If omitted, uses sensible defaults
+  # level_groupings:
+  #   - levels: "1-9"
+  #     title: "Novice"
+  #     badge: "🌱"
+  #     color: "#10b981"
+  #   - levels: "10-19"
+  #     title: "Technician"
+  #     badge: "🔧"
+  #     color: "#3b82f6"
+  #   - levels: "20-29"
+  #     title: "General"
+  #     badge: "📡"
+  #     color: "#8b5cf6"
+  #   - levels: "30-39"
+  #     title: "Advanced"
+  #     badge: "🎯"
+  #     color: "#f59e0b"
+  #   - levels: "40-49"
+  #     title: "Extra"
+  #     badge: "💎"
+  #     color: "#ef4444"
+  #   - levels: "50-55"
+  #     title: "Elmer"
+  #     badge: "🧙"
+  #     color: "#ec4899"
+  #   - levels: "56-60"
+  #     title: "Professor"
+  #     badge: "🎓"
+  #     color: "#6366f1"
 
-	# Renown (prestige) settings
-	# When a user reaches level 60 they may enter Renown cycles. Each Renown level
-	# requires a fixed amount of XP (seconds) configured below. Default is 36000
-	# seconds (10 hours).
-	# renown:
-	#   enabled: true
-	#   xp_per_level: 36000
+  # Renown (prestige) settings
+  # When a user reaches level 60 they may enter Renown cycles. Each Renown level
+  # requires a fixed amount of XP (seconds) configured below. Default is 36000
+  # seconds (10 hours).
+  # renown:
+  #   enabled: true
+  #   xp_per_level: 36000
 
-	# Discord Notifications
-	# Send notifications to Discord when users level up or enter new level groupings
-	# discord:
-	#   enabled: false
-	#   webhook_url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_URL_HERE"
+  # Discord Notifications
+  # Send notifications to Discord when users level up or enter new level groupings
+  # discord:
+  #   enabled: false
+  #   webhook_url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_URL_HERE"
