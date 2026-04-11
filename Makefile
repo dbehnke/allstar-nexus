@@ -55,7 +55,8 @@ test-e2e:
 	cd $(FRONTEND_DIR) && npm run build && npx playwright install --with-deps chromium && npm run test:e2e
 
 lint:
-	@echo "(placeholder) add golangci-lint or staticcheck here"
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.11.4
+	golangci-lint run ./...
 
 clean:
 	rm -f $(APP_NAME)
