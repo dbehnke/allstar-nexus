@@ -287,6 +287,7 @@ func (n *Notifier) notifyStateChange(oldState, newState ActivityState) {
 			n.sendNotification("🎙️ A QSO has started!")
 		}
 	case StateIdle:
+		//nolint:staticcheck // could use tagged switch but newState switch makes this clearer
 		if oldState == StateQSO {
 			// QSO ended first, then idle
 			// Send first notification
@@ -388,7 +389,7 @@ func (n *Notifier) sendNotification(message string) {
 			log.Printf("[DISCORD] failed to send notification: %v", err)
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			log.Printf("[DISCORD] webhook returned status %d", resp.StatusCode)
