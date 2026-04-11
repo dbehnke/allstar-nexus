@@ -10,7 +10,7 @@
 
 | Layer | Technology | Details |
 |-------|------------|---------|
-| **Backend** | Go 1.25+ | Single binary, embeds frontend assets. Uses `net/http` standard lib. |
+| **Backend** | Go 1.26+ | Single binary, embeds frontend assets. Uses `net/http` standard lib. |
 | **Database** | SQLite | `modernc.org/sqlite` (CGO-free). WAL mode enabled. |
 | **Realtime** | WebSockets | `github.com/coder/websocket`. Event-driven updates (no polling). |
 | **AMI** | TCP | Custom AMI connector for Asterisk Manager Interface. |

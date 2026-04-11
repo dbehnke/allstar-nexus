@@ -7,7 +7,7 @@ This file keeps assistants and contributors aligned with the CURRENT (not histor
 ## Active Architecture Snapshot
 | Layer | Technology | Notes |
 |-------|------------|-------|
-| Backend | Go 1.25.x | Single binary, embeds built static assets (Vue + legacy Next export fallback) |
+| Backend | Go 1.26.2 | Single binary, embeds built static assets (Vue + legacy Next export fallback) |
 | Realtime | AMI TCP connector | Login, auto-reconnect, event-driven state (RPT_* / VarSet) |
 | Persistence | SQLite (modernc.org/sqlite) | WAL mode, link_stats table (per-link TX totals & timestamps) |
 | Frontend | Vue 3 + Vite | Anonymous dashboard + admin login drawer, WS-driven updates |
