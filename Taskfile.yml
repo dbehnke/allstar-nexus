@@ -117,7 +117,7 @@ tasks:
     desc: Run npm audit on frontend dependencies
     dir: "{{.FRONTEND_DIR}}"
     cmds:
-      - npm audit --audit-level=moderate
+      - npm audit --audit-level=high
 
   vulncheck:
     desc: Run Go vulnerability check
