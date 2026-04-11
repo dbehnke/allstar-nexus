@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.14.2](https://github.com/dbehnke/allstar-nexus/compare/v0.14.1...v0.14.2) (2026-04-11)
+
+
+### Bug Fixes
+
+* golangci-lint version prefix and npm audit issues ([453af27](https://github.com/dbehnke/allstar-nexus/commit/453af27b4579814f619deaea4f864cba3257e904))
+* remove invalid linters-settings from .golangci.yml (v2 schema) ([b740c19](https://github.com/dbehnke/allstar-nexus/commit/b740c194d47a25aaad8cfb4f469d29778a6a7c1f))
+* restore v prefix on golangci-lint version for v7 action ([5b09ebb](https://github.com/dbehnke/allstar-nexus/commit/5b09ebb0ec51ce83f7a365dcea9feeda61bace2b))
+* update golangci-lint config to v2 format ([0822d75](https://github.com/dbehnke/allstar-nexus/commit/0822d75c127266727091d4f106d557f8cd10a44a))
+* upgrade to golangci-lint-action@v7 (v6 doesn't support v2 linter) ([55eb6dd](https://github.com/dbehnke/allstar-nexus/commit/55eb6ddec0af0875762545ac60bbd4c679396fd3))
+* use golangci-lint-action@v7 for golangci-lint v2 ([118ff63](https://github.com/dbehnke/allstar-nexus/commit/118ff63e0c63524f2217b2bb7626098a42d31408))
+
 ## [0.14.1](https://github.com/dbehnke/allstar-nexus/compare/v0.14.0...v0.14.1) (2026-01-23)
 
 
