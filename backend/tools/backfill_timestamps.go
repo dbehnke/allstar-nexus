@@ -35,7 +35,7 @@ func BackfillTransmissionLogTimestamps(dbPath string, db *gorm.DB, logger *zap.L
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		updated := 0
 		scanned := 0
@@ -132,7 +132,7 @@ func backupFile(path string, logger *zap.Logger) error {
 	if err != nil {
 		return err
 	}
-	defer srcF.Close()
+	defer func() { _ = srcF.Close() }()
 
 	dstF, err := os.Create(dest)
 	if err != nil {

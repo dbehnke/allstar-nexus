@@ -12,7 +12,7 @@ func TestReadCallsigns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	// Write test data
 	testData := `# This is a comment
@@ -28,7 +28,7 @@ N0CALL
 	if _, err := tmpFile.WriteString(testData); err != nil {
 		t.Fatalf("Failed to write test data: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	// Read callsigns
 	callsigns, err := readCallsigns(tmpFile.Name())
@@ -58,8 +58,8 @@ func TestReadCallsigns_EmptyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
-	tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	_ = tmpFile.Close()
 
 	callsigns, err := readCallsigns(tmpFile.Name())
 	if err != nil {
@@ -76,7 +76,7 @@ func TestReadCallsigns_OnlyComments(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	testData := `# Comment line 1
 ; Comment line 2
@@ -85,7 +85,7 @@ func TestReadCallsigns_OnlyComments(t *testing.T) {
 	if _, err := tmpFile.WriteString(testData); err != nil {
 		t.Fatalf("Failed to write test data: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	callsigns, err := readCallsigns(tmpFile.Name())
 	if err != nil {
@@ -102,7 +102,7 @@ func TestReadCallsigns_WithExtraWhitespace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	testData := `  KF8S  
 	KE8VSI	
@@ -112,7 +112,7 @@ W1ABC    some extra text here
 	if _, err := tmpFile.WriteString(testData); err != nil {
 		t.Fatalf("Failed to write test data: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	callsigns, err := readCallsigns(tmpFile.Name())
 	if err != nil {
@@ -140,7 +140,7 @@ func TestReadCallsigns_CaseConversion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	testData := `kf8s
 Ke8vsi
@@ -150,7 +150,7 @@ n0call
 	if _, err := tmpFile.WriteString(testData); err != nil {
 		t.Fatalf("Failed to write test data: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	callsigns, err := readCallsigns(tmpFile.Name())
 	if err != nil {

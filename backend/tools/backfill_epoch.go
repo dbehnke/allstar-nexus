@@ -25,7 +25,7 @@ func BackfillTransmissionEpochs(db *gorm.DB, logger *zap.Logger) error {
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		updated := 0
 		scanned := 0

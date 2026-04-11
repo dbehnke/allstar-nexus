@@ -219,7 +219,7 @@ func TestGroupChangeNotifications(t *testing.T) {
 
 // processLevelUpsForTest is a standalone version of the processLevelUps logic for testing
 // It replicates the logic from tally_service.go without needing a full TallyService instance
-func processLevelUpsForTest(profile *models.CallsignProfile, levelRequirements map[int]int, levelGroupings []cfgpkg.LevelGrouping, renownEnabled bool, renownXPPerLevel int, logger *zap.Logger) (bool, []LevelUpInfo) {
+func processLevelUpsForTest(profile *models.CallsignProfile, levelRequirements map[int]int, levelGroupings []cfgpkg.LevelGrouping, renownEnabled bool, renownXPPerLevel int, _ *zap.Logger) (bool, []LevelUpInfo) {
 	leveledUp := false
 	var levelUpEvents []LevelUpInfo
 

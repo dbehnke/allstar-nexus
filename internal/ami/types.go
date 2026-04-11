@@ -119,7 +119,7 @@ func formatTime(h, m, s int) string {
 }
 
 // Helper to format without fmt import
-func sprintf(format string, h, m, s int) string {
+func sprintf(_ string, h, m, s int) string {
 	// Simple sprintf for HH:MM:SS format
 	hStr := padLeft(itoa(h), 3, '0')
 	mStr := padLeft(itoa(m), 2, '0')
