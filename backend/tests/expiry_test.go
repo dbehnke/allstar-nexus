@@ -79,7 +79,8 @@ func decode(resp *http.Response, v any) {
 	defer func() { _ = resp.Body.Close() }()
 	_ = json.NewDecoder(resp.Body).Decode(v)
 }
-func getWithToken(c *http.Client, url, tok string) (*http.Response, env) {
+//nolint:unparam
+func getWithToken(c *http.Client, url, tok string) (*http.Response, any) {
 	req, _ := http.NewRequest("GET", url, nil)
 	if tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)

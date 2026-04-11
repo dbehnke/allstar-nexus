@@ -154,7 +154,7 @@ func TestLevelingSpeed_WithRestedBonus(t *testing.T) {
 	if prof2.Level > 16 {
 		t.Errorf("expected level 16 with current XP, got %d (requirements may have changed)", prof2.Level)
 	}
-	
+
 	// Document what happened
 	t.Logf("Result: Level %d with %d XP (rested bonus active)", prof2.Level, prof2.ExperiencePoints)
 	t.Log("This demonstrates that rested XP bonus can cause rapid leveling progress")
@@ -166,7 +166,7 @@ func TestProfileUpsert_PersistsDailyWeeklyXP(t *testing.T) {
 	profileRepo := repository.NewCallsignProfileRepo(gdb)
 
 	callsign := "W1PERSIST"
-	
+
 	// Create initial profile
 	prof, err := profileRepo.GetByCallsign(context.Background(), callsign)
 	if err != nil {
@@ -219,13 +219,13 @@ func TestLevelRequirements_Documentation(t *testing.T) {
 		cumulative += reqs[tt.level]
 		xp := reqs[tt.level]
 		if xp != tt.expectedXP {
-			t.Errorf("Level %d: expected %d XP, got %d (%s)", 
+			t.Errorf("Level %d: expected %d XP, got %d (%s)",
 				tt.level, tt.expectedXP, xp, tt.description)
 		}
-		t.Logf("Level %2d: %5d XP (%s) - Cumulative: %d", 
+		t.Logf("Level %2d: %5d XP (%s) - Cumulative: %d",
 			tt.level, xp, tt.description, cumulative)
 	}
-	
+
 	// Also document level 60 (max level before renown)
 	t.Logf("Level 60: %5d XP (Max level before renown)", reqs[60])
 

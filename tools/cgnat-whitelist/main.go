@@ -91,8 +91,8 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to create temp file for astdb: %v", err)
 		}
-		astdbPath.Close()
-		defer os.Remove(astdbPath.Name())
+		_ = astdbPath.Close()
+		defer func() { _ = os.Remove(astdbPath.Name()) }()
 
 		downloader := astdb.NewDownloader(*astdbURL, astdbPath.Name(), 24, logger)
 		downloader.SetNodeInfoRepository(nodeInfoRepo)
@@ -126,10 +126,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create output file: %v", err)
 	}
-	defer outFile.Close()
+	defer func() { _ = outFile.Close() }()
 
 	writer := bufio.NewWriter(outFile)
-	defer writer.Flush()
+	defer func() { _ = writer.Flush() }()
 
 	// Process each callsign
 	totalEntries := 0
@@ -147,17 +147,17 @@ func main() {
 		if len(nodes) == 0 {
 			logger.Warn("No nodes found", zap.String("callsign", callsign))
 			// Still write the comment line to show the callsign was processed
-			fmt.Fprintf(writer, ";%s Nodes (none found)\n", strings.ToUpper(callsign))
+			_, _ = fmt.Fprintf(writer, ";%s Nodes (none found)\n", strings.ToUpper(callsign))
 			continue
 		}
 
 		// Write comment line for this callsign
-		fmt.Fprintf(writer, ";%s Nodes\n", strings.ToUpper(callsign))
+		_, _ = fmt.Fprintf(writer, ";%s Nodes\n", strings.ToUpper(callsign))
 
 		// Write each node entry
 		for _, node := range nodes {
 			nodeIDStr := fmt.Sprintf("%-6d", node.NodeID)
-			fmt.Fprintf(writer, "%s = radio@%s/%d,NONE\n", nodeIDStr, *ipAddress, node.NodeID)
+			_, _ = fmt.Fprintf(writer, "%s = radio@%s/%d,NONE\n", nodeIDStr, *ipAddress, node.NodeID)
 			totalEntries++
 		}
 
@@ -190,7 +190,7 @@ func readCallsigns(filename string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var callsigns []string
 	scanner := bufio.NewScanner(file)

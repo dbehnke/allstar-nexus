@@ -43,9 +43,9 @@ func TestGroupChangeNotifications(t *testing.T) {
 	// Initialize repositories
 	profileRepo := repository.NewCallsignProfileRepo(gdb)
 	levelConfigRepo := repository.NewLevelConfigRepo(gdb)
-	_ = repository.NewTransmissionLogRepository(gdb)  // Not used but needed for setup
-	_ = repository.NewXPActivityRepo(gdb)              // Not used but needed for setup
-	_ = repository.NewTallyStateRepo(gdb)              // Not used but needed for setup
+	_ = repository.NewTransmissionLogRepository(gdb) // Not used but needed for setup
+	_ = repository.NewXPActivityRepo(gdb)            // Not used but needed for setup
+	_ = repository.NewTallyStateRepo(gdb)            // Not used but needed for setup
 
 	// Seed level config
 	levelReqs := CalculateLevelRequirements()
@@ -71,10 +71,10 @@ func TestGroupChangeNotifications(t *testing.T) {
 		// Create profile at level 19 with enough XP to reach level 20
 		ctx := context.Background()
 		profile := &models.CallsignProfile{
-			Callsign:         "K8TEST",
-			Level:            19,
-			ExperiencePoints: levelReqs[20], // Exactly enough for level 20
-			RenownLevel:      0,
+			Callsign:           "K8TEST",
+			Level:              19,
+			ExperiencePoints:   levelReqs[20], // Exactly enough for level 20
+			RenownLevel:        0,
 			LastTransmissionAt: time.Now(),
 			LastTallyAt:        time.Now(),
 		}
@@ -130,10 +130,10 @@ func TestGroupChangeNotifications(t *testing.T) {
 	t.Run("Level 29 to 30 crosses group boundary", func(t *testing.T) {
 		ctx := context.Background()
 		profile := &models.CallsignProfile{
-			Callsign:         "K8TEST2",
-			Level:            29,
-			ExperiencePoints: levelReqs[30],
-			RenownLevel:      0,
+			Callsign:           "K8TEST2",
+			Level:              29,
+			ExperiencePoints:   levelReqs[30],
+			RenownLevel:        0,
 			LastTransmissionAt: time.Now(),
 			LastTallyAt:        time.Now(),
 		}
@@ -175,10 +175,10 @@ func TestGroupChangeNotifications(t *testing.T) {
 	t.Run("Level 20 to 21 does not cross group boundary", func(t *testing.T) {
 		ctx := context.Background()
 		profile := &models.CallsignProfile{
-			Callsign:         "K8TEST3",
-			Level:            20,
-			ExperiencePoints: levelReqs[21],
-			RenownLevel:      0,
+			Callsign:           "K8TEST3",
+			Level:              20,
+			ExperiencePoints:   levelReqs[21],
+			RenownLevel:        0,
 			LastTransmissionAt: time.Now(),
 			LastTallyAt:        time.Now(),
 		}
@@ -219,7 +219,7 @@ func TestGroupChangeNotifications(t *testing.T) {
 
 // processLevelUpsForTest is a standalone version of the processLevelUps logic for testing
 // It replicates the logic from tally_service.go without needing a full TallyService instance
-func processLevelUpsForTest(profile *models.CallsignProfile, levelRequirements map[int]int, levelGroupings []cfgpkg.LevelGrouping, renownEnabled bool, renownXPPerLevel int, logger *zap.Logger) (bool, []LevelUpInfo) {
+func processLevelUpsForTest(profile *models.CallsignProfile, levelRequirements map[int]int, levelGroupings []cfgpkg.LevelGrouping, renownEnabled bool, renownXPPerLevel int, _ *zap.Logger) (bool, []LevelUpInfo) {
 	leveledUp := false
 	var levelUpEvents []LevelUpInfo
 

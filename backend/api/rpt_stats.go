@@ -60,7 +60,7 @@ func (a *API) RPTStats(w http.ResponseWriter, r *http.Request) {
 
 // parseRPTStats parses the raw rpt stats output into a structured format.
 // The format varies by Asterisk/app_rpt version, so we'll keep it flexible.
-func parseRPTStats(output, node string) map[string]any {
+func parseRPTStats(output, _ string) map[string]any {
 	stats := make(map[string]any)
 	lines := strings.Split(output, "\n")
 

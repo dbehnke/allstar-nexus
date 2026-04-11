@@ -166,12 +166,12 @@ func TestTextNodeCallsignAndDescription(t *testing.T) {
 	// Test with a text-based node (callsign without numeric ID)
 	alinks := "2,W1ABCTU,KF8STTK"
 	sm.apply(ami.Message{Headers: map[string]string{"RPT_ALINKS": alinks}})
-	
+
 	snap := sm.Snapshot()
 	if len(snap.LinksDetailed) != 2 {
 		t.Fatalf("expected 2 links, got %d", len(snap.LinksDetailed))
 	}
-	
+
 	// Both should have negative node IDs (hashed)
 	for _, link := range snap.LinksDetailed {
 		if link.Node >= 0 {
@@ -184,7 +184,7 @@ func TestTextNodeCallsignAndDescription(t *testing.T) {
 			t.Errorf("expected 'VOIP Client' description, got '%s'", link.NodeDescription)
 		}
 	}
-	
+
 	// Check specific callsigns are preserved
 	foundW1ABC := false
 	foundKF8ST := false
@@ -196,7 +196,7 @@ func TestTextNodeCallsignAndDescription(t *testing.T) {
 			foundKF8ST = true
 		}
 	}
-	
+
 	if !foundW1ABC {
 		t.Error("expected to find W1ABC callsign")
 	}
@@ -216,14 +216,14 @@ func TestTransmissionTimestampsAreUTC(t *testing.T) {
 	// Verify timestamp handling in ProcessALinks would use UTC
 	// by checking the fix is in place (we've changed time.Now() to time.Now().UTC())
 	sm := NewStateManager()
-	
+
 	// Apply an ALINKS event which internally calls time.Now().UTC()
 	sm.apply(ami.Message{
 		Headers: map[string]string{
 			"RPT_ALINKS": "2001TU",
 		},
 	})
-	
+
 	// Check that the state's UpdatedAt timestamp is in UTC
 	snap := sm.Snapshot()
 	if snap.UpdatedAt.Location() != time.UTC {

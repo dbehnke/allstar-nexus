@@ -107,7 +107,7 @@ func (c *Client) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.sock != nil {
-		c.sock.Close()
+		_ = c.sock.Close()
 		c.sock = nil
 	}
 }

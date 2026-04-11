@@ -84,7 +84,7 @@ func (d *DiscordNotifier) sendNotification(message string) {
 			d.logger.Error("failed to send Discord notification", zap.Error(err))
 			return
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			d.logger.Warn("Discord webhook returned non-success status",

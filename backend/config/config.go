@@ -229,7 +229,7 @@ func Load(configPath ...string) Config {
 		} else {
 			// Config file found but error reading it
 			log.Printf("ERROR: Failed to parse config file: %v", err)
-			
+
 			// Try to detect if tabs are the issue by checking the file we tried to read
 			var configFilePath string
 			if len(configPath) > 0 && configPath[0] != "" {
@@ -246,7 +246,7 @@ func Load(configPath ...string) Config {
 					searchPaths = append(searchPaths, homeDir+"/.allstar-nexus/config.yaml")
 				}
 				searchPaths = append(searchPaths, "/etc/allstar-nexus/config.yaml")
-				
+
 				for _, path := range searchPaths {
 					if _, statErr := os.Stat(path); statErr == nil {
 						configFilePath = path
@@ -254,7 +254,7 @@ func Load(configPath ...string) Config {
 					}
 				}
 			}
-			
+
 			if configFilePath != "" {
 				if data, readErr := os.ReadFile(configFilePath); readErr == nil {
 					// Check for tabs (literal tab characters)
@@ -282,7 +282,7 @@ func Load(configPath ...string) Config {
 							}
 						}
 					}
-					
+
 					if hasTabs || hasMixedIndent {
 						log.Printf("ERROR: Your config file (%s) contains TAB characters!", configFilePath)
 						log.Printf("ERROR: YAML requires SPACES for indentation, not TABS.")
@@ -294,7 +294,7 @@ func Load(configPath ...string) Config {
 					}
 				}
 			}
-			
+
 			log.Printf("HINT: Run 'allstar-nexus config validate' to check your config file for errors")
 			log.Printf("WARNING: Falling back to default values and environment variables")
 			log.Printf("WARNING: This means your AMI host/port/credentials will use defaults!")

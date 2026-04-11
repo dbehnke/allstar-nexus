@@ -56,11 +56,11 @@ func TestDiscordNotifications_LevelUp(t *testing.T) {
 
 	// Gamification config - all features disabled for simplicity
 	cfg := &gamification.Config{
-		RestedEnabled:    false,
-		DREnabled:        false,
-		KerchunkEnabled:  false,
-		CapsEnabled:      false,
-		RenownEnabled:    false,
+		RestedEnabled:   false,
+		DREnabled:       false,
+		KerchunkEnabled: false,
+		CapsEnabled:     false,
+		RenownEnabled:   false,
 	}
 
 	// Create tally service
@@ -186,4 +186,3 @@ func TestDiscordNotifications_GroupTransition(t *testing.T) {
 		})
 	}
 }
-

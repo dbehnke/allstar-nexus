@@ -21,13 +21,13 @@ type LinkedNode struct {
 
 // XStatResult contains parsed XStat response
 type XStatResult struct {
-	Node        int            // Local node number
-	Connections []Connection   // Connected nodes
-	LinkedNodes []LinkedNode   // Linked nodes with modes
-	RxKeyed     bool           // RPT_RXKEYED - Local receiver COS
-	TxKeyed     bool           // RPT_TXKEYED - Local transmitter PTT
+	Node        int               // Local node number
+	Connections []Connection      // Connected nodes
+	LinkedNodes []LinkedNode      // Linked nodes with modes
+	RxKeyed     bool              // RPT_RXKEYED - Local receiver COS
+	TxKeyed     bool              // RPT_TXKEYED - Local transmitter PTT
 	Variables   map[string]string // All Var: fields
-	Timestamp   time.Time      // When this data was captured
+	Timestamp   time.Time         // When this data was captured
 }
 
 // KeyingInfo represents keying history from SawStat
@@ -42,18 +42,18 @@ type KeyingInfo struct {
 
 // SawStatResult contains parsed SawStat response
 type SawStatResult struct {
-	Node      int                    // Local node number
-	Nodes     map[int]*KeyingInfo    // Keying info by remote node number
-	Timestamp time.Time              // When this data was captured
+	Node      int                 // Local node number
+	Nodes     map[int]*KeyingInfo // Keying info by remote node number
+	Timestamp time.Time           // When this data was captured
 }
 
 // CombinedNodeStatus merges XStat and SawStat data
 type CombinedNodeStatus struct {
-	Node        int            // Local node number
-	RxKeyed     bool           // Local receiver COS
-	TxKeyed     bool           // Local transmitter PTT
+	Node        int                     // Local node number
+	RxKeyed     bool                    // Local receiver COS
+	TxKeyed     bool                    // Local transmitter PTT
 	Connections []ConnectionWithHistory // Connections with keying history
-	Timestamp   time.Time      // When this data was captured
+	Timestamp   time.Time               // When this data was captured
 }
 
 // ConnectionWithHistory combines Connection and KeyingInfo
@@ -119,7 +119,7 @@ func formatTime(h, m, s int) string {
 }
 
 // Helper to format without fmt import
-func sprintf(format string, h, m, s int) string {
+func sprintf(_ string, h, m, s int) string {
 	// Simple sprintf for HH:MM:SS format
 	hStr := padLeft(itoa(h), 3, '0')
 	mStr := padLeft(itoa(m), 2, '0')
