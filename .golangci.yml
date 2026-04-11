@@ -4,49 +4,104 @@ run:
   timeout: 5m
   modules-download-mode: readonly
 
-linters:
+formatters:
   enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
     - gofmt
     - goimports
-    - misspell
-    - vet
+  settings:
+    gofmt:
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
+
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - copyloopvar
+    - depguard
+    - dogsled
     - dupl
+    - errcheck
+    - errorlint
+    - gocheckcompilerdirectives
+    - gochecknoinits
     - goconst
+    - gocritic
     - gocyclo
+    - godox
     - goheader
-    - prealloc
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - nolintlint
     - revive
+    - staticcheck
+    - testifylint
     - unconvert
     - unparam
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-  govet:
-    enable-all: true
-  gocyclo:
-    min-complexity: 20
-  dupl:
-    threshold: 150
-  goheader:
-    template-file: .golangci.header
-  revive:
-    rules:
-      - name: var-naming
-      - name: package-comments
-      - name: exported
-      - name: context-as-utility
-  unparam:
-    check-called-before-shadowed: true
+    - unused
+    - whitespace
+  settings:
+    depguard:
+      rules:
+        main:
+          allow:
+            - $gostd
+            - github.com/dbehnke/allstar-nexus
+    dogsled:
+      max-blank-identifiers: 3
+    dupl:
+      threshold: 100
+    goconst:
+      min-len: 2
+      min-occurrences: 3
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    gocyclo:
+      min-complexity: 15
+    godox:
+      keywords:
+        - FIXME
+        - TODO
+    goheader:
+      values:
+        const:
+          AUTHOR: David Behnke
+      template: |-
+        Copyright (c) {{ YEAR }} {{ AUTHOR }}
+        SPDX-License-Identifier: MIT
+    govet:
+      enable:
+        - nilness
+        - shadow
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    errorlint:
+      asserts: false
+    misspell:
+      locale: US
+    nolintlint:
+      allow-unused: false
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        - name: indent-error-flow
+        - name: unexported-return
+          disabled: true
+        - name: unused-parameter
+          disabled: true
+        - name: unused-receiver
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 50
   max-same-issues: 10
