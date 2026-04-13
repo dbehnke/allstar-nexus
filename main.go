@@ -288,6 +288,7 @@ func main() {
 			RenownEnabled:       cfg.Gamification.Renown.Enabled,
 			RenownXPPerLevel:    cfg.Gamification.Renown.XPPerLevel,
 			ScoringSourceNodeID: cfg.Gamification.ScoringSourceNodeID,
+			ExcludedCallsigns:   cfg.Gamification.ExcludedCallsigns,
 		}
 
 		// Convert DR tiers
