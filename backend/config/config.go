@@ -14,8 +14,11 @@ import (
 
 // NodeConfig represents configuration for a single AllStar node
 type NodeConfig struct {
-	NodeID int    `mapstructure:"node_id" yaml:"node_id" json:"node_id"`
-	Name   string `mapstructure:"name" yaml:"name,omitempty" json:"name,omitempty"` // Optional - if empty, lookup from astdb
+	NodeID  int    `mapstructure:"node_id" yaml:"node_id" json:"node_id"`
+	Name    string `mapstructure:"name" yaml:"name,omitempty" json:"name,omitempty"` // Optional - if empty, lookup from astdb
+	Visible *bool  `mapstructure:"visible" yaml:"visible" json:"visible"`            // nil = true (show in UI by default)
+	AMIHost string `mapstructure:"ami_host" yaml:"ami_host" json:"ami_host"`         // empty = inherit global
+	AMIPort int    `mapstructure:"ami_port" yaml:"ami_port" json:"ami_port"`         // 0 = inherit global
 }
 
 // GamificationConfig holds gamification system settings
