@@ -285,8 +285,9 @@ func main() {
 			DailyCapSeconds:            cfg.Gamification.XPCaps.DailyCap,
 			WeeklyCapSeconds:           cfg.Gamification.XPCaps.WeeklyCap,
 			// Renown settings
-			RenownEnabled:    cfg.Gamification.Renown.Enabled,
-			RenownXPPerLevel: cfg.Gamification.Renown.XPPerLevel,
+			RenownEnabled:       cfg.Gamification.Renown.Enabled,
+			RenownXPPerLevel:    cfg.Gamification.Renown.XPPerLevel,
+			ScoringSourceNodeID: cfg.Gamification.ScoringSourceNodeID,
 		}
 
 		// Convert DR tiers
