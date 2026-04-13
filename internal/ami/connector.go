@@ -24,9 +24,10 @@ const (
 
 // Message represents a generic AMI frame (Event or Response) with headers.
 type Message struct {
-	Type    MessageType
-	Headers map[string]string
-	Raw     []string
+	Type         MessageType
+	Headers      map[string]string
+	Raw          []string
+	SourceNodeID int // Set by the connector to tag which node this message originated from
 }
 
 // Snapshot minimal exported state placeholder (will expand later).
