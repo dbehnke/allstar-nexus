@@ -483,8 +483,8 @@ func main() {
 		seedCancel()
 		// Seed keying tracker with existing links (if any were loaded from persistence)
 		// This ensures the keying tracker has data even before AMI events arrive
-		if len(cfg.Nodes) > 0 {
-			sm.SeedKeyingTrackerFromLinks(cfg.Nodes[0].NodeID)
+		for _, node := range cfg.Nodes {
+			sm.SeedKeyingTrackerFromLinks(node.NodeID)
 		}
 
 		// Initialize Discord notifier if enabled (before starting hub loops)
@@ -588,26 +588,33 @@ func main() {
 		go hub.SourceNodeKeyingLoop(sm.KeyingUpdates())     // Source node keying updates
 		go hub.SourceNodeKeyingEventLoop(sm.KeyingEvents()) // Session edge events (TX_START/TX_END)
 
-		conn := ami.NewConnector(cfg.AMIHost, cfg.AMIPort, cfg.AMIUser, cfg.AMIPassword, cfg.AMIEvents, cfg.AMIRetryInterval, cfg.AMIRetryMax)
-		// Pass AMI connector and StateManager to API layer
-		apiLayer.SetAMIConnector(conn)
-		apiLayer.SetStateManager(sm)
+		// Create one AMI connector per configured node
 		ctxAMI, cancelAMI := context.WithCancel(context.Background())
-
-		// Monitor AMI connection status changes
-		go func() {
-			for status := range conn.ConnectionStatusChan() {
-				if status.Connected {
-					logger.Info("AMI connection established", zap.Time("timestamp", status.Timestamp))
-				} else {
-					if status.Error != nil {
-						logger.Warn("AMI connection lost", zap.Error(status.Error), zap.Time("timestamp", status.Timestamp))
-					} else {
-						logger.Info("AMI connection closed", zap.Time("timestamp", status.Timestamp))
-					}
-				}
+		for _, node := range cfg.Nodes {
+			amiHost := node.AMIHost
+			if amiHost == "" {
+				amiHost = cfg.AMIHost
 			}
-		}()
+			amiPort := node.AMIPort
+			if amiPort == 0 {
+				amiPort = cfg.AMIPort
+			}
+
+			connector := ami.NewConnector(amiHost, amiPort, cfg.AMIUser, cfg.AMIPassword, cfg.AMIEvents, cfg.AMIRetryInterval, cfg.AMIRetryMax)
+			connector.WithSourceNodeID(node.NodeID)
+
+			// Feed this connector's events into StateManager
+			go sm.Run(connector.Raw())
+
+			// Start connector (auto-reconnects on failure)
+			go func() {
+				if err := connector.Start(ctxAMI); err != nil {
+					logger.Warn("AMI connector start error", zap.Error(err))
+				}
+			}()
+		}
+		// Pass StateManager to API layer
+		apiLayer.SetStateManager(sm)
 
 		// If tally service is running, broadcast a WS event when it completes
 		if tallyService != nil {
@@ -647,88 +654,14 @@ func main() {
 			}
 		}
 
-		log.Printf("starting AMI connector (will auto-reconnect on failure)")
-		if err := conn.Start(ctxAMI); err != nil {
-			log.Printf("AMI start error: %v", err)
+		logger.Info("AMI connectors started for all configured nodes")
+
+		// TODO(multi-node): Polling service needs architectural changes to work with per-node connectors
+		// The polling service was designed for a single connector and uses conn parameter.
+		// Re-enable once multi-node polling is implemented.
+		if false && !cfg.DisableLinkPoller {
 		} else {
-			log.Printf("AMI connector started successfully")
-		}
-		// Diagnostic: issue a test AMI command after startup to verify responses are received and parsed.
-		// Startup diagnostics removed: relying solely on event-driven AMI processing.
-		go sm.Run(conn.Raw())
-		logger.Info("using hybrid event-driven + polling AMI processing")
-
-		// Start periodic polling service for data sync and enrichment
-		// This provides a hybrid approach:
-		// - Events drive real-time updates (ALINKS, TXKEYED, etc.)
-		// - Polling (1 min) ensures sync and enriches with XStat/SawStat data (direction, IP, elapsed, mode)
-		if !cfg.DisableLinkPoller {
-			nodeIDs := make([]int, len(cfg.Nodes))
-			for i, node := range cfg.Nodes {
-				nodeIDs[i] = node.NodeID
-			}
-			pollingService := core.NewPollingService(conn, sm, 60*time.Second, nodeIDs)
-
-			// Set cleanup callback to sync database with actual state after first poll
-			// This cleans up any stale links that were seeded from database but are no longer connected
-			pollingService.SetCleanupCallback(func() {
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-
-				// Get current link state from StateManager
-				currentLinks := sm.Snapshot().LinksDetailed
-
-				// Collect active node IDs
-				activeNodeIDs := make([]int, len(currentLinks))
-				for i, li := range currentLinks {
-					activeNodeIDs[i] = li.Node
-				}
-
-				// Delete stale entries from database (nodes not in current state)
-				deleted, err := lsRepo.DeleteNotIn(ctx, activeNodeIDs)
-				if err != nil {
-					logger.Warn("failed to clean up stale link stats", zap.Error(err))
-				} else if deleted > 0 {
-					logger.Info("cleaned up stale link stats from database", zap.Int64("deleted_count", deleted))
-				}
-
-				// Update active links in database
-				for _, li := range currentLinks {
-					stat := models.LinkStat{
-						Node:           li.Node,
-						TotalTxSeconds: li.TotalTxSeconds,
-						LastTxStart:    li.LastTxStart,
-						LastTxEnd:      li.LastTxEnd,
-						ConnectedSince: &li.ConnectedSince,
-					}
-					if err := lsRepo.Upsert(ctx, stat); err != nil {
-						logger.Warn("failed to sync link stat", zap.Int("node", li.Node), zap.Error(err))
-					}
-				}
-
-				logger.Info("database synchronized with current link state", zap.Int("active_link_count", len(currentLinks)))
-			})
-
-			if err := pollingService.Start(); err != nil {
-				logger.Warn("failed to start polling service", zap.Error(err))
-			} else {
-				logger.Info("polling service started", zap.Duration("interval", 60*time.Second), zap.Ints("nodes", nodeIDs))
-			}
-			// If a hub exists, wire a trigger so new WS clients cause an immediate
-			// on-demand poll shortly after connecting (debounced).
-			hub.SetTriggerPoll(func() { pollingService.TriggerPollOnce() })
-			// Expose poll trigger to API: node==0 => poll all; else poll specific node
-			apiLayer.SetTriggerPoll(func(nodeID int) {
-				if nodeID > 0 {
-					pollingService.TriggerPollNode(nodeID)
-				} else {
-					pollingService.TriggerPollOnce()
-				}
-			})
-			// Stop polling service on shutdown
-			defer pollingService.Stop()
-		} else {
-			logger.Info("polling service disabled via config (disable_link_poller=true)")
+			logger.Info("polling service disabled (multi-node polling not yet implemented)")
 		}
 		// Persist per-link TX stats on edges
 		sm.SetPersistHook(func(list []core.LinkInfo) {
