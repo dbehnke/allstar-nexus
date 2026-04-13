@@ -42,6 +42,8 @@ type Config struct {
 	// Renown (prestige)
 	RenownEnabled    bool
 	RenownXPPerLevel int // fixed XP required per renown-level (applies after level 60)
+
+	ScoringSourceNodeID int
 }
 
 type DRTier struct {
@@ -248,7 +250,7 @@ func (s *TallyService) ProcessTally() error {
 					// Check both daily and weekly caps and use the most restrictive
 					remainingDaily := s.config.DailyCapSeconds - dailySeconds
 					remainingWeekly := s.config.WeeklyCapSeconds - weeklySeconds
-					
+
 					// Use the minimum of raw seconds and both remaining caps
 					if rawXP > remainingDaily {
 						cappedRawSeconds = remainingDaily
@@ -256,7 +258,7 @@ func (s *TallyService) ProcessTally() error {
 					if cappedRawSeconds > remainingWeekly {
 						cappedRawSeconds = remainingWeekly
 					}
-					
+
 					// Recalculate XP based on capped seconds (if capped)
 					if cappedRawSeconds < rawXP {
 						finalXP = float64(cappedRawSeconds) * restedMultiplier * drMultiplier * kerchunkPenalty
