@@ -168,8 +168,76 @@ func TestTallyService_ProcessOnce(t *testing.T) {
 	}
 }
 
+// TestExcludedCallsigns_NotScored verifies that callsigns in ExcludedCallsigns are skipped during XP tally.
+func TestExcludedCallsigns_NotScored(t *testing.T) {
+	gdb := setUpGormTestDB(t)
+
+	levelRepo := repository.NewLevelConfigRepo(gdb)
+	profileRepo := repository.NewCallsignProfileRepo(gdb)
+	txRepo := repository.NewTransmissionLogRepository(gdb)
+	activityRepo := repository.NewXPActivityRepo(gdb)
+	stateRepo := repository.NewTallyStateRepo(gdb)
+
+	reqs := gamification.CalculateLevelRequirements()
+	if err := levelRepo.SeedDefaults(context.Background(), reqs); err != nil {
+		t.Fatalf("seed level config: %v", err)
+	}
+
+	cfg := &gamification.Config{
+		ExcludedCallsigns: []string{"W1AW", "WX5NWS"},
+		RestedEnabled:     false,
+		DREnabled:         false,
+		KerchunkEnabled:   false,
+		CapsEnabled:       false,
+	}
+
+	ts := gamification.NewTallyService(gdb, txRepo, profileRepo, levelRepo, activityRepo, stateRepo, cfg, 30*time.Minute, zaptestLogger(), gamification.DefaultLevelGroupings(), nil)
+
+	now := time.Now().Add(-time.Minute)
+
+	// Log transmission from excluded callsign
+	_ = txRepo.LogTransmission(1001, 2001, "W1AW", now, now.Add(60*time.Second), 60)
+	// Log transmission from non-excluded callsign
+	_ = txRepo.LogTransmission(1001, 2001, "N0CALL", now, now.Add(60*time.Second), 60)
+
+	if err := ts.Start(); err != nil {
+		t.Fatalf("start tally: %v", err)
+	}
+	defer ts.Stop()
+
+	if err := ts.ProcessTally(); err != nil {
+		t.Fatalf("process tally: %v", err)
+	}
+
+	// Excluded callsign should NOT have XP awarded
+	excludedProf, err := profileRepo.GetByCallsign(context.Background(), "W1AW")
+	if err != nil {
+		t.Fatalf("get excluded profile: %v", err)
+	}
+	if excludedProf.ExperiencePoints != 0 {
+		t.Errorf("W1AW should have 0 XP (excluded), got %d", excludedProf.ExperiencePoints)
+	}
+
+	// Non-excluded callsign SHOULD have XP awarded
+	normalProf, err := profileRepo.GetByCallsign(context.Background(), "N0CALL")
+	if err != nil {
+		t.Fatalf("get normal profile: %v", err)
+	}
+	if normalProf.ExperiencePoints <= 0 {
+		t.Errorf("N0CALL should have XP awarded, got %d", normalProf.ExperiencePoints)
+	}
+
+	// Activity logs should only exist for non-excluded callsign
+	var excludedLogs []models.XPActivityLog
+	if err := gdb.Where("callsign = ?", "W1AW").Find(&excludedLogs).Error; err != nil {
+		t.Fatalf("query excluded activity: %v", err)
+	}
+	if len(excludedLogs) != 0 {
+		t.Errorf("excluded callsign should have no activity logs, got %d", len(excludedLogs))
+	}
+}
+
 // Minimal zap logger replacement to satisfy constructor without external deps.
-// The service uses logger only for Info/Error; we can return a no-op logger.
 func zaptestLogger() *zap.Logger {
 	// Build a no-op logger (disabled) to avoid noisy output during tests
 	cfg := zap.NewDevelopmentConfig()
