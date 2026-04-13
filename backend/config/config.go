@@ -31,6 +31,7 @@ type GamificationConfig struct {
 	Renown               RenownConfig             `mapstructure:"renown" yaml:"renown"`
 	Discord              DiscordConfig            `mapstructure:"discord" yaml:"discord"`
 	ScoringSourceNodeID  int                      `mapstructure:"scoring_source_node_id" yaml:"scoring_source_node_id"`
+	ExcludedCallsigns    []string                 `mapstructure:"excluded_callsigns" yaml:"excluded_callsigns"`
 }
 
 type RestedBonusConfig struct {

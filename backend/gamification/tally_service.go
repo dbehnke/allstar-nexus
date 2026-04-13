@@ -44,6 +44,8 @@ type Config struct {
 	RenownXPPerLevel int // fixed XP required per renown-level (applies after level 60)
 
 	ScoringSourceNodeID int
+
+	ExcludedCallsigns []string
 }
 
 type DRTier struct {
