@@ -338,6 +338,21 @@ func (s *TallyService) ProcessTally() error {
 		if err != nil {
 			return err
 		}
+		if s.config.ScoringSourceNodeID > 0 {
+			filtered := make(map[string][]models.TransmissionLog, len(transmissions))
+			for callsign, logs := range transmissions {
+				var kept []models.TransmissionLog
+				for _, log := range logs {
+					if log.SourceID == s.config.ScoringSourceNodeID {
+						kept = append(kept, log)
+					}
+				}
+				if len(kept) > 0 {
+					filtered[callsign] = kept
+				}
+			}
+			transmissions = filtered
+		}
 		if len(transmissions) > 0 {
 			// Test-trace: log counts
 			txCount := 0
