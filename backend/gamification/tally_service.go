@@ -3,6 +3,7 @@ package gamification
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	cfgpkg "github.com/dbehnke/allstar-nexus/backend/config"
@@ -70,6 +71,7 @@ type TallyService struct {
 	lastTallyTime     time.Time
 	logger            *zap.Logger
 	discordNotifier   *DiscordNotifier
+	excludedCallsigns map[string]struct{}
 	// Optional hook invoked after each tally completes
 	OnTallyComplete func(summary TallySummary)
 }
@@ -95,7 +97,7 @@ func NewTallyService(
 	levelGroupings []cfgpkg.LevelGrouping,
 	discordNotifier *DiscordNotifier,
 ) *TallyService {
-	return &TallyService{
+	svc := &TallyService{
 		db:              db,
 		txLogRepo:       txRepo,
 		profileRepo:     profileRepo,
@@ -110,6 +112,13 @@ func NewTallyService(
 		levelGroupings:  levelGroupings,
 		discordNotifier: discordNotifier,
 	}
+	// Initialize excluded callsigns map
+	excluded := make(map[string]struct{})
+	for _, cs := range config.ExcludedCallsigns {
+		excluded[strings.ToUpper(cs)] = struct{}{}
+	}
+	svc.excludedCallsigns = excluded
+	return svc
 }
 
 func (s *TallyService) Start() error {
@@ -192,6 +201,12 @@ func (s *TallyService) ProcessTally() error {
 		for callsign, txLogs := range transmissions {
 			if callsign == "" {
 				continue
+			}
+			// Skip excluded callsigns — they are tracked but not scored
+			if s.excludedCallsigns != nil {
+				if _, ok := s.excludedCallsigns[strings.ToUpper(callsign)]; ok {
+					continue
+				}
 			}
 			processed[callsign] = struct{}{}
 
