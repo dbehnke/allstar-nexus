@@ -334,67 +334,68 @@ func (sm *StateManager) apply(m ami.Message) {
 		copy(prev, sm.state.Links)
 		log.Printf("[ALINKS DEBUG] parsed ids=%v keyed=%v previous_links=%v", ids, keyedMap, prev)
 
-		// Process keying trackers for each configured source node
+		// Route ALINKS to only the matching keying tracker (tagged by SourceNodeID on the message)
 		now := time.Now().UTC().UTC()
-		for sourceNodeID, tracker := range sm.keyingTrackers {
-			// Process ALINKS for this source node's tracker
-			tracker.ProcessALinks(ids, keyedMap, now)
-
-			// Enrich tracker nodes with lookup data
-			if sm.nodeLookup != nil {
-				for _, nodeID := range ids {
-					if nodeID > 0 {
-						if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
-							tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
-						}
-					} else if nodeID < 0 {
-						// Handle hashed/text nodes by resolving to original name
-						if name, ok := getTextNodeName(nodeID); ok {
-							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
-						} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
-							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
-						}
-					}
-				}
-			} else {
-				// Even without nodeLookup, attempt to enrich negative nodes from registries
-				for _, nodeID := range ids {
-					if nodeID < 0 {
-						if name, ok := getTextNodeName(nodeID); ok {
-							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
-						} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
-							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
-						}
-					}
-				}
-			}
-
-			// Update per-source counters
-			sm.perSourceNumALinks[sourceNodeID] = len(ids)
-			// Derive per-source links count from LinksDetailed scoped to this local node if available
-			perLinks := 0
-			for i := range sm.state.LinksDetailed {
-				if sm.state.LinksDetailed[i].LocalNode == sourceNodeID {
-					perLinks++
-				}
-			}
-			if perLinks == 0 {
-				perLinks = sm.numLinks // fallback to global until LinksDetailed populated
-			}
-			sm.perSourceNumLinks[sourceNodeID] = perLinks
-
-			// Emit update for this source node (sm.mu is already locked in apply)
-			sm.emitKeyingUpdateLocked(sourceNodeID, now)
-
-			// Log keying summary
-			keyedCount := 0
-			for _, isKeyed := range keyedMap {
-				if isKeyed {
-					keyedCount++
-				}
-			}
-			log.Printf("[KEYING] Source %d: %d adjacent nodes, %d keyed", sourceNodeID, len(ids), keyedCount)
+		targetID := m.SourceNodeID
+		tracker, exists := sm.keyingTrackers[targetID]
+		if !exists {
+			log.Printf("[STATE] no keyingTracker for sourceNodeID=%d, dropping ALINKS event", targetID)
+			return
 		}
+
+		// Process ALINKS for this source node's tracker
+		tracker.ProcessALinks(ids, keyedMap, now)
+
+		// Enrich tracker nodes with lookup data
+		if sm.nodeLookup != nil {
+			for _, nodeID := range ids {
+				if nodeID > 0 {
+					if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
+						tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+					}
+				} else if nodeID < 0 {
+					if name, ok := getTextNodeName(nodeID); ok {
+						tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+					} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+						tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+					}
+				}
+			}
+		} else {
+			for _, nodeID := range ids {
+				if nodeID < 0 {
+					if name, ok := getTextNodeName(nodeID); ok {
+						tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+					} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+						tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+					}
+				}
+			}
+		}
+
+		sm.perSourceNumALinks[targetID] = len(ids)
+		perLinks := 0
+		for i := range sm.state.LinksDetailed {
+			if sm.state.LinksDetailed[i].LocalNode == targetID {
+				perLinks++
+			}
+		}
+		if perLinks == 0 {
+			perLinks = sm.numLinks
+		}
+		sm.perSourceNumLinks[targetID] = perLinks
+
+		// Emit update for this source node
+		sm.emitKeyingUpdateLocked(targetID, now)
+
+		// Log keying summary
+		keyedCount := 0
+		for _, isKeyed := range keyedMap {
+			if isKeyed {
+				keyedCount++
+			}
+		}
+		log.Printf("[KEYING] Source %d: %d adjacent nodes, %d keyed", targetID, len(ids), keyedCount)
 
 		// Mark that we just processed ALINKS so we can skip redundant legacy-only RPT_LINKS processing for trackers
 		sm.lastALinksProcessedAt = now
