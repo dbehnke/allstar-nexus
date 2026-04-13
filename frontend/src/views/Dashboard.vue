@@ -5,10 +5,23 @@
     <div class="dashboard-grid">
       <!-- Render SourceNodeCard for each source node so E2E WS tests can observe cards -->
       <div class="grid-item full-width">
-        <div v-if="Object.keys(nodeStore.sourceNodes || {}).length === 0" class="no-data">No source nodes</div>
-        <div v-for="(entry, key) in nodeStore.sourceNodes" :key="key" class="source-node-wrapper">
-          <SourceNodeCard :source-node-id="Number(key)" :data="entry" />
+        <div class="node-toggles" v-if="Object.keys(nodeStore.sourceNodes || {}).length > 1">
+          <button
+            v-for="(data, key) in nodeStore.sourceNodes"
+            :key="key"
+            :class="['node-toggle-btn', { active: visibleNodes[key] !== false }]"
+            @click="toggleNode(key)"
+          >
+            {{ data.name || data.sourceNodeID || key }}
+          </button>
         </div>
+
+        <div v-if="Object.keys(nodeStore.sourceNodes || {}).length === 0" class="no-data">No source nodes</div>
+        <template v-for="(entry, key) in nodeStore.sourceNodes" :key="key">
+          <div class="source-node-wrapper" v-if="visibleNodes[key] !== false">
+            <SourceNodeCard :source-node-id="Number(key)" :data="entry" />
+          </div>
+        </template>
       </div>
 
       <!-- Recent Transmissions (left, 1/3) + Scoreboard (right, 2/3) -->
@@ -40,6 +53,17 @@ import TransmissionHistoryCard from '../components/TransmissionHistoryCard.vue'
 
 const nodeStore = useNodeStore()
 const authStore = useAuthStore()
+
+const visibleNodes = ref({})
+
+function toggleNode(key) {
+  if (visibleNodes.value[key] === false) {
+    visibleNodes.value[key] = true
+  } else {
+    visibleNodes.value[key] = false
+  }
+  localStorage.setItem('nodeVisibility', JSON.stringify(visibleNodes.value))
+}
 
 // Pagination for transmission history
 const currentPage = ref(1)
@@ -92,6 +116,21 @@ let transmissionPollInterval = null
 let txEndRefreshTimeout = null
 
 onMounted(() => {
+  const saved = localStorage.getItem('nodeVisibility')
+  if (saved) {
+    try {
+      visibleNodes.value = JSON.parse(saved)
+    } catch (e) {
+      for (const k of Object.keys(nodeStore.sourceNodes || {})) {
+        visibleNodes.value[k] = true
+      }
+    }
+  } else {
+    for (const k of Object.keys(nodeStore.sourceNodes || {})) {
+      visibleNodes.value[k] = true
+    }
+  }
+
   initWS()
   refreshStats()
   nodeStore.startTickTimer()
@@ -277,5 +316,40 @@ onUnmounted(() => {
 
 .talker-log::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+.node-toggles {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.node-toggle-btn {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.node-toggle-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.node-toggle-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+}
+
+.node-toggle-btn.active:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 </style>
