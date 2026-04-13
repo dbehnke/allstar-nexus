@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-13
 **Author:** Sisyphus (via brainstorming session)
-**Status:** Draft — awaiting spec review
+**Status:** v2 — updated after review
 **Repo:** `github.com/dbehnke/allstar-nexus`
 
 ---
@@ -70,10 +70,18 @@ if s.cfg.ScoringSourceNodeID > 0 {
 
 **Backward compatibility**: `scoring_source_node_id: 0` (default zero value) means all nodes score — identical to current behavior.
 
+### Config Wiring Note
+
+There are **two** config structs:
+- `config.GamificationConfig` in `backend/config/config.go` — loaded from YAML
+- `gamification.Config` in `backend/gamification/config.go` — used by `TallyService`
+
+The YAML fields go into `config.GamificationConfig`. In `main.go`, a `gameCfg` of type `gamification.Config` is built from `cfg.Gamification`. **Both `ScoringSourceNodeID` and `ExcludedCallsigns` must be added to the `gamification.Config` struct AND wired in `main.go`'s `gameCfg` construction block.**
+
 ### Files Changed
-- `backend/config/config.go` — add `ScoringSourceNodeID` field
+- `backend/config/config.go` — add `ScoringSourceNodeID` field to `GamificationConfig`
+- `backend/gamification/config.go` — add `ScoringSourceNodeID` and wire from `GamificationConfig` in `main.go`
 - `backend/gamification/tally_service.go` — add filter in `ProcessTally()`
-- `backend/gamification/config.go` — add field to config struct if separate from `GamificationConfig`
 
 ### Tests
 - `tally_service_test.go`: Add test case with mixed `SourceID` logs and `scoring_source_node_id` set — verify only matching logs are scored
@@ -145,7 +153,8 @@ for callsign, txLogs := range transmissions {
 **Empty list**: If `excluded_callsigns` is absent or empty, behavior is unchanged.
 
 ### Files Changed
-- `backend/config/config.go` — add `ExcludedCallsigns` field
+- `backend/config/config.go` — add `ExcludedCallsigns` field to `GamificationConfig`
+- `backend/gamification/config.go` — add `ExcludedCallsigns` and wire from `GamificationConfig` in `main.go`
 - `backend/gamification/tally_service.go` — add `excludedCallsigns` field, check in `processGroup()`
 
 ### Tests
@@ -201,43 +210,95 @@ nodes:
     name: "Secondary"
 ```
 
-#### `EventsHandler` Tagging
+#### Routing Mechanism: Tag Events with SourceNodeID
+
+The core problem: `sm.Run(conn.Raw())` consumes events from all connectors on a single channel, so the state manager doesn't know which node an event came from. The fix is to tag each message with its source node ID before it enters the state manager.
+
+**Step 1 — Add `SourceNodeID` to `ami.Message` struct** (`internal/ami/message.go` or wherever `Message` is defined):
 
 ```go
-// internal/ami/connector.go
-type EventsHandler struct {
-    StateManager  *core.StateManager
-    SourceNodeID  int  // Set at construction; used to tag all events from this connector
+type Message struct {
+    Headers map[string]string
+    // ... existing fields ...
+    SourceNodeID int  // Set by the producing connector before enqueuing
 }
 ```
 
-Each connector is constructed with its `sourceNodeID`, so every event from that connector is inherently tagged.
+**Step 2 — Tag messages in each connector's `Run()` loop** (`internal/ami/connector.go`):
 
-#### `StateManager.Apply` Signature Change
-
-Add `sourceNodeID int` parameter to `Apply()` so events are routed to the correct tracker:
+Each connector knows its own `sourceNodeID`. Before putting a message on `rawOut`, tag it:
 
 ```go
-// Before:
-func (sm *StateManager) Apply(m ami.Message) { ... }
-
-// After:
-func (sm *StateManager) Apply(m ami.Message, sourceNodeID int) { ... }
+func (c *AMIConnector) Run(ctx context.Context) {
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case msg, ok := <-c.conn.Output():
+            if !ok {
+                return
+            }
+            // Tag every message with the source node ID this connector handles
+            msg.SourceNodeID = c.sourceNodeID
+            select {
+            case c.rawOut <- msg:
+            default: // non-blocking
+            }
+        }
+    }
+}
 ```
 
-All call sites in `connector.go` pass `h.SourceNodeID`.
+**Step 3 — `StateManager.Apply()` reads `msg.SourceNodeID`** (`internal/core/state.go`):
 
-Within `Apply()`, the key routing change is:
+The `Apply()` signature stays unchanged (`Apply(m ami.Message)`), but it reads the tag from the message:
+
 ```go
-// Process keying trackers — ONLY the tracker matching this sourceNodeID
-if tracker, exists := sm.keyingTrackers[sourceNodeID]; exists {
+// Process keying trackers — ONLY the tracker matching this message's sourceNodeID
+if tracker, exists := sm.keyingTrackers[m.SourceNodeID]; exists {
     tracker.ProcessALinks(ids, keyedMap, now)
     // ... enrich and update only this tracker
 }
 ```
 
-**Before**: Every ALINKS event was sent to ALL trackers (lines 337-341 in `state.go`), contaminating all nodes' keying state.
-**After**: Only the tracker matching the connector's `sourceNodeID` processes the event.
+The current broken behavior (all trackers process every ALINKS event) comes from the loop in `Apply()` at lines 337-341:
+
+```go
+// BEFORE (broken):
+for sourceNodeID, tracker := range sm.keyingTrackers {
+    tracker.ProcessALinks(ids, keyedMap, now)  // all trackers get all events!
+}
+```
+
+**AFTER (fixed)**:
+```go
+// AFTER (correct):
+if tracker, exists := sm.keyingTrackers[m.SourceNodeID]; exists {
+    tracker.ProcessALinks(ids, keyedMap, now)  // only the correct tracker processes this event
+}
+```
+
+**Why this approach**:
+- `ami.Message` is the project's own type — adding a field is safe
+- `Connector.Run()` already loops over messages — minimal change to tag each one
+- `StateManager.Apply()` stays the same signature — just reads `m.SourceNodeID`
+- No new channels or goroutine patterns needed
+
+#### `Connector` Struct — Add `sourceNodeID`
+
+The `Connector` struct needs a `sourceNodeID` field so the `Run()` loop can tag messages:
+
+```go
+// internal/ami/connector.go — add to Connector struct
+type Connector struct {
+    // ... existing fields (host, port, user, pass, etc.) ...
+    sourceNodeID int  // set at construction, used to tag messages
+}
+```
+
+The `NewConnector` function signature may need adjustment to accept `sourceNodeID`. If `NewConnector` currently takes many individual params, consider adding a `WithSourceNodeID(id int)` setter to be called after construction, or refactor to accept a config/options struct.
+
+**IMPORTANT — Verify current `NewConnector` signature** in `connector.go` before implementing. The spec assumes it takes many individual params; if it already uses a handler struct, the approach may differ. Read `NewConnector`'s actual signature and adapt accordingly.
 
 #### `main.go` Connector Creation Loop
 
@@ -252,17 +313,23 @@ for _, node := range cfg.Nodes {
     if amiPort == 0 {
         amiPort = cfg.AmiPort
     }
-    handler := &ami.EventsHandler{
-        StateManager: sm,
-        SourceNodeID: node.NodeID,
-    }
-    connector := ami.NewConnector(amiHost, amiPort, handler)
-    // Connect in background (existing pattern)
+
+    connector := ami.NewConnector(amiHost, amiPort, cfg.AmiUser, cfg.AmiPassword, cfg.AmiReconnectMin, cfg.AmiReconnectMax)
+    connector.WithSourceNodeID(node.NodeID)  // tag all this connector's events with its node ID
+
+    // Feed into StateManager (existing pattern — verify connector exposes rawOut or equivalent)
+    go func(c *ami.Connector) {
+        for msg := range c.Raw() {  // or whatever the channel accessor is
+            sm.Apply(msg)  // msg.SourceNodeID is already set by connector
+        }
+    }(connector)
+
+    // Start connector (background)
     go connector.Run()
 }
 ```
 
-**Note**: If multiple nodes share the same `ami_host:ami_port`, it's safe to create separate connectors — Asterisk handles multiple manager accounts fine.
+**Note**: If multiple nodes share the same `ami_host:ami_port`, it's safe to create separate connectors — Asterisk handles multiple manager accounts fine. Each connector logs in independently.
 
 #### SeedKeyingTrackerFromLinks — Call for All Nodes
 
@@ -274,15 +341,16 @@ for _, node := range cfg.Nodes {
 ```
 
 #### Files Changed (Backend)
+- `internal/ami/message.go` (or wherever `Message` struct is) — add `SourceNodeID int` field
+- `internal/ami/connector.go` — add `sourceNodeID` to `Connector` struct, tag messages in `Run()` loop
+- `internal/core/state.go` — fix ALINKS routing: replace broadcast-to-all loop with single-tracker dispatch using `m.SourceNodeID`
 - `backend/config/config.go` — add `Visible`, `AMIHost`, `AMIPort` to `NodeConfig`
-- `internal/ami/connector.go` — add `SourceNodeID` to `EventsHandler`
-- `internal/core/state.go` — `Apply()` signature change, fix ALINKS routing to only matching tracker
-- `main.go` — loop to create per-node connectors
+- `main.go` — loop to create per-node connectors, feed into state manager
 
 #### Benefits (Beyond UI)
 - Correct `TransmissionLog.SourceID` on every row — each tracker logs only TX events it observes via its own AMI connection
-- Eliminates double-counting for **free** (Feature 1's scoring node filter becomes less critical, but still useful as explicit override)
-- `SourceNodeKeyingUpdate` per node is now accurate
+- Per-node `SourceNodeKeyingUpdate` is now accurate — cards show only the links active on that specific node
+- Feature 1's scoring node filter remains independently useful as an explicit override (not replaced by this change)
 
 ---
 
@@ -376,10 +444,23 @@ Deferred — not in this spec. The toggle approach above satisfies the immediate
 
 1. **Feature 1** (Scoring Node Filter) — gamification config + `ProcessTally` filter. Smallest, safest.
 2. **Feature 2** (Exclude Callsigns) — config + `processGroup` skip. Small, same file.
-3. **Feature 3 Part A** (Per-Node AMI) — config + connector loop + `Apply()` signature change. Largest, most impactful.
+3. **Feature 3 Part A** (Per-Node AMI) — `ami.Message` field + connector tagging + routing fix. Largest, most impactful.
 4. **Feature 3 Part B** (UI Toggles) — frontend only, independent of Part A.
 
 Features 1 and 2 are independent of each other and of Feature 3. Feature 3 Part B (UI) is also independent of Part A (backend) — the UI toggle works regardless of how the backend routes events.
+
+---
+
+## v1 → v2 Changelog (Review Fixes)
+
+| Change | Reason |
+|--------|--------|
+| Added `SourceNodeID int` to `ami.Message` struct | `Apply()` needs to know which node an event came from — tagging the message is cleaner than changing `Apply`'s signature |
+| Tagged messages in `Connector.Run()` loop | Each connector knows its `sourceNodeID` — set it on every message before enqueuing |
+| Changed `Apply()` routing from broadcast-to-all to single-tracker dispatch | Fixes the core bug: all trackers receiving all events |
+| Added `gamification.Config` wiring clarification | `TallyService` uses a separate `gamification.Config` struct — fields must be added there AND wired from `config.GamificationConfig` in `main.go` |
+| Removed "eliminates double-counting for free" claim | Feature 1 scoring filter remains independently useful; per-node connectors fix routing but don't replace the explicit override |
+| Updated `NewConnector` approach | Original spec showed handler-based pattern but `NewConnector` uses individual params — clarified to use `WithSourceNodeID()` setter or equivalent |
 
 ---
 
