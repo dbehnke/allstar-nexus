@@ -66,6 +66,8 @@ type Connector struct {
 
 	actionMu sync.Mutex
 	pending  map[string]chan Message // ActionID -> single-response channel
+
+	sourceNodeID int // source node ID tagged on all messages
 }
 
 // NewConnector builds a connector (not started yet).
@@ -86,6 +88,12 @@ func NewConnector(host string, port int, user, pass, events string, retryMin, re
 
 // Raw returns the channel of parsed AMI messages.
 func (c *Connector) Raw() <-chan Message { return c.rawOut }
+
+// WithSourceNodeID sets the source node ID that will be tagged on all messages.
+func (c *Connector) WithSourceNodeID(id int) *Connector {
+	c.sourceNodeID = id
+	return c
+}
 
 // ConnectionStatus returns the channel of connection status changes.
 func (c *Connector) ConnectionStatusChan() <-chan ConnectionStatus { return c.statusOut }
@@ -262,7 +270,7 @@ func (c *Connector) connectAndServe(ctx context.Context) error {
 				c.debugEventLogged += 5
 			}
 		}
-		msg := Message{Type: mtype, Headers: headers, Raw: append([]string(nil), frame...)}
+		msg := Message{Type: mtype, Headers: headers, Raw: append([]string(nil), frame...), SourceNodeID: c.sourceNodeID}
 		frame = frame[:0]
 		// Action correlation
 		if id, ok := headers["ActionID"]; ok {
