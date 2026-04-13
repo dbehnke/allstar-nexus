@@ -338,67 +338,68 @@ func (sm *StateManager) apply(m ami.Message) {
 		now := time.Now().UTC().UTC()
 		targetID := m.SourceNodeID
 		tracker, exists := sm.keyingTrackers[targetID]
-		if !exists {
-			log.Printf("[STATE] no keyingTracker for sourceNodeID=%d, dropping ALINKS event", targetID)
-			return
-		}
 
-		// Process ALINKS for this source node's tracker
-		tracker.ProcessALinks(ids, keyedMap, now)
+		if exists {
+			// Process ALINKS for this source node's tracker
+			tracker.ProcessALinks(ids, keyedMap, now)
 
-		// Enrich tracker nodes with lookup data
-		if sm.nodeLookup != nil {
-			for _, nodeID := range ids {
-				if nodeID > 0 {
-					if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
-						tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+			// Enrich tracker nodes with lookup data
+			if sm.nodeLookup != nil {
+				for _, nodeID := range ids {
+					if nodeID > 0 {
+						if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
+							tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
+						}
+					} else if nodeID < 0 {
+						if name, ok := getTextNodeName(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						}
 					}
-				} else if nodeID < 0 {
-					if name, ok := getTextNodeName(nodeID); ok {
-						tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
-					} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
-						tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+				}
+			} else {
+				for _, nodeID := range ids {
+					if nodeID < 0 {
+						if name, ok := getTextNodeName(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
+							tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
+						}
 					}
 				}
 			}
+
+			sm.perSourceNumALinks[targetID] = len(ids)
+			perLinks := 0
+			for i := range sm.state.LinksDetailed {
+				if sm.state.LinksDetailed[i].LocalNode == targetID {
+					perLinks++
+				}
+			}
+			if perLinks == 0 {
+				perLinks = sm.numLinks
+			}
+			sm.perSourceNumLinks[targetID] = perLinks
+
+			// Emit update for this source node
+			sm.emitKeyingUpdateLocked(targetID, now)
+
+			// Log keying summary
+			keyedCount := 0
+			for _, isKeyed := range keyedMap {
+				if isKeyed {
+					keyedCount++
+				}
+			}
+			log.Printf("[KEYING] Source %d: %d adjacent nodes, %d keyed", targetID, len(ids), keyedCount)
+
+			// Mark that we just processed ALINKS so we can skip redundant legacy-only RPT_LINKS processing for trackers
+			sm.lastALinksProcessedAt = now
 		} else {
-			for _, nodeID := range ids {
-				if nodeID < 0 {
-					if name, ok := getTextNodeName(nodeID); ok {
-						tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
-					} else if name, ok := ami.GetTextNodeFromAMI(nodeID); ok {
-						tracker.UpdateNodeInfo(nodeID, name, "VOIP Client")
-					}
-				}
-			}
+			// No tracker for this SourceNodeID — log but continue so LINKS handler can still populate LinksDetailed
+			log.Printf("[STATE] no keyingTracker for sourceNodeID=%d, ALINKS routed but tracker not found", targetID)
 		}
-
-		sm.perSourceNumALinks[targetID] = len(ids)
-		perLinks := 0
-		for i := range sm.state.LinksDetailed {
-			if sm.state.LinksDetailed[i].LocalNode == targetID {
-				perLinks++
-			}
-		}
-		if perLinks == 0 {
-			perLinks = sm.numLinks
-		}
-		sm.perSourceNumLinks[targetID] = perLinks
-
-		// Emit update for this source node
-		sm.emitKeyingUpdateLocked(targetID, now)
-
-		// Log keying summary
-		keyedCount := 0
-		for _, isKeyed := range keyedMap {
-			if isKeyed {
-				keyedCount++
-			}
-		}
-		log.Printf("[KEYING] Source %d: %d adjacent nodes, %d keyed", targetID, len(ids), keyedCount)
-
-		// Mark that we just processed ALINKS so we can skip redundant legacy-only RPT_LINKS processing for trackers
-		sm.lastALinksProcessedAt = now
 	} else if v, ok := m.Headers["RPT_LINKS"]; ok && len(sm.keyingTrackers) > 0 {
 		// FALLBACK: If RPT_ALINKS not available, use RPT_LINKS to at least populate the node list
 		// (without keying status information)
