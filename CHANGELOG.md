@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/dbehnke/allstar-nexus/compare/v0.15.0...v0.15.1) (2026-04-14)
+
+
+### Bug Fixes
+
+* wire TriggerPoll and tag links to correct AMI source node ([#155](https://github.com/dbehnke/allstar-nexus/issues/155)) ([607caa9](https://github.com/dbehnke/allstar-nexus/commit/607caa946cc943d45daa1bff8459cf1779e94c06))
+
 ## [0.15.0](https://github.com/dbehnke/allstar-nexus/compare/v0.14.2...v0.15.0) (2026-04-13)
 
 
