@@ -840,9 +840,15 @@ func (sm *StateManager) SeedKeyingTrackerFromLinks(sourceNodeID int) {
 	now := time.Now().UTC().UTC()
 	tracker.ProcessALinks(linkIDs, emptyKeyedMap, now)
 
-	// Enrich with node lookup data and link details
+	filteredLinkIDs := make([]int, 0, len(linkIDs))
+	for _, linkDetail := range sm.state.LinksDetailed {
+		if linkDetail.LocalNode == sourceNodeID {
+			filteredLinkIDs = append(filteredLinkIDs, linkDetail.Node)
+		}
+	}
+
 	if sm.nodeLookup != nil {
-		for _, nodeID := range linkIDs {
+		for _, nodeID := range filteredLinkIDs {
 			if info := sm.nodeLookup.LookupNode(nodeID); info != nil {
 				tracker.UpdateNodeInfo(nodeID, info.Callsign, info.Description)
 			}
@@ -851,11 +857,14 @@ func (sm *StateManager) SeedKeyingTrackerFromLinks(sourceNodeID int) {
 
 	// Update with detailed link info (ConnectedSince, Mode, Direction, IP)
 	for _, linkInfo := range sm.state.LinksDetailed {
+		if linkInfo.LocalNode != sourceNodeID {
+			continue
+		}
 		tracker.UpdateConnectedSince(linkInfo.Node, linkInfo.ConnectedSince)
 		tracker.UpdateLinkInfo(linkInfo.Node, linkInfo.Mode, linkInfo.Direction, linkInfo.IP)
 	}
 
-	log.Printf("[KEYING] Seeded tracker for source %d with %d links", sourceNodeID, len(linkIDs))
+	log.Printf("[KEYING] Seeded tracker for source %d with %d links (filtered from %d global)", sourceNodeID, len(filteredLinkIDs), len(linkIDs))
 }
 
 // AddSourceNode adds a source node and creates a keying tracker for it

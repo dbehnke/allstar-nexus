@@ -81,7 +81,8 @@ func (kt *KeyingTracker) ProcessALinks(adjacentNodeIDs []int, alinksKeyed map[in
 	// First, process timer queue for any expired unkey checks
 	kt.processTimerQueue(timestamp)
 
-	// Process each adjacent node from RPT_ALINKS
+	kt.adjacentNodes = make(map[int]*AdjacentNodeStatus)
+
 	for _, nodeID := range adjacentNodeIDs {
 		linkIsKeyed := alinksKeyed[nodeID]
 
