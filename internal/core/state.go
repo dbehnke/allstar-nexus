@@ -515,10 +515,10 @@ func (sm *StateManager) apply(m ami.Message) {
 				}
 				newDetails = append(newDetails, *li)
 			} else {
-				// New link - set LocalNode from primary node ID
+				// New link - set LocalNode from the AMI message's source node
 				ni := LinkInfo{
 					Node:           id,
-					LocalNode:      sm.state.NodeID, // Set LocalNode for multi-node compatibility
+					LocalNode:      m.SourceNodeID, // Tag to the connector that reported this link
 					ConnectedSince: now,
 				}
 				// Enrich with node lookup data
