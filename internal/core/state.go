@@ -931,13 +931,13 @@ func (sm *StateManager) emitKeyingUpdateLocked(sourceNodeID int, timestamp time.
 		return
 	}
 
-	// Derive per-source counters (fallback to global if missing)
-	perLinks := sm.perSourceNumLinks[sourceNodeID]
-	perALinks := sm.perSourceNumALinks[sourceNodeID]
-	if perLinks == 0 {
+	// Derive per-source counters (fallback to global if not set for this source)
+	perLinks, linksOk := sm.perSourceNumLinks[sourceNodeID]
+	perALinks, alinksOk := sm.perSourceNumALinks[sourceNodeID]
+	if !linksOk {
 		perLinks = sm.numLinks
 	}
-	if perALinks == 0 {
+	if !alinksOk {
 		perALinks = sm.numALinks
 	}
 	update := SourceNodeKeyingUpdate{
@@ -981,12 +981,12 @@ func (sm *StateManager) GetSourceNodeSnapshot(nodeID int) (SourceNodeKeyingUpdat
 		return SourceNodeKeyingUpdate{}, false
 	}
 
-	perLinks := sm.perSourceNumLinks[nodeID]
-	perALinks := sm.perSourceNumALinks[nodeID]
-	if perLinks == 0 {
+	perLinks, linksOk := sm.perSourceNumLinks[nodeID]
+	perALinks, alinksOk := sm.perSourceNumALinks[nodeID]
+	if !linksOk {
 		perLinks = sm.numLinks
 	}
-	if perALinks == 0 {
+	if !alinksOk {
 		perALinks = sm.numALinks
 	}
 	return SourceNodeKeyingUpdate{
