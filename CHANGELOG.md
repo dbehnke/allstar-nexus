@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.15.0](https://github.com/dbehnke/allstar-nexus/compare/v0.14.2...v0.15.0) (2026-04-13)
+
+
+### Features
+
+* **ami:** add SourceNodeID to Message struct ([c831b05](https://github.com/dbehnke/allstar-nexus/commit/c831b059d948f600354d10bc0d2e0668b4dd4262))
+* **ami:** tag messages with sourceNodeID in connector ([b5f1fc2](https://github.com/dbehnke/allstar-nexus/commit/b5f1fc2f54178c31400c047093d996e78a491563))
+* **config:** add Visible, AMIHost, AMIPort to NodeConfig ([103a56b](https://github.com/dbehnke/allstar-nexus/commit/103a56b7799e3ab0c164337ca5cd97e015652742))
+* **gamification:** add ExcludedCallsigns to config structs ([12a6ca4](https://github.com/dbehnke/allstar-nexus/commit/12a6ca4179cd3517347c217712bbeb8a5203f5e9))
+* **gamification:** add ScoringSourceNodeID to config structs ([4b73590](https://github.com/dbehnke/allstar-nexus/commit/4b735909c24e02f3ea6c314cf8db4f6bcdec1e74))
+* **gamification:** exclude callsigns from XP scoring ([ec54d33](https://github.com/dbehnke/allstar-nexus/commit/ec54d33e3332dd798181d7de9a7f3fdc6ae4f7c4))
+* multi-node gamification and UI — all features ([7766ced](https://github.com/dbehnke/allstar-nexus/commit/7766ced5a95c3ef5acd193b0cb9b64dce2d3e760))
+* **multi-node:** create per-node AMI connectors with sourceNodeID tagging ([e9a6815](https://github.com/dbehnke/allstar-nexus/commit/e9a68156bb66a1641fdc84f5bf3e9640a19e7d56))
+
+
+### Bug Fixes
+
+* **core:** remove early return in ALINKS handler so LINKS handler can still populate LinksDetailed ([68fe322](https://github.com/dbehnke/allstar-nexus/commit/68fe322d90cae3f1874aeddc69415d9da82bcc89))
+* **core:** route ALINKS events only to matching keyingTracker ([b2e27b8](https://github.com/dbehnke/allstar-nexus/commit/b2e27b8a24411e7165c0bd0934ab9e1567bfeec2))
+
 ## [0.14.2](https://github.com/dbehnke/allstar-nexus/compare/v0.14.1...v0.14.2) (2026-04-11)
 
 
