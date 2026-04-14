@@ -413,8 +413,9 @@ func (sm *StateManager) apply(m ami.Message) {
 
 			log.Printf("[STATE] Processing RPT_LINKS fallback: %d adjacent nodes", len(ids))
 
-			// Process keying trackers with empty keying map
-			for sourceNodeID, tracker := range sm.keyingTrackers {
+			// Process ONLY the tracker matching this message's source node (mirrors RPT_ALINKS pattern)
+			tracker, exists := sm.keyingTrackers[m.SourceNodeID]
+			if exists {
 				tracker.ProcessALinks(ids, emptyKeyedMap, now)
 
 				// Enrich tracker nodes with lookup data
@@ -446,21 +447,21 @@ func (sm *StateManager) apply(m ami.Message) {
 				}
 
 				// Update per-source counters
-				sm.perSourceNumALinks[sourceNodeID] = len(ids)
+				sm.perSourceNumALinks[m.SourceNodeID] = len(ids)
 				// Derive per-source links count from LinksDetailed scoped to this local node if available
 				perLinks := 0
 				for i := range sm.state.LinksDetailed {
-					if sm.state.LinksDetailed[i].LocalNode == sourceNodeID {
+					if sm.state.LinksDetailed[i].LocalNode == m.SourceNodeID {
 						perLinks++
 					}
 				}
 				if perLinks == 0 {
 					perLinks = sm.numLinks // fallback to global until LinksDetailed populated
 				}
-				sm.perSourceNumLinks[sourceNodeID] = perLinks
+				sm.perSourceNumLinks[m.SourceNodeID] = perLinks
 
 				// Emit update for this source node (sm.mu is already locked in apply)
-				sm.emitKeyingUpdateLocked(sourceNodeID, now)
+				sm.emitKeyingUpdateLocked(m.SourceNodeID, now)
 			}
 		}
 	}
@@ -515,10 +516,10 @@ func (sm *StateManager) apply(m ami.Message) {
 				}
 				newDetails = append(newDetails, *li)
 			} else {
-				// New link - set LocalNode from primary node ID
+				// New link - set LocalNode from the AMI message's source node
 				ni := LinkInfo{
 					Node:           id,
-					LocalNode:      sm.state.NodeID, // Set LocalNode for multi-node compatibility
+					LocalNode:      m.SourceNodeID, // Tag to the connector that reported this link
 					ConnectedSince: now,
 				}
 				// Enrich with node lookup data

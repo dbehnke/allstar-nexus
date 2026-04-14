@@ -616,6 +616,13 @@ func main() {
 		// Pass StateManager to API layer
 		apiLayer.SetStateManager(sm)
 
+		// Wire poll trigger so /api/poll-now doesn't 503
+		// Hub.TriggerPollDebounced takes func() but API stores func(nodeID int),
+		// so we wrap it — the nodeID param is ignored since debouncing is per-hub.
+		apiLayer.SetTriggerPoll(func(nodeID int) {
+			hub.TriggerPollDebounced()
+		})
+
 		// If tally service is running, broadcast a WS event when it completes
 		if tallyService != nil {
 			// When a tally completes, broadcast the summary and include the current leaderboard
