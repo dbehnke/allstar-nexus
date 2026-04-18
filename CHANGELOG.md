@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15.4](https://github.com/dbehnke/allstar-nexus/compare/v0.15.3...v0.15.4) (2026-04-18)
+
+
+### Bug Fixes
+
+* **release:** remove unsupported merge plugin ([#164](https://github.com/dbehnke/allstar-nexus/issues/164)) ([2d178a5](https://github.com/dbehnke/allstar-nexus/commit/2d178a5195a296e187c2b8905741e4a1cd916236))
+* **release:** use release-please-oss/release-please-action v5 ([#166](https://github.com/dbehnke/allstar-nexus/issues/166)) ([f021696](https://github.com/dbehnke/allstar-nexus/commit/f021696f8a9b58c1f88875c22b91026bffaef37a))
+* **state:** filter AMI events by Node: header to prevent shared-server broadcast crosstalk ([#161](https://github.com/dbehnke/allstar-nexus/issues/161)) ([aa4f0ad](https://github.com/dbehnke/allstar-nexus/commit/aa4f0ad9c609d0518acabef3ac9daf4196b6c033))
+
 ## [0.15.3](https://github.com/dbehnke/allstar-nexus/compare/v0.15.2...v0.15.3) (2026-04-18)
 
 
