@@ -12,5 +12,5 @@
       "include-component-in-tag": false
     }
   },
-  "plugins": []
+  "plugins": ["merge"]
 }
