@@ -270,6 +270,16 @@ func (sm *StateManager) apply(m ami.Message) {
 		return
 	}
 	sm.mu.Lock()
+	// Filter: on shared-server AMI setups, events may be broadcast to all connectors.
+	// Use the event's Node: header to only process events that pertain to this connector's
+	// configured source node. Ignore events for other nodes — they're cross-talk from the
+	// shared server broadcasting its global state to all connected clients.
+	if nodeStr, ok := m.Headers["Node"]; ok {
+		if nodeNum, err := strconv.Atoi(nodeStr); err == nil && nodeNum != m.SourceNodeID {
+			sm.mu.Unlock()
+			return
+		}
+	}
 	// track if this apply cycle emitted any per-link TX events; if so we should avoid emitting
 	// ambiguous global talker events (node==0) for the same activity.
 	perLinkEmitted := false
