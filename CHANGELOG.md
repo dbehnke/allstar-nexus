@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.15.2](https://github.com/dbehnke/allstar-nexus/compare/v0.15.1...v0.15.2) (2026-04-14)
+
+
+### Bug Fixes
+
+* **keying:** clear adjacentNodes on ProcessALinks and filter seed by LocalNode ([c5aa10f](https://github.com/dbehnke/allstar-nexus/commit/c5aa10f20ea2c6407016a91b3397c49f8849d01e))
+* **keying:** clear adjacentNodes on ProcessALinks and filter seed by LocalNode ([4c9aaa4](https://github.com/dbehnke/allstar-nexus/commit/4c9aaa49657139755ddc1dccb3344d320a01d589))
+* **state:** distinguish zero from missing in per-source adjacent counter fallback ([3f2d5d2](https://github.com/dbehnke/allstar-nexus/commit/3f2d5d2693b43d8e85b8d1dadfd513b505455006))
+* **state:** distinguish zero from missing in per-source adjacent counter fallback ([3545e4d](https://github.com/dbehnke/allstar-nexus/commit/3545e4d892fd4e7653d58f7891a7bf0ec6fb3b15))
+
 ## [0.15.1](https://github.com/dbehnke/allstar-nexus/compare/v0.15.0...v0.15.1) (2026-04-14)
 
 
