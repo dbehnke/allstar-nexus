@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.15.3](https://github.com/dbehnke/allstar-nexus/compare/v0.15.2...v0.15.3) (2026-04-18)
+
+
+### Bug Fixes
+
+* **keying:** clear adjacentNodes on ProcessALinks and filter seed by LocalNode ([c5aa10f](https://github.com/dbehnke/allstar-nexus/commit/c5aa10f20ea2c6407016a91b3397c49f8849d01e))
+* **keying:** clear adjacentNodes on ProcessALinks and filter seed by LocalNode ([4c9aaa4](https://github.com/dbehnke/allstar-nexus/commit/4c9aaa49657139755ddc1dccb3344d320a01d589))
+* **release:** remove unsupported merge plugin ([#164](https://github.com/dbehnke/allstar-nexus/issues/164)) ([2d178a5](https://github.com/dbehnke/allstar-nexus/commit/2d178a5195a296e187c2b8905741e4a1cd916236))
+* **state:** distinguish zero from missing in per-source adjacent counter fallback ([3f2d5d2](https://github.com/dbehnke/allstar-nexus/commit/3f2d5d2693b43d8e85b8d1dadfd513b505455006))
+* **state:** filter AMI events by Node: header to prevent shared-server broadcast crosstalk ([#161](https://github.com/dbehnke/allstar-nexus/issues/161)) ([aa4f0ad](https://github.com/dbehnke/allstar-nexus/commit/aa4f0ad9c609d0518acabef3ac9daf4196b6c033))
+
 ## [0.15.2](https://github.com/dbehnke/allstar-nexus/compare/v0.15.1...v0.15.2) (2026-04-14)
 
 
