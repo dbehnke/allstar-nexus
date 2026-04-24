@@ -42,3 +42,4 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 data/astdb.txt
+.worktrees/
