@@ -280,6 +280,16 @@ func (sm *StateManager) apply(m ami.Message) {
 			return
 		}
 	}
+	// Filter: VarSet events with RPT_* variables lack Node headers, so they cannot be
+	// routed to the correct source node. Event-based RPT_* frames carry the same data
+	// and include proper Node headers. Always ignore VarSet RPT_* events.
+	if ev, ok := m.Headers["Event"]; ok && ev == "VarSet" {
+		if variable, ok := m.Headers["Variable"]; ok && strings.HasPrefix(variable, "RPT_") {
+			log.Printf("[STATE] filtering VarSet %s (no Node header, use Event-based frame instead)", variable)
+			sm.mu.Unlock()
+			return
+		}
+	}
 	// track if this apply cycle emitted any per-link TX events; if so we should avoid emitting
 	// ambiguous global talker events (node==0) for the same activity.
 	perLinkEmitted := false
@@ -303,22 +313,6 @@ func (sm *StateManager) apply(m ami.Message) {
 		case "RPT_ALINKS":
 			if v, ok := m.Headers["EventValue"]; ok {
 				m.Headers["RPT_ALINKS"] = v
-			}
-		}
-	}
-	if ev, ok := m.Headers["Event"]; ok && ev == "VarSet" { // Variable based update
-		if variable, ok := m.Headers["Variable"]; ok {
-			if value, ok2 := m.Headers["Value"]; ok2 {
-				switch variable {
-				case "RPT_LINKS":
-					m.Headers["RPT_LINKS"] = value
-				case "RPT_ALINKS":
-					m.Headers["RPT_ALINKS"] = value
-				case "RPT_TXKEYED":
-					m.Headers["RPT_TXKEYED"] = value
-				case "RPT_RXKEYED":
-					m.Headers["RPT_RXKEYED"] = value
-				}
 			}
 		}
 	}
