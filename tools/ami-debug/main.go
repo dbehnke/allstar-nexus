@@ -34,6 +34,10 @@ func main() {
 	)
 	flag.Parse()
 
+	if envHost := os.Getenv("AMI_HOST"); envHost != "" {
+		*host = envHost
+	}
+
 	password := os.Getenv("AMI_PASSWORD")
 	if password == "" {
 		fmt.Print("AMI Password: ")

@@ -33,6 +33,7 @@ AMI_PASSWORD=allstar go run . --host 127.0.0.1:5038 --output debug.log
 ## Environment Variables
 
 - `AMI_PASSWORD` - Required. AMI password.
+- `AMI_HOST` - Optional. AMI host:port (overrides `--host` flag).
 
 ## Snapshot Format
 
