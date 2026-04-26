@@ -1244,6 +1244,46 @@ func (sm *StateManager) ApplyCombinedStatus(combined *ami.CombinedNodeStatus) {
 	}
 }
 
+// ApplyLStats enriches existing LinkInfo entries with data from rpt lstats output.
+// This fills in fields like Direction, IP, and ConnectState that events don't provide.
+func (sm *StateManager) ApplyLStats(nodeID int, lstats *ami.LStatsResult) {
+	if lstats == nil || len(lstats.Entries) == 0 {
+		return
+	}
+
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	// Build lookup by remote node for this local node
+	for i := range sm.state.LinksDetailed {
+		if sm.state.LinksDetailed[i].LocalNode != nodeID && sm.state.LinksDetailed[i].LocalNode != 0 {
+			continue
+		}
+
+		// Find matching lstats entry
+		for _, entry := range lstats.Entries {
+			if entry.Node == sm.state.LinksDetailed[i].Node {
+				li := &sm.state.LinksDetailed[i]
+				if entry.Peer != "" {
+					li.IP = entry.Peer
+				}
+				if entry.Direction != "" {
+					li.Direction = entry.Direction
+				}
+				if entry.ConnectTime != "" {
+					li.Elapsed = entry.ConnectTime
+				}
+				if entry.ConnectState != "" {
+					li.LinkType = entry.ConnectState
+				}
+				break
+			}
+		}
+	}
+
+	sm.state.UpdatedAt = time.Now().UTC().UTC()
+}
+
 // parseLinkIDs extracts AllStar node IDs from RPT_LINKS style payloads.
 // Formats observed:
 //

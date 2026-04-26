@@ -146,6 +146,14 @@ func (ps *PollingService) performPoll(nodeID int) {
 	// This enriches the tracker with connection details (Direction, IP, Elapsed, Mode)
 	ps.updateKeyingTracker(nodeID, combined)
 
+	// Get lstats to enrich link info with Direction, IP, Connect Time, State
+	lstats, err := ps.connector.GetLStats(ctx, nodeID)
+	if err != nil {
+		log.Printf("[POLLING] Failed to get lstats for node %d: %v", nodeID, err)
+	} else {
+		ps.stateManager.ApplyLStats(nodeID, lstats)
+	}
+
 	// After first successful poll, trigger cleanup callback if set
 	ps.mu.Lock()
 	if !ps.firstPollDone && ps.cleanupCallback != nil {

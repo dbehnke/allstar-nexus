@@ -465,3 +465,129 @@ func GetTextNodeFromAMI(nodeID int) (string, bool) {
 	text, ok := amiTextNodeRegistry[nodeID]
 	return text, ok
 }
+
+// ParseLStats parses the response from "rpt lstats <node>" command.
+// Expected format:
+//
+//	NODE      PEER                RECONNECTS  DIRECTION  CONNECT TIME        CONNECT STATE
+//	----      ----                ----------  ---------  ------------        -------------
+//	58840     100.89.118.58       0           IN         20:38:42:43         ESTABLISHED
+func ParseLStats(node int, response string) (*LStatsResult, error) {
+	result := &LStatsResult{
+		Node: node,
+	}
+
+	lines := strings.Split(response, "\n")
+	var headerParsed bool
+	var colPositions []int
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Skip separator lines (all dashes)
+		if strings.HasPrefix(line, "----") || strings.HasPrefix(line, "====") {
+			continue
+		}
+
+		// Parse header line to determine column positions
+		if !headerParsed {
+			if strings.Contains(line, "NODE") && strings.Contains(line, "PEER") {
+				colPositions = findLStatsColumnPositions(line)
+				headerParsed = true
+				continue
+			}
+		}
+
+		if !headerParsed || len(colPositions) < 5 {
+			continue
+		}
+
+		entry, err := parseLStatsLine(line, colPositions)
+		if err != nil {
+			continue // Skip malformed lines
+		}
+		result.Entries = append(result.Entries, entry)
+	}
+
+	return result, nil
+}
+
+// findLStatsColumnPositions finds the starting positions of each column in the header line
+func findLStatsColumnPositions(header string) []int {
+	positions := []int{}
+	words := []string{"NODE", "PEER", "RECONNECTS", "DIRECTION", "CONNECT TIME", "CONNECT STATE"}
+	idx := 0
+	for _, word := range words {
+		pos := strings.Index(header[idx:], word)
+		if pos >= 0 {
+			positions = append(positions, idx+pos)
+			idx += pos
+		}
+	}
+	return positions
+}
+
+// parseLStatsLine parses a single data line using column positions from the header
+func parseLStatsLine(line string, positions []int) (LStatsEntry, error) {
+	entry := LStatsEntry{}
+
+	// Extract each field using column positions
+	getField := func(start, end int) string {
+		if start >= len(line) {
+			return ""
+		}
+		if end > len(line) {
+			end = len(line)
+		}
+		return strings.TrimSpace(line[start:end])
+	}
+
+	var fields []string
+	for i := 0; i < len(positions); i++ {
+		start := positions[i]
+		end := len(line)
+		if i+1 < len(positions) {
+			end = positions[i+1]
+		}
+		fields = append(fields, getField(start, end))
+	}
+
+	if len(fields) < 5 {
+		return entry, fmt.Errorf("not enough fields")
+	}
+
+	// Parse node number
+	nodeNum, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return entry, fmt.Errorf("invalid node number: %s", fields[0])
+	}
+	entry.Node = nodeNum
+
+	// Peer (IP/hostname)
+	entry.Peer = fields[1]
+
+	// Reconnects
+	if len(fields) > 2 {
+		entry.Reconnects, _ = strconv.Atoi(fields[2])
+	}
+
+	// Direction
+	if len(fields) > 3 {
+		entry.Direction = fields[3]
+	}
+
+	// Connect time
+	if len(fields) > 4 {
+		entry.ConnectTime = fields[4]
+	}
+
+	// Connect state
+	if len(fields) > 5 {
+		entry.ConnectState = fields[5]
+	}
+
+	return entry, nil
+}
