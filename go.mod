@@ -2,7 +2,7 @@ module github.com/dbehnke/allstar-nexus
 
 go 1.26.2
 
-require modernc.org/sqlite v1.48.2
+require modernc.org/sqlite v1.49.1
 
 require (
 	github.com/coder/websocket v1.8.14
@@ -37,7 +37,7 @@ require (
 	golang.org/x/text v0.36.0 // indirect
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
-	modernc.org/libc v1.70.0 // indirect
+	modernc.org/libc v1.72.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
