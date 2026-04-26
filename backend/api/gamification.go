@@ -272,6 +272,7 @@ func (g *GamificationAPI) RecentTransmissions(w http.ResponseWriter, r *http.Req
 	type TransmissionEntry struct {
 		Callsign        string `json:"callsign"`
 		Node            int    `json:"node"`
+		SourceNode      int    `json:"source_node"`
 		TimestampStart  string `json:"timestamp_start"`
 		DurationSeconds int    `json:"duration_seconds"`
 	}
@@ -283,6 +284,7 @@ func (g *GamificationAPI) RecentTransmissions(w http.ResponseWriter, r *http.Req
 		entries = append(entries, TransmissionEntry{
 			Callsign:        log.Callsign,
 			Node:            log.AdjacentLinkID,
+			SourceNode:      log.SourceID,
 			TimestampStart:  ts,
 			DurationSeconds: log.DurationSeconds,
 		})

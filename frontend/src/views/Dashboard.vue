@@ -27,7 +27,7 @@
       <!-- Recent Transmissions (left, 1/3) + Scoreboard (right, 2/3) -->
       <div class="grid-item transmission-history">
         <TransmissionHistoryCard
-          :transmissions="nodeStore.recentTransmissions"
+          :transmissions="filteredTransmissions"
           :currentPage="currentPage"
           :totalPages="totalPages"
           @page-change="handlePageChange"
@@ -42,7 +42,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, watch, ref } from 'vue'
+import { onMounted, onUnmounted, watch, ref, computed } from 'vue'
 import { useNodeStore } from '../stores/node'
 import { useAuthStore } from '../stores/auth'
 import { connectWS } from '../env'
@@ -64,6 +64,20 @@ function toggleNode(key) {
   }
   localStorage.setItem('nodeVisibility', JSON.stringify(visibleNodes.value))
 }
+
+// Filter recent transmissions to only show visible nodes
+const filteredTransmissions = computed(() => {
+  const txs = nodeStore.recentTransmissions || []
+  // If no source nodes or all visible, show all
+  const sourceKeys = Object.keys(nodeStore.sourceNodes || {})
+  if (sourceKeys.length <= 1) return txs
+  // Filter by visible nodes
+  return txs.filter(t => {
+    const sourceNode = t.source_node != null ? String(t.source_node) : null
+    if (!sourceNode) return true
+    return visibleNodes.value[sourceNode] !== false
+  })
+})
 
 // Pagination for transmission history
 const currentPage = ref(1)

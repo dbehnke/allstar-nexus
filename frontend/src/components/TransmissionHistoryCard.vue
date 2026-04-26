@@ -11,6 +11,7 @@
               <th>Time</th>
               <th>Callsign</th>
               <th>Node</th>
+              <th>Repeater</th>
               <th>Duration</th>
             </tr>
           </thead>
@@ -26,6 +27,10 @@
                   <a v-if="Number(t.node) >= 0" :href="`https://stats.allstarlink.org/stats/${t.node}`" target="_blank" rel="noopener noreferrer">{{ t.node }}</a>
                   <span v-else class="muted">{{ t.callsign }}</span>
                 </template>
+                <span v-else class="muted">—</span>
+              </td>
+              <td>
+                <span v-if="t.source_node != null && t.source_node !== ''">{{ t.source_node }}</span>
                 <span v-else class="muted">—</span>
               </td>
               <td>{{ formatDuration(getDuration(t)) }}</td>
