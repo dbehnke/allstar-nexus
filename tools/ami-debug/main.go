@@ -41,7 +41,10 @@ func main() {
 	password := os.Getenv("AMI_PASSWORD")
 	if password == "" {
 		fmt.Print("AMI Password: ")
-		fmt.Scanln(&password)
+		if _, err := fmt.Scanln(&password); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to read password: %v\n", err)
+			os.Exit(1)
+		}
 		if password == "" {
 			fmt.Fprintln(os.Stderr, "Error: AMI_PASSWORD environment variable not set")
 			os.Exit(1)
@@ -79,7 +82,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error: failed to connect after 3 attempts: %v\n", err)
 		os.Exit(1)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close connection: %v\n", err)
+		}
+	}()
 
 	fmt.Printf("Connected. Logging in...\n")
 

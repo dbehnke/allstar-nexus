@@ -47,20 +47,34 @@ func writeSnapshot(rb *RingBuffer, host, username string, startTime time.Time, o
 	if err != nil {
 		return "", fmt.Errorf("create snapshot file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close snapshot file: %w", cerr)
+		}
+	}()
 
-	fmt.Fprintf(f, "=== AMI Debug Capture ===\n")
-	fmt.Fprintf(f, "Host: %s\n", host)
-	fmt.Fprintf(f, "Username: %s\n", username)
-	fmt.Fprintf(f, "Started: %s\n", startTime.Format(time.RFC3339))
-	fmt.Fprintf(f, "Ended: %s\n", endTime.Format(time.RFC3339))
-	fmt.Fprintf(f, "Duration: %s\n", endTime.Sub(startTime).Round(time.Second))
-	fmt.Fprintf(f, "Total Events: %d\n", len(events))
-	fmt.Fprintf(f, "\n")
+	writef := func(format string, args ...any) {
+		if err != nil {
+			return
+		}
+		_, werr := fmt.Fprintf(f, format, args...)
+		if werr != nil {
+			err = fmt.Errorf("write snapshot: %w", werr)
+		}
+	}
 
-	fmt.Fprintf(f, "--- Event Summary ---\n")
+	writef("=== AMI Debug Capture ===\n")
+	writef("Host: %s\n", host)
+	writef("Username: %s\n", username)
+	writef("Started: %s\n", startTime.Format(time.RFC3339))
+	writef("Ended: %s\n", endTime.Format(time.RFC3339))
+	writef("Duration: %s\n", endTime.Sub(startTime).Round(time.Second))
+	writef("Total Events: %d\n", len(events))
+	writef("\n")
+
+	writef("--- Event Summary ---\n")
 	if len(eventCounts) == 0 {
-		fmt.Fprintf(f, "(no events captured)\n")
+		writef("(no events captured)\n")
 	} else {
 		var pairs []countPair
 		for eventType, count := range eventCounts {
@@ -71,19 +85,19 @@ func writeSnapshot(rb *RingBuffer, host, username string, startTime time.Time, o
 		})
 
 		for _, pair := range pairs {
-			fmt.Fprintf(f, "%s: %d\n", pair.EventType, pair.Count)
+			writef("%s: %d\n", pair.EventType, pair.Count)
 		}
 	}
-	fmt.Fprintf(f, "\n")
+	writef("\n")
 
-	fmt.Fprintf(f, "--- Raw Frames ---\n")
+	writef("--- Raw Frames ---\n")
 	for _, event := range events {
-		fmt.Fprintf(f, "[%s] Event: %s\n", event.Timestamp.Format(time.RFC3339), event.Type)
+		writef("[%s] Event: %s\n", event.Timestamp.Format(time.RFC3339), event.Type)
 		for key, value := range event.Headers {
-			fmt.Fprintf(f, "%s: %s\n", key, value)
+			writef("%s: %s\n", key, value)
 		}
-		fmt.Fprintf(f, "\n")
+		writef("\n")
 	}
 
-	return outputPath, nil
+	return outputPath, err
 }
