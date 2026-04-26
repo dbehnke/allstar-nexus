@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.16.0](https://github.com/dbehnke/allstar-nexus/compare/v0.15.4...v0.16.0) (2026-04-26)
+
+
+### Features
+
+* AMI debug tool for capturing event snapshots ([#174](https://github.com/dbehnke/allstar-nexus/issues/174)) ([e3672ad](https://github.com/dbehnke/allstar-nexus/commit/e3672ada6de1262cff9a978d6a895058e3e3d95c))
+
+
+### Bug Fixes
+
+* **core:** prevent VarSet RPT_ events from causing cross-talk in multi-node setups ([#175](https://github.com/dbehnke/allstar-nexus/issues/175)) ([8cee406](https://github.com/dbehnke/allstar-nexus/commit/8cee406349cab703d48148fdee092fa60dcd6cc6))
+
 ## [0.15.4](https://github.com/dbehnke/allstar-nexus/compare/v0.15.3...v0.15.4) (2026-04-18)
 
 
