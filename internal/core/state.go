@@ -279,6 +279,13 @@ func (sm *StateManager) apply(m ami.Message) {
 			sm.mu.Unlock()
 			return
 		}
+	} else if ch, ok := m.Headers["Channel"]; ok {
+		// Some events (e.g. RPT_ALINKS) lack a Node header but include Channel: Rpt/<node>
+		// Extract the node number and filter if it doesn't match this connector's source node.
+		if nodeNum := parseChannelNode(ch); nodeNum > 0 && nodeNum != m.SourceNodeID {
+			sm.mu.Unlock()
+			return
+		}
 	}
 	// Filter: VarSet events with RPT_* variables lack Node headers, so they cannot be
 	// routed to the correct source node. Event-based RPT_* frames carry the same data
@@ -1480,4 +1487,20 @@ func parseALinks(payload string) (ids []int, keyed map[int]bool) {
 		}
 	}
 	return ids, keyed
+}
+
+// parseChannelNode extracts the node number from AllStar channel names like "Rpt/594950".
+func parseChannelNode(channel string) int {
+	channel = strings.TrimSpace(channel)
+	// Common formats: "Rpt/594950", "rpt/594950", "RPT/594950"
+	idx := strings.LastIndex(channel, "/")
+	if idx < 0 {
+		return 0
+	}
+	nodeStr := strings.TrimSpace(channel[idx+1:])
+	nodeStr = strings.TrimSuffix(nodeStr, "-") // Some channels have trailing dash
+	if nodeNum, err := strconv.Atoi(nodeStr); err == nil {
+		return nodeNum
+	}
+	return 0
 }
