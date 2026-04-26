@@ -297,6 +297,19 @@ func (sm *StateManager) apply(m ami.Message) {
 			return
 		}
 	}
+	// Filter: In multi-node setups, ALINKS/LINKS events without Node/Channel headers
+	// cannot be routed correctly. All connectors receive the same broadcast and each
+	// tags it with their own SourceNodeID, causing cross-talk into wrong trackers.
+	// Ignore these events in multi-node setups and rely on polling for link updates.
+	if ev, ok := m.Headers["Event"]; ok && (ev == "RPT_ALINKS" || ev == "RPT_LINKS") {
+		_, hasNode := m.Headers["Node"]
+		_, hasChannel := m.Headers["Channel"]
+		if !hasNode && !hasChannel && len(sm.keyingTrackers) > 1 {
+			log.Printf("[STATE] filtering %s for source %d (no Node/Channel header in multi-node setup)", ev, m.SourceNodeID)
+			sm.mu.Unlock()
+			return
+		}
+	}
 	// track if this apply cycle emitted any per-link TX events; if so we should avoid emitting
 	// ambiguous global talker events (node==0) for the same activity.
 	perLinkEmitted := false

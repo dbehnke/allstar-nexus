@@ -177,6 +177,17 @@ func (ps *PollingService) updateKeyingTracker(nodeID int, combined *ami.Combined
 		return
 	}
 
+	// Build list of adjacent node IDs and keyed states from polled connections
+	adjacentIDs := make([]int, 0, len(combined.Connections))
+	keyedMap := make(map[int]bool)
+	for _, conn := range combined.Connections {
+		adjacentIDs = append(adjacentIDs, conn.Node)
+		keyedMap[conn.Node] = conn.IsKeyed
+	}
+
+	// Sync the tracker's adjacent nodes list (adds new, removes stale)
+	tracker.SyncAdjacentNodes(adjacentIDs, keyedMap, time.Now().UTC())
+
 	// Update each connection in the tracker with enriched data
 	for _, conn := range combined.Connections {
 		// Parse elapsed time to get connected since
