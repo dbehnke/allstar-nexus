@@ -205,6 +205,81 @@ func TestTextNodeCallsignAndDescription(t *testing.T) {
 	}
 }
 
+// TestVarSetMultinodeCrosstalk verifies that VarSet events with RPT_* variables
+// do not leak between source nodes in multi-node setups. VarSet events lack Node
+// headers, so without this filter they would be processed by every connector and
+// routed to the wrong keying tracker.
+func TestVarSetMultinodeCrosstalk(t *testing.T) {
+	sm := NewStateManager()
+	// Set up two source nodes (simulating 594950 and 594951)
+	sm.AddSourceNode(594950, 0)
+	sm.AddSourceNode(594951, 0)
+
+	// Send a VarSet event with RPT_ALINKS as if it came from connector 594950.
+	// In real operation, the same AMI broadcast is received by ALL connectors,
+	// so each connector tags it with its own SourceNodeID. Here we simulate
+	// the 594950-tagged copy.
+	varsetMsg := ami.Message{
+		SourceNodeID: 594950,
+		Headers: map[string]string{
+			"Event":    "VarSet",
+			"Variable": "RPT_ALINKS",
+			"Value":    "2,2001TU,2002TK",
+		},
+	}
+	sm.apply(varsetMsg)
+
+	// VarSet events are always filtered because they lack Node headers and
+	// Event-based RPT_* frames carry the same data with proper routing info.
+	snap950, ok := sm.GetSourceNodeSnapshot(594950)
+	if !ok {
+		t.Fatalf("expected snapshot for node 594950")
+	}
+	if len(snap950.AdjacentNodes) != 0 {
+		t.Fatalf("expected 0 adjacent nodes for 594950 (VarSet always filtered), got %d", len(snap950.AdjacentNodes))
+	}
+
+	// Tracker 594951 should NOT have received the cross-talk
+	snap951, ok := sm.GetSourceNodeSnapshot(594951)
+	if !ok {
+		t.Fatalf("expected snapshot for node 594951")
+	}
+	if len(snap951.AdjacentNodes) != 0 {
+		t.Fatalf("expected 0 adjacent nodes for 594951 (crosstalk blocked), got %d", len(snap951.AdjacentNodes))
+	}
+}
+
+// TestEventBasedRPT_ALINKSMultinode verifies that Event-based RPT_ALINKS frames
+// (which include Node headers) are correctly filtered and routed in multi-node setups.
+func TestEventBasedRPT_ALINKSMultinode(t *testing.T) {
+	sm := NewStateManager()
+	sm.AddSourceNode(594950, 0)
+	sm.AddSourceNode(594951, 0)
+
+	// Event-based RPT_ALINKS with Node header (this is the primary source)
+	msg := ami.Message{
+		SourceNodeID: 594950,
+		Headers: map[string]string{
+			"Event":      "RPT_ALINKS",
+			"Node":       "594950",
+			"EventValue": "2,2001TU,2002TK",
+		},
+	}
+	sm.apply(msg)
+
+	// 594950 should have the links
+	snap950, _ := sm.GetSourceNodeSnapshot(594950)
+	if len(snap950.AdjacentNodes) != 2 {
+		t.Fatalf("expected 2 adjacent nodes for 594950, got %d", len(snap950.AdjacentNodes))
+	}
+
+	// 594951 should not (filtered by Node header)
+	snap951, _ := sm.GetSourceNodeSnapshot(594951)
+	if len(snap951.AdjacentNodes) != 0 {
+		t.Fatalf("expected 0 adjacent nodes for 594951, got %d", len(snap951.AdjacentNodes))
+	}
+}
+
 // TestTransmissionTimestampsAreUTC verifies that transmission timestamps use UTC
 func TestTransmissionTimestampsAreUTC(t *testing.T) {
 	// Simple test: verify that time.Now().UTC() produces UTC timestamps

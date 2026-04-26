@@ -146,6 +146,14 @@ func (ps *PollingService) performPoll(nodeID int) {
 	// This enriches the tracker with connection details (Direction, IP, Elapsed, Mode)
 	ps.updateKeyingTracker(nodeID, combined)
 
+	// Get lstats to enrich link info with Direction, IP, Connect Time, State
+	lstats, err := ps.connector.GetLStats(ctx, nodeID)
+	if err != nil {
+		log.Printf("[POLLING] Failed to get lstats for node %d: %v", nodeID, err)
+	} else {
+		ps.stateManager.ApplyLStats(nodeID, lstats)
+	}
+
 	// After first successful poll, trigger cleanup callback if set
 	ps.mu.Lock()
 	if !ps.firstPollDone && ps.cleanupCallback != nil {
@@ -168,6 +176,17 @@ func (ps *PollingService) updateKeyingTracker(nodeID int, combined *ami.Combined
 	if !exists {
 		return
 	}
+
+	// Build list of adjacent node IDs and keyed states from polled connections
+	adjacentIDs := make([]int, 0, len(combined.Connections))
+	keyedMap := make(map[int]bool)
+	for _, conn := range combined.Connections {
+		adjacentIDs = append(adjacentIDs, conn.Node)
+		keyedMap[conn.Node] = conn.IsKeyed
+	}
+
+	// Sync the tracker's adjacent nodes list (adds new, removes stale)
+	tracker.SyncAdjacentNodes(adjacentIDs, keyedMap, time.Now().UTC())
 
 	// Update each connection in the tracker with enriched data
 	for _, conn := range combined.Connections {

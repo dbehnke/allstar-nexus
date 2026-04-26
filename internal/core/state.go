@@ -279,6 +279,36 @@ func (sm *StateManager) apply(m ami.Message) {
 			sm.mu.Unlock()
 			return
 		}
+	} else if ch, ok := m.Headers["Channel"]; ok {
+		// Some events (e.g. RPT_ALINKS) lack a Node header but include Channel: Rpt/<node>
+		// Extract the node number and filter if it doesn't match this connector's source node.
+		if nodeNum := parseChannelNode(ch); nodeNum > 0 && nodeNum != m.SourceNodeID {
+			sm.mu.Unlock()
+			return
+		}
+	}
+	// Filter: VarSet events with RPT_* variables lack Node headers, so they cannot be
+	// routed to the correct source node. Event-based RPT_* frames carry the same data
+	// and include proper Node headers. Always ignore VarSet RPT_* events.
+	if ev, ok := m.Headers["Event"]; ok && ev == "VarSet" {
+		if variable, ok := m.Headers["Variable"]; ok && strings.HasPrefix(variable, "RPT_") {
+			log.Printf("[STATE] filtering VarSet %s (no Node header, use Event-based frame instead)", variable)
+			sm.mu.Unlock()
+			return
+		}
+	}
+	// Filter: In multi-node setups, ALINKS/LINKS events without Node/Channel headers
+	// cannot be routed correctly. All connectors receive the same broadcast and each
+	// tags it with their own SourceNodeID, causing cross-talk into wrong trackers.
+	// Ignore these events in multi-node setups and rely on polling for link updates.
+	if ev, ok := m.Headers["Event"]; ok && (ev == "RPT_ALINKS" || ev == "RPT_LINKS") {
+		_, hasNode := m.Headers["Node"]
+		_, hasChannel := m.Headers["Channel"]
+		if !hasNode && !hasChannel && len(sm.keyingTrackers) > 1 {
+			log.Printf("[STATE] filtering %s for source %d (no Node/Channel header in multi-node setup)", ev, m.SourceNodeID)
+			sm.mu.Unlock()
+			return
+		}
 	}
 	// track if this apply cycle emitted any per-link TX events; if so we should avoid emitting
 	// ambiguous global talker events (node==0) for the same activity.
@@ -303,22 +333,6 @@ func (sm *StateManager) apply(m ami.Message) {
 		case "RPT_ALINKS":
 			if v, ok := m.Headers["EventValue"]; ok {
 				m.Headers["RPT_ALINKS"] = v
-			}
-		}
-	}
-	if ev, ok := m.Headers["Event"]; ok && ev == "VarSet" { // Variable based update
-		if variable, ok := m.Headers["Variable"]; ok {
-			if value, ok2 := m.Headers["Value"]; ok2 {
-				switch variable {
-				case "RPT_LINKS":
-					m.Headers["RPT_LINKS"] = value
-				case "RPT_ALINKS":
-					m.Headers["RPT_ALINKS"] = value
-				case "RPT_TXKEYED":
-					m.Headers["RPT_TXKEYED"] = value
-				case "RPT_RXKEYED":
-					m.Headers["RPT_RXKEYED"] = value
-				}
 			}
 		}
 	}
@@ -1250,6 +1264,46 @@ func (sm *StateManager) ApplyCombinedStatus(combined *ami.CombinedNodeStatus) {
 	}
 }
 
+// ApplyLStats enriches existing LinkInfo entries with data from rpt lstats output.
+// This fills in fields like Direction, IP, and ConnectState that events don't provide.
+func (sm *StateManager) ApplyLStats(nodeID int, lstats *ami.LStatsResult) {
+	if lstats == nil || len(lstats.Entries) == 0 {
+		return
+	}
+
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	// Build lookup by remote node for this local node
+	for i := range sm.state.LinksDetailed {
+		if sm.state.LinksDetailed[i].LocalNode != nodeID && sm.state.LinksDetailed[i].LocalNode != 0 {
+			continue
+		}
+
+		// Find matching lstats entry
+		for _, entry := range lstats.Entries {
+			if entry.Node == sm.state.LinksDetailed[i].Node {
+				li := &sm.state.LinksDetailed[i]
+				if entry.Peer != "" {
+					li.IP = entry.Peer
+				}
+				if entry.Direction != "" {
+					li.Direction = entry.Direction
+				}
+				if entry.ConnectTime != "" {
+					li.Elapsed = entry.ConnectTime
+				}
+				if entry.ConnectState != "" {
+					li.LinkType = entry.ConnectState
+				}
+				break
+			}
+		}
+	}
+
+	sm.state.UpdatedAt = time.Now().UTC().UTC()
+}
+
 // parseLinkIDs extracts AllStar node IDs from RPT_LINKS style payloads.
 // Formats observed:
 //
@@ -1446,4 +1500,20 @@ func parseALinks(payload string) (ids []int, keyed map[int]bool) {
 		}
 	}
 	return ids, keyed
+}
+
+// parseChannelNode extracts the node number from AllStar channel names like "Rpt/594950".
+func parseChannelNode(channel string) int {
+	channel = strings.TrimSpace(channel)
+	// Common formats: "Rpt/594950", "rpt/594950", "RPT/594950"
+	idx := strings.LastIndex(channel, "/")
+	if idx < 0 {
+		return 0
+	}
+	nodeStr := strings.TrimSpace(channel[idx+1:])
+	nodeStr = strings.TrimSuffix(nodeStr, "-") // Some channels have trailing dash
+	if nodeNum, err := strconv.Atoi(nodeStr); err == nil {
+		return nodeNum
+	}
+	return 0
 }

@@ -416,6 +416,17 @@ func (c *Connector) GetCombinedStatus(ctx context.Context, node int) (*CombinedN
 	return CombineXStatSawStat(xstat, sawstat), nil
 }
 
+// GetLStats retrieves and parses link statistics for a node
+func (c *Connector) GetLStats(ctx context.Context, node int) (*LStatsResult, error) {
+	msg, err := c.SendCommand(ctx, fmt.Sprintf("rpt lstats %d", node))
+	if err != nil {
+		return nil, err
+	}
+
+	responseText := extractCommandOutput(msg)
+	return ParseLStats(node, responseText)
+}
+
 // extractCommandOutput extracts the command output from an AMI response
 func extractCommandOutput(msg Message) string {
 	// The response is in msg.Raw

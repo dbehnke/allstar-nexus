@@ -81,6 +81,22 @@ type VoterResult struct {
 	Timestamp time.Time       // When this data was captured
 }
 
+// LStatsEntry represents a single link from rpt lstats output
+type LStatsEntry struct {
+	Node         int       // Remote node number
+	Peer         string    // IP address or hostname
+	Reconnects   int       // Number of reconnects
+	Direction    string    // "IN" or "OUT"
+	ConnectTime  string    // Connection duration string
+	ConnectState string    // "ESTABLISHED", "CONNECTING", etc.
+}
+
+// LStatsResult contains parsed rpt lstats response
+type LStatsResult struct {
+	Node    int           // Local node number
+	Entries []LStatsEntry // Link entries
+}
+
 // Helper functions for formatting
 
 // FormatElapsed converts seconds to HH:MM:SS format

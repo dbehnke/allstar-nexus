@@ -28,6 +28,9 @@ tmp/
 # Packet captures
 *.pcap
 
+# Debug files
+debug-ami.txt
+
 # misc
 external
 main
