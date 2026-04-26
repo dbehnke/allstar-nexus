@@ -81,12 +81,10 @@ func (kt *KeyingTracker) ProcessALinks(adjacentNodeIDs []int, alinksKeyed map[in
 	// First, process timer queue for any expired unkey checks
 	kt.processTimerQueue(timestamp)
 
-	kt.adjacentNodes = make(map[int]*AdjacentNodeStatus)
-
+	newMap := make(map[int]*AdjacentNodeStatus, len(adjacentNodeIDs))
 	for _, nodeID := range adjacentNodeIDs {
 		linkIsKeyed := alinksKeyed[nodeID]
 
-		// Get or initialize node status
 		nodeStatus, exists := kt.adjacentNodes[nodeID]
 		if !exists {
 			nodeStatus = &AdjacentNodeStatus{
@@ -95,8 +93,8 @@ func (kt *KeyingTracker) ProcessALinks(adjacentNodeIDs []int, alinksKeyed map[in
 				IsTransmitting: false,
 				ConnectedSince: timestamp,
 			}
-			kt.adjacentNodes[nodeID] = nodeStatus
 		}
+		newMap[nodeID] = nodeStatus
 
 		// --- 1. Key-Up (TX START) Detection ---
 		if linkIsKeyed && !nodeStatus.IsTransmitting {
@@ -136,6 +134,34 @@ func (kt *KeyingTracker) ProcessALinks(adjacentNodeIDs []int, alinksKeyed map[in
 			kt.removeFromQueue(nodeID)
 		}
 	}
+
+	kt.adjacentNodes = newMap
+}
+
+// SyncAdjacentNodes replaces the adjacent nodes list with polled data without emitting keying events.
+// Used by the polling service to keep the tracker in sync when ALINKS events are filtered out.
+func (kt *KeyingTracker) SyncAdjacentNodes(adjacentNodeIDs []int, keyedMap map[int]bool, timestamp time.Time) {
+	kt.mu.Lock()
+	defer kt.mu.Unlock()
+
+	newMap := make(map[int]*AdjacentNodeStatus, len(adjacentNodeIDs))
+	for _, nodeID := range adjacentNodeIDs {
+		nodeStatus, exists := kt.adjacentNodes[nodeID]
+		if !exists {
+			nodeStatus = &AdjacentNodeStatus{
+				NodeID:         nodeID,
+				IsKeyed:        false,
+				IsTransmitting: false,
+				ConnectedSince: timestamp,
+			}
+		}
+		if keyed, ok := keyedMap[nodeID]; ok {
+			nodeStatus.IsKeyed = keyed
+			nodeStatus.IsTransmitting = keyed
+		}
+		newMap[nodeID] = nodeStatus
+	}
+	kt.adjacentNodes = newMap
 }
 
 // ProcessTimers processes expired timers and returns true if any timers were processed

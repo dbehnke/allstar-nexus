@@ -590,6 +590,7 @@ func main() {
 
 		// Create one AMI connector per configured node
 		ctxAMI, cancelAMI := context.WithCancel(context.Background())
+		var pollingConnector *ami.Connector
 		for _, node := range cfg.Nodes {
 			amiHost := node.AMIHost
 			if amiHost == "" {
@@ -612,6 +613,11 @@ func main() {
 					logger.Warn("AMI connector start error", zap.Error(err))
 				}
 			}()
+
+			// Store the first connector for polling (any connector can poll any node since they all connect to the same AMI server)
+			if pollingConnector == nil {
+				pollingConnector = connector
+			}
 		}
 		// Pass StateManager to API layer
 		apiLayer.SetStateManager(sm)
@@ -663,12 +669,22 @@ func main() {
 
 		logger.Info("AMI connectors started for all configured nodes")
 
-		// TODO(multi-node): Polling service needs architectural changes to work with per-node connectors
-		// The polling service was designed for a single connector and uses conn parameter.
-		// Re-enable once multi-node polling is implemented.
-		if false && !cfg.DisableLinkPoller {
+		// Start polling service for multi-node setups
+		if !cfg.DisableLinkPoller && pollingConnector != nil {
+			nodeIDs := make([]int, 0, len(cfg.Nodes))
+			for _, node := range cfg.Nodes {
+				nodeIDs = append(nodeIDs, node.NodeID)
+			}
+			pollInterval := 30 * time.Second
+			pollService := core.NewPollingService(pollingConnector, sm, pollInterval, nodeIDs)
+			if err := pollService.Start(); err != nil {
+				logger.Warn("failed to start polling service", zap.Error(err))
+			} else {
+				logger.Info("polling service started", zap.Ints("nodes", nodeIDs), zap.Duration("interval", pollInterval))
+			}
+			defer pollService.Stop()
 		} else {
-			logger.Info("polling service disabled (multi-node polling not yet implemented)")
+			logger.Info("polling service disabled")
 		}
 		// Persist per-link TX stats on edges
 		sm.SetPersistHook(func(list []core.LinkInfo) {
