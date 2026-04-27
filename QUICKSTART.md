@@ -1,72 +1,72 @@
-# Quick Start Guide - Modern Allstar Nexus Dashboard
+# Quick Start Guide
 
-Get up and running with the new modern Vue.js dashboard in minutes!
+Get Allstar Nexus running locally in a few minutes for development or testing.
+
+> For **production deployment** (systemd, Debian/RPM packages), see [INSTALL.md](INSTALL.md) instead.
+
+---
+
+## Prerequisites
+
+- **Go** 1.21+
+- **Node.js** 20+ and npm
+- [Task](https://taskfile.dev/) (recommended — runs build/test/lint targets)
+- An AllStar node with **AMI access** (optional, but most features depend on it)
+
+---
 
 ## 🚀 Quick Setup (5 Minutes)
 
-### Step 1: Install Dependencies
+### Step 1: Clone and Install Dependencies
 
 ```bash
-# Install Vue dashboard dependencies
-cd vue-dashboard
-npm install
+git clone https://github.com/dbehnke/allstar-nexus.git
+cd allstar-nexus
 
-# Go dependencies (already vendored)
-cd ..
+# Frontend deps
+cd frontend && npm install && cd ..
+
+# Go modules
 go mod download
 ```
 
-### Step 2: Build Everything
+### Step 2: Configure
+
+Copy and edit the example config:
 
 ```bash
-# Build Vue dashboard for production
-cd vue-dashboard
-npm run build
-cd ..
-
-# Build Go backend (includes embedded Vue dashboard)
-go build -o allstar-nexus .
+cp config.yaml.example config.yaml
+# Edit config.yaml — set ami_host, ami_user, ami_password, nodes, jwt_secret
 ```
 
-### Step 3: Configure (Optional)
-
-Create a `.env` file or set environment variables:
+Validate the config:
 
 ```bash
-# ✨ NEW: astdb.txt is now AUTO-DOWNLOADED!
-# The AllStar node database is automatically downloaded from allmondb.allstarlink.org
-# No manual setup required - just works out of the box! 🎉
-
-# Optional: Customize astdb location (default: data/astdb.txt)
-export ASTDB_PATH="data/astdb.txt"
-
-# Optional: Use alternative database source
-export ASTDB_URL="http://allmondb.allstarlink.org/"
-
-# Optional: Change update frequency (default: 24 hours)
-export ASTDB_UPDATE_HOURS=24
-
-# 🔥 IMPORTANT: Enable enhanced AMI features (COS/PTT, link modes, last heard)
-export AMI_NODE_ID=43732  # YOUR AllStar node number - REQUIRED for enhanced features!
-
-# AMI connection settings
-export AMI_ENABLED=true
-export AMI_HOST="localhost"
-export AMI_PORT=5038
-export AMI_USER="admin"
-export AMI_PASSWORD="yourpassword"
-
-# Optional: Allow public dashboard access
-export ALLOW_ANON_DASHBOARD=true
+go run . config validate --config ./config.yaml
 ```
 
-### Step 4: Run It!
+### Step 3: Build and Run
 
 ```bash
-./allstar-nexus
+# Build frontend + Go binary in one step
+task build
+
+# Run the binary
+./allstar-nexus --config ./config.yaml
 ```
 
-Open your browser to `http://localhost:8080`
+Or for development with hot-reload of the frontend:
+
+```bash
+# Terminal 1 — Vue dev server (port 5173, proxies API to backend)
+cd frontend
+npm run dev
+
+# Terminal 2 — Go backend (port 8080)
+task run
+```
+
+Open your browser to `http://localhost:8080` (production build) or `http://localhost:5173` (dev mode with hot-reload).
 
 ---
 
@@ -76,58 +76,71 @@ Open your browser to `http://localhost:8080`
 
 1. **Create Admin Account**
    - Click "Admin Login" in the navbar
-   - The login panel will appear
    - Enter your email and password
-   - Click "Login"
-   - First user becomes superadmin automatically
+   - The first user registered becomes superadmin automatically
 
 2. **Explore the Dashboard**
-   - **Dashboard** - View real-time node status and active links
-   - **Node Lookup** - Search for nodes and callsigns
-   - **RPT Stats** - View detailed node statistics (requires login)
-   - **Voter** - Monitor RTCM receivers (requires login)
+   - **Dashboard** — Real-time node status and active links
+   - **Node Lookup** — Search nodes/callsigns from astdb
+   - **RPT Stats** — Detailed Asterisk node statistics (admin only)
+   - **Voter** — RTCM receiver RSSI visualization (admin only)
+   - **Gamification** — XP, levels, top operators (if enabled in config)
 
 ---
 
 ## 🔍 Features at a Glance
 
-### Dashboard Page
-- Real-time status updates via WebSocket
-- Active links with TX indicators
-- Top talker rankings
-- Event log
+### Dashboard
+- Real-time WebSocket updates of node activity
+- Active links table with TX indicators
+- Top talkers ranking
+- Live event log
 
 ### Node Lookup
-- Search by node number or callsign
-- AllStar, IRLP, EchoLink support
-- Instant results
+- Search AllStar / IRLP / EchoLink by node number or callsign
+- Backed by auto-downloaded astdb.txt
 
-### RPT Stats (Admin Only)
-- Select any connected node
-- View detailed Asterisk statistics
-- Terminal-style output
+### RPT Stats (Admin)
+- Per-node Asterisk statistics from AMI
 
-### Voter Display (Admin Only)
-- Visual RSSI bars
-- Color-coded receiver status
-- Real-time signal strength
+### Voter Display (Admin)
+- Color-coded RSSI bars for RTCM receivers
+
+### Gamification (Optional)
+- XP/leveling per operator across one or more nodes
+- Configurable level groupings, anti-cheat protections
+- See `config.yaml.example` for `gamification:` section
+
+### Discord Notifications (Optional)
+- Webhooks for node activity, QSO start/end, individual talkers
+- See [DISCORD.md](DISCORD.md)
 
 ---
 
-## 🛠️ Development Mode
-
-For development with hot-reload:
+## 🛠️ Common Development Tasks
 
 ```bash
-# Terminal 1: Vue dev server with hot reload
-cd vue-dashboard
-npm run dev
+# Run all tests (Go + Vitest)
+task test
 
-# Terminal 2: Go backend
-go run main.go
+# Run only Go tests
+task test-backend
+
+# Run only frontend unit tests
+task test-frontend
+
+# Run Playwright e2e tests
+task test-e2e
+
+# Lint Go code
+task lint
+
+# Build standalone tools (e.g., cgnat-whitelist)
+task tools
+
+# Clean build artifacts
+task clean
 ```
-
-The Vue dev server runs on port 5173, proxying API calls to the Go backend on port 8080.
 
 ---
 
@@ -135,26 +148,28 @@ The Vue dev server runs on port 5173, proxying API calls to the Go backend on po
 
 ```
 allstar-nexus/
-├── vue-dashboard/          # Modern Vue.js frontend
+├── frontend/               # Vue 3 + Vite SPA
 │   ├── src/
 │   │   ├── components/     # Reusable UI components
-│   │   ├── views/          # Page components
+│   │   ├── views/          # Page-level components
 │   │   ├── stores/         # Pinia state management
-│   │   ├── router/         # Vue Router
-│   │   └── App.vue         # Root component
-│   ├── dist/               # Production build output
+│   │   └── router/         # Vue Router
 │   └── package.json
 ├── backend/                # Go backend
-│   ├── api/                # API handlers
-│   ├── auth/               # Authentication
-│   ├── config/             # Configuration
-│   ├── database/           # Database layer
+│   ├── api/                # HTTP API handlers
+│   ├── ami/                # Asterisk Manager Interface client
+│   ├── auth/               # Authentication (JWT)
+│   ├── config/             # Configuration loader
+│   ├── gamification/       # XP/leveling logic
+│   ├── repository/         # SQLite data layer
 │   └── models/             # Data models
-├── internal/               # Internal packages
-│   ├── ami/                # AMI connector
-│   ├── core/               # Core logic
-│   └── web/                # WebSocket hub
-└── main.go                 # Application entry point
+├── tools/                  # Standalone CLI utilities
+│   ├── cgnat-whitelist/
+│   └── ami-debug/
+├── docs/                   # Design docs and plans
+├── Taskfile.yml            # Build/test/lint targets
+├── config.yaml.example     # Annotated config template
+└── main.go                 # Application entrypoint
 ```
 
 ---
@@ -163,18 +178,17 @@ allstar-nexus/
 
 ### Configuration file issues (YAML syntax errors)
 
-If you're using `config.yaml` instead of environment variables and it's not being read:
+If your config isn't being read or AMI is connecting to `127.0.0.1` instead of your configured host:
 
-1. **Validate your config file**:
+1. **Validate**:
    ```bash
-   ./allstar-nexus config validate
+   ./allstar-nexus config validate --config ./config.yaml
    ```
 
-2. **Check for tabs in your config** - YAML requires SPACES, not TABS:
+2. **Check for tabs** — YAML requires SPACES, not TABS:
    ```bash
-   cat -A config.yaml | grep "^I"
+   grep -P "^\t" config.yaml
    ```
-   If you see `^I`, those are tabs that need to be replaced with spaces.
 
 3. **Fix tabs automatically**:
    ```bash
@@ -182,119 +196,64 @@ If you're using `config.yaml` instead of environment variables and it's not bein
    mv config-fixed.yaml config.yaml
    ```
 
-4. **Watch startup logs for config errors**:
-   ```bash
-   ./allstar-nexus 2>&1 | grep -i "config\|ERROR"
-   ```
-
 When config parsing fails, the app falls back to defaults (including `ami_host: 127.0.0.1`).
 
-### Dashboard not loading?
-- Make sure you built the Vue app: `cd vue-dashboard && npm run build`
-- Check the `vue-dashboard/dist/` directory exists
+### Dashboard not loading
+- Ensure the frontend was built: `cd frontend && npm run build`
+- Check `frontend/dist/` exists
+- Or use dev mode: `npm run dev` from `frontend/`
 
-### AMI features not working?
-- Verify AMI is enabled in Asterisk (`/etc/asterisk/manager.conf`)
-- Check AMI credentials are correct
-- Ensure `AMI_ENABLED=true` is set
+### AMI features not working
+- Verify AMI is enabled in `/etc/asterisk/manager.conf` on the AllStar node
+- Check credentials in `config.yaml` match Asterisk
+- Confirm the node is reachable from the host running Allstar Nexus
 
-### Can't login?
-- The first user created becomes superadmin
-- Check the database file exists (default: `nexus.db`)
-- Verify JWT_SECRET is set
+### Can't login
+- The first registered user becomes superadmin
+- Check the database file exists (default `allstar.db`)
+- Verify `jwt_secret` is set in config
 
-### Node lookup returns no results?
-- Check `ASTDB_PATH` points to valid astdb.txt file
-- Default location: `/var/lib/asterisk/astdb.txt`
-- File format: `node|callsign|description|location`
+### Node lookup returns no results
+- astdb.txt is auto-downloaded from `allmondb.allstarlink.org` on startup
+- Check write permissions on the data directory
+- Override with `astdb_path` and `astdb_url` in config if needed
 
 ---
 
-## 📊 API Testing
-
-Test the new API endpoints:
+## 📊 Quick API Test
 
 ```bash
-# Node lookup (public)
+# Public node lookup
 curl "http://localhost:8080/api/node-lookup?q=1999"
 
-# Login to get token
+# Login to get a JWT
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","password":"yourpassword"}'
 
-# RPT stats (authenticated)
-curl -H "Authorization: Bearer YOUR_TOKEN" \
+# Authenticated request (use token from login response)
+curl -H "Authorization: Bearer <token>" \
   "http://localhost:8080/api/rpt-stats?node=1999"
-
-# Voter stats (authenticated)
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-  "http://localhost:8080/api/voter-stats?node=1999"
 ```
 
 ---
 
 ## 🔒 Security Notes
 
-- Change default JWT_SECRET in production
-- Use HTTPS in production
-- Set strong passwords for admin accounts
-- Restrict AMI access to localhost if possible
-- Consider firewall rules for port 8080
-
----
-
-## 📝 Configuration Reference
-
-### All Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8080` | HTTP server port |
-| `DB_PATH` | `nexus.db` | SQLite database path |
-| `JWT_SECRET` | `change-me-in-production` | JWT signing secret |
-| `TOKEN_TTL` | `24h` | JWT expiration time |
-| `ASTDB_PATH` | `/var/lib/asterisk/astdb.txt` | AllStar database path |
-| `ALLOW_ANON_DASHBOARD` | `true` | Allow public dashboard access |
-| `AMI_ENABLED` | `true` | Enable AMI connectivity (set to false to run without AMI) |
-| `AMI_HOST` | `localhost` | AMI host address |
-| `AMI_PORT` | `5038` | AMI port |
-| `AMI_USER` | `admin` | AMI username |
-| `AMI_PASSWORD` | `password` | AMI password |
-| `AUTH_RATE_LIMIT_RPM` | `10` | Login attempts per minute |
-| `PUBLIC_STATS_RATE_LIMIT_RPM` | `60` | Public API rate limit |
+- **Always** change `jwt_secret` in production
+- Use HTTPS via a reverse proxy (nginx, Caddy) in production
+- Set strong admin passwords
+- Restrict AMI access to localhost or trusted networks
+- Firewall port 8080 to trusted sources
 
 ---
 
 ## 🎯 Next Steps
 
-1. **Customize the theme** - Edit colors in `vue-dashboard/src/App.vue`
-2. **Add more nodes** - Configure multiple nodes in your allmon.ini
-3. **Enable AMI** - Unlock RPT Stats and Voter features
-4. **Set up monitoring** - Use the real-time dashboard for node monitoring
-5. **Explore the code** - Check out `FEATURES.md` for architecture details
-
----
-
-## 💡 Tips
-
-- Use the browser dev tools (F12) to debug WebSocket connections
-- Check the browser console for any JavaScript errors
-- Monitor the Go backend logs for API issues
-- The dashboard updates in real-time without page refreshes
-- Mobile users: bookmark the dashboard for quick access
-
----
-
-## 🤝 Getting Help
-
-If you run into issues:
-
-1. Check this guide and `FEATURES.md`
-2. Review the browser console for errors
-3. Check backend logs for API errors
-4. Verify AMI connectivity if using RPT/Voter features
-5. Search GitHub issues or create a new one
+1. Read [FEATURES.md](FEATURES.md) for an architecture overview
+2. Set up [Discord notifications](DISCORD.md)
+3. Configure gamification in `config.yaml`
+4. For deployment, follow [INSTALL.md](INSTALL.md)
 
 ---
 

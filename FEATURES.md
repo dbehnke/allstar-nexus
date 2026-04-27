@@ -1,234 +1,133 @@
-# Allstar Nexus - Modern Vue Dashboard Features
+# Allstar Nexus - Features & Architecture
 
-This document describes the modern Vue.js dashboard implementation that brings Supermon public-facing features to Allstar Nexus with a modern, card-based UI.
+This document describes the Allstar Nexus application architecture, key features, and design decisions.
 
-## 🎯 Feature Parity with Supermon
+## 🎯 Core Features
 
-### ✅ Implemented Features
+### 1. Dashboard (Home)
+- **Real-time Node Status Card** — Live status updates with uptime, RX/TX status, version info
+- **Active Links Card** — Dynamic table showing all connected nodes with TX indicators
+- **Top Links Card** — Visual ranking of most active nodes by TX time
+- **Talker Log Card** — Real-time activity log of recent events
+- **WebSocket Integration** — Live updates without page refresh
+- **Responsive Grid Layout** — Modern card-based UI that adapts to screen size
 
-#### 1. **Modern Dashboard (Home)**
-- **Real-time Node Status Card** - Live status updates with uptime, RX/TX status, version info
-- **Active Links Card** - Dynamic table showing all connected nodes with TX indicators
-- **Top Links Card** - Visual ranking of most active nodes by TX time
-- **Talker Log Card** - Real-time activity log of recent events
-- **WebSocket Integration** - Live updates without page refresh
-- **Responsive Grid Layout** - Modern card-based UI that adapts to screen size
-
-#### 2. **Node/Callsign Lookup**
-Route: `/lookup`
-
-- Search for AllStar, IRLP, or EchoLink nodes
-- Search by node number or callsign
-- Displays node info, callsign, description, location
+### 2. Node/Callsign Lookup
+- Search AllStar, IRLP, or EchoLink nodes by number or callsign
+- Backed by auto-downloaded `astdb.txt` from allmondb.allstarlink.org
 - Clean, searchable interface with real-time results
-- Supports searching the astdb.txt database
 
-**API Endpoint:** `GET /api/node-lookup?q=<search_term>`
-
-#### 3. **RPT Statistics**
-Route: `/rpt-stats` (Requires Authentication)
-
-- View detailed Asterisk RPT statistics for any node
+### 3. RPT Statistics (Admin Only)
+- View detailed Asterisk RPT statistics for any connected node
 - Select from available connected nodes
 - Terminal-style output display
-- Real-time stats loading
 
-**API Endpoint:** `GET /api/rpt-stats?node=<node_number>`
-
-#### 4. **Voter/RTCM Display**
-Route: `/voter` (Requires Authentication)
-
+### 4. Voter/RTCM Display (Admin Only)
 - Visual display of voter receiver signal strength
-- Color-coded RSSI bars (0-255 range)
+- Color-coded RSSI bars (0–255 range)
 - Shows voted receiver in green
-- Displays receiver types and IP addresses
 - Real-time signal strength monitoring
 
-**API Endpoint:** `GET /api/voter-stats?node=<node_number>`
+### 5. Gamification System (Optional)
+- XP/leveling system for operators across one or more nodes
+- Per-node or cross-node tracking
+- Configurable level groupings and thresholds
+- Anti-cheat protections (duplicate detection, time-gating)
+- Leaderboard and operator statistics
+
+### 6. Discord Webhooks (Optional)
+- Real-time notifications for node activity
+- QSO start/end announcements
+- Individual station talk notifications
+- Per-node and per-type deduplication
+- See [DISCORD.md](DISCORD.md) for setup
 
 ---
 
-## 🎨 Modern UI Features
+## 🎨 UI Architecture
 
 ### Design Highlights
 
-- **Dark Theme** - Modern dark color scheme optimized for readability
-- **Card-Based Layout** - Clean, organized information architecture
-- **Gradient Buttons** - Modern blue gradient primary actions
-- **Smooth Animations** - Subtle transitions and hover effects
-- **Responsive Design** - Works on desktop, tablet, and mobile
-- **Sticky Navigation** - Always-accessible top navbar
-- **Real-time Indicators** - Pulsing badges for active TX/RX
+- **Dark Theme** — Modern dark color scheme optimized for readability
+- **Card-Based Layout** — Clean, organized information architecture
+- **Responsive Design** — Works on desktop, tablet, and mobile
+- **Real-time Indicators** — Pulsing badges for active TX/RX
+- **Single Page Application** — Vue 3 with client-side routing
 
 ### Component Architecture
 
 ```
-vue-dashboard/src/
+frontend/src/
 ├── components/          # Reusable UI components
-│   ├── Card.vue        # Base card component
-│   ├── StatusCard.vue  # Node status display
-│   ├── LinksCard.vue   # Active links table
-│   └── TopLinksCard.vue # Top talkers ranking
+│   ├── Card.vue
+│   ├── StatusCard.vue
+│   ├── LinksCard.vue
+│   └── TopLinksCard.vue
 ├── views/              # Page-level components
-│   ├── Dashboard.vue   # Main dashboard view
-│   ├── NodeLookup.vue  # Search interface
-│   ├── RptStats.vue    # RPT statistics
-│   └── VoterDisplay.vue # Voter visualization
+│   ├── Dashboard.vue
+│   ├── NodeLookup.vue
+│   ├── RptStats.vue
+│   └── VoterDisplay.vue
 ├── stores/             # Pinia state management
-│   ├── auth.js         # Authentication state
-│   └── node.js         # Node/link state
+│   ├── auth.ts
+│   └── node.ts
 ├── router/             # Vue Router config
-│   └── index.js
-└── main.js            # App entry point
+│   └── index.ts
+└── main.ts             # App entry point
 ```
 
 ---
 
-## 🔧 Backend API Endpoints
+## 🔧 Backend Architecture
 
-### 1. Node Lookup
-**Endpoint:** `GET /api/node-lookup`
+### API Endpoints
 
-**Query Parameters:**
-- `q` - Search term (node number or callsign)
+| Endpoint | Auth | Description |
+|----------|------|-------------|
+| `GET /api/node-lookup?q=` | Public | Search nodes/callsigns |
+| `GET /api/rpt-stats?node=` | Required | Asterisk RPT statistics |
+| `GET /api/voter-stats?node=` | Required | RTCM voter RSSI data |
+| `GET /api/nodes` | Public | List configured nodes |
+| `GET /api/nodes/:id/status` | Public | Real-time node status (WebSocket) |
+| `POST /api/auth/login` | Public | JWT authentication |
+| `POST /api/auth/register` | Public | First user becomes superadmin |
 
-**Response:**
-```json
-{
-  "ok": true,
-  "data": {
-    "query": "1999",
-    "results": [
-      {
-        "node": "1999",
-        "callsign": "W6XYZ",
-        "description": "Test Node",
-        "location": "San Francisco, CA"
-      }
-    ],
-    "count": 1
-  }
-}
+### Go Package Layout
+
 ```
-
-**Authentication:** Configurable (public or authenticated based on `ALLOW_ANON_DASHBOARD`)
-
----
-
-### 2. RPT Statistics
-**Endpoint:** `GET /api/rpt-stats`
-
-**Query Parameters:**
-- `node` - Node number (required)
-
-**Response:**
-```json
-{
-  "ok": true,
-  "data": {
-    "node": "1999",
-    "stats": "RPT statistics output...",
-    "parsed": {
-      "key1": "value1",
-      "key2": "value2"
-    }
-  }
-}
-```
-
-**Authentication:** Required
-
----
-
-### 3. Voter Statistics
-**Endpoint:** `GET /api/voter-stats`
-
-**Query Parameters:**
-- `node` - Voter node number (required)
-
-**Response:**
-```json
-{
-  "ok": true,
-  "data": {
-    "node": "1999",
-    "receivers": [
-      {
-        "id": "1",
-        "name": "Receiver 1",
-        "rssi": 142,
-        "voted": true,
-        "type": "voting",
-        "ip": "192.168.1.10",
-        "state": "active"
-      }
-    ]
-  }
-}
-```
-
-**Authentication:** Required
-
----
-
-## 🚀 Running the Application
-
-### Development Mode
-
-Start the Vue development server:
-```bash
-cd vue-dashboard
-npm run dev
-```
-
-Start the Go backend:
-```bash
-go run main.go
-```
-
-### Production Build
-
-Build the Vue dashboard:
-```bash
-cd vue-dashboard
-npm run build
-```
-
-Build the Go binary:
-```bash
-go build -o allstar-nexus .
-```
-
-Run the production server:
-```bash
-./allstar-nexus
+backend/
+├── api/                # HTTP handlers and middleware
+├── ami/                # Asterisk Manager Interface client
+├── auth/               # JWT authentication
+├── config/             # YAML configuration loader
+├── gamification/       # XP/leveling logic
+├── models/             # Data models (Node, Link, Talker, etc.)
+├── repository/         # SQLite persistence layer
+└── websocket/          # WebSocket hub for real-time updates
 ```
 
 ---
 
 ## ⚙️ Configuration
 
-### Environment Variables
+Allstar Nexus uses a single YAML configuration file. See `config.yaml.example` for a fully annotated template.
 
-- `ASTDB_PATH` - Path to astdb.txt (default: `/var/lib/asterisk/astdb.txt`)
-- `ALLOW_ANON_DASHBOARD` - Allow public access to dashboard (default: `true`)
-- `AMI_ENABLED` - Enable AMI connectivity (default: `false`)
-- `AMI_HOST` - Asterisk Manager Interface host
-- `AMI_PORT` - AMI port (default: `5038`)
-- `AMI_USER` - AMI username
-- `AMI_PASSWORD` - AMI password
+Key sections:
 
-### Configuration File
-
-See `backend/config/config.go` for all available configuration options.
+- `ami_*` — Asterisk Manager Interface connection
+- `nodes` — List of AllStar node numbers to monitor
+- `jwt_secret` — JWT signing secret (change in production!)
+- `gamification` — Enable/disable and configure XP/leveling
+- `discord` — Webhook URLs and notification settings
+- `astdb_path` / `astdb_url` — Node database location
 
 ---
 
-## 📊 Comparison: Supermon vs Allstar Nexus
+## 📊 Technology Comparison
 
-| Feature | Supermon | Allstar Nexus |
-|---------|----------|---------------|
-| **UI Framework** | jQuery + PHP | Vue.js 3 + Go |
+| Feature | Legacy Supermon | Allstar Nexus |
+|---------|----------------|---------------|
+| **UI Framework** | jQuery + PHP | Vue 3 + Go |
 | **Real-time Updates** | Server-Sent Events | WebSockets |
 | **Authentication** | Session-based | JWT tokens |
 | **Design** | Classic tables | Modern cards |
@@ -239,27 +138,33 @@ See `backend/config/config.go` for all available configuration options.
 | **RPT Stats** | ✅ PHP | ✅ Go + Vue |
 | **Voter Display** | ✅ PHP | ✅ Go + Vue |
 | **Link Status** | ✅ SSE | ✅ WebSocket |
+| **Gamification** | ❌ | ✅ |
+| **Discord Notifications** | ❌ | ✅ |
 
 ---
 
-## 🎯 Key Improvements
+## 🚀 Running the Application
 
-### Performance
-- **Faster page loads** - Single Page Application (SPA) architecture
-- **Efficient updates** - WebSocket binary protocol vs HTTP polling
-- **Smaller bundle** - Modern build tools with tree-shaking
+### Development Mode
 
-### User Experience
-- **No page reloads** - Smooth client-side routing
-- **Real-time feedback** - Instant visual updates
-- **Modern design** - Clean, professional interface
-- **Mobile-friendly** - Responsive layout works on all devices
+```bash
+# Terminal 1: Vue dev server (hot reload, port 5173)
+cd frontend
+npm run dev
 
-### Developer Experience
-- **Type safety** - Go's strong typing for backend
-- **Component reusability** - Vue.js single-file components
-- **State management** - Centralized Pinia stores
-- **Easy maintenance** - Modular, well-organized codebase
+# Terminal 2: Go backend (port 8080)
+task run
+```
+
+### Production Build
+
+```bash
+# Build everything (frontend + Go binary)
+task build
+
+# Run the binary
+./allstar-nexus --config ./config.yaml
+```
 
 ---
 
@@ -276,22 +181,21 @@ See `backend/config/config.go` for all available configuration options.
 
 ## 🛠️ Future Enhancements
 
-Potential additions to reach full Supermon parity:
+Potential additions:
 
-- [ ] Connection logs viewer
-- [ ] System stats (CPU temp, memory usage)
-- [ ] Weather integration (via API)
-- [ ] DTMF command interface
-- [ ] Node restriction/ban management
-- [ ] Configuration editor
-- [ ] Archive playback
-- [ ] Mobile app (React Native/Flutter)
+- Connection logs viewer
+- System stats (CPU temp, memory usage)
+- Weather integration
+- DTMF command interface
+- Node restriction/ban management
+- Configuration editor in UI
+- Archive playback
 
 ---
 
 ## 📝 Notes
 
-- The Vue dashboard is served from the same Go binary (embedded)
+- The Vue dashboard is served from the same Go binary (embedded static files)
 - All API endpoints follow RESTful conventions
 - Error handling provides clear, actionable messages
 - Rate limiting protects public endpoints
@@ -303,17 +207,17 @@ Potential additions to reach full Supermon parity:
 
 To add new features:
 
-1. Create Vue components in `vue-dashboard/src/components/`
-2. Add views in `vue-dashboard/src/views/`
+1. Create Vue components in `frontend/src/components/`
+2. Add views in `frontend/src/views/`
 3. Create Go handlers in `backend/api/`
 4. Wire routes in `main.go`
-5. Update this documentation
+5. Update relevant documentation
 
 ---
 
 ## 📄 License
 
-Ham radio use only - NOT for commercial use.
+Ham radio use only — NOT for commercial use.
 
 ---
 
