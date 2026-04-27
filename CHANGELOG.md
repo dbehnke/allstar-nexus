@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/dbehnke/allstar-nexus/compare/v0.16.0...v0.16.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* **ami:** prevent phantom indirect connections from LinkedNodes ([#180](https://github.com/dbehnke/allstar-nexus/issues/180)) ([2c17b4e](https://github.com/dbehnke/allstar-nexus/commit/2c17b4e27b66ccb2ab0e782144637a439ff0bb5e))
+
 ## [0.16.0](https://github.com/dbehnke/allstar-nexus/compare/v0.15.4...v0.16.0) (2026-04-26)
 
 
