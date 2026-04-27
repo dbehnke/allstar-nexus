@@ -83,25 +83,21 @@ func TestCombineXStatSawStatWithTextNodes(t *testing.T) {
 
 	combined := CombineXStatSawStat(xstat, nil)
 
-	// Should have 2 connections: one from Connections, one synthetic from LinkedNodes
-	if len(combined.Connections) != 2 {
-		t.Fatalf("expected 2 connections, got %d", len(combined.Connections))
+	// Should have ONLY 1 connection from Connections — text nodes in LinkedNodes
+	// should NOT be added as synthetic connections (they're indirect, not direct)
+	if len(combined.Connections) != 1 {
+		t.Fatalf("expected 1 connection (only direct), got %d", len(combined.Connections))
 	}
 
-	// Find the KF8S connection
-	var kf8sConn *ConnectionWithHistory
-	for i := range combined.Connections {
-		if combined.Connections[i].Node == nodeID {
-			kf8sConn = &combined.Connections[i]
-			break
+	// The single connection should be the numeric node 550465
+	if combined.Connections[0].Node != 550465 {
+		t.Errorf("expected node 550465, got %d", combined.Connections[0].Node)
+	}
+
+	// KF8S should NOT appear as a synthetic connection
+	for _, conn := range combined.Connections {
+		if conn.Node == nodeID {
+			t.Fatal("KF8S text node should NOT appear as a synthetic connection")
 		}
-	}
-
-	if kf8sConn == nil {
-		t.Fatal("KF8S connection not found in combined result")
-	}
-
-	if kf8sConn.Mode != "T" {
-		t.Errorf("expected mode T, got %s", kf8sConn.Mode)
 	}
 }

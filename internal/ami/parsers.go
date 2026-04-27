@@ -80,21 +80,27 @@ func parseConnLine(line string) (Connection, error) {
 
 	// Parse node number (can be numeric or text-based callsign)
 	nodeNum, err := strconv.Atoi(fields[0])
+	isTextNode := false
 	if err != nil {
 		// Not a numeric node ID - treat as text node (callsign)
-		// We'll use a placeholder value for now since the Connection struct expects int
-		// The text will be passed through and processed by state manager
-		// For now, skip these - they should come through LinkedNodes instead
-		return Connection{}, fmt.Errorf("text node in Conn line (will be processed via LinkedNodes): %s", fields[0])
+		// Hash to a negative integer for consistent handling
+		callsign := strings.ToUpper(strings.TrimSpace(fields[0]))
+		nodeNum = hashTextNodeToInt(callsign)
+		registerTextNodeInAMI(nodeNum, callsign)
+		log.Printf("[AMI] Parsed text node from Conn line: %s -> %d", callsign, nodeNum)
+		isTextNode = true
 	}
 	conn.Node = nodeNum
 
-	// Detect EchoLink vs standard format
-	// EchoLink nodes > 3000000 and don't have IP field
+	// Detect format:
+	// - Standard: NodeNum IP IsKeyed Direction Elapsed [LinkType]
+	// - EchoLink: NodeNum IsKeyed Direction Elapsed [LinkType] (no IP, node > 3000000)
+	// - Text node with IP: Callsign IP IsKeyed Direction Elapsed [LinkType]
+	// - Text node without IP: Callsign IsKeyed Direction Elapsed [LinkType]
 	isEchoLink := nodeNum > 3000000
 
-	if isEchoLink {
-		// Format: NodeNum IsKeyed Direction Elapsed [LinkType]
+	if isEchoLink || (isTextNode && len(fields) < 5) {
+		// Format without IP: NodeNum IsKeyed Direction Elapsed [LinkType]
 		if len(fields) >= 4 {
 			conn.IsKeyed = fields[1] == "1"
 			conn.Direction = fields[2]
@@ -104,7 +110,7 @@ func parseConnLine(line string) (Connection, error) {
 			}
 		}
 	} else {
-		// Format: NodeNum IP IsKeyed Direction Elapsed [LinkType]
+		// Format with IP: NodeNum IP IsKeyed Direction Elapsed [LinkType]
 		if len(fields) >= 5 {
 			conn.IP = fields[1]
 			conn.IsKeyed = fields[2] == "1"
@@ -310,30 +316,17 @@ func CombineXStatSawStat(xstat *XStatResult, sawstat *SawStatResult) *CombinedNo
 		combined.Connections = append(combined.Connections, cwh)
 	}
 
-	// Add LinkedNodes that don't have a corresponding Connection entry
-	// This handles text nodes (callsigns) that couldn't be parsed in Conn: lines
-	for _, ln := range xstat.LinkedNodes {
-		if !seenNodes[ln.Node] {
-			// Create synthetic connection for this linked node
-			cwh := ConnectionWithHistory{
-				Connection: Connection{
-					Node:      ln.Node,
-					Timestamp: time.Now(),
-				},
-				Mode: ln.Mode,
-			}
-
-			// Add keying info if available
-			if sawstat != nil {
-				if ki, ok := sawstat.Nodes[ln.Node]; ok {
-					cwh.KeyingInfo = ki
-					cwh.LastHeard = FormatLastHeard(ki)
-				}
-			}
-
-			combined.Connections = append(combined.Connections, cwh)
-		}
-	}
+	// NOTE: We intentionally do NOT create synthetic connections for LinkedNodes
+	// entries that don't have a corresponding Connection entry. LinkedNodes shows
+	// the full network topology (including indirect connections through the
+	// spanning tree), while Conn: lines show only direct connections. Adding
+	// LinkedNodes entries as connections would incorrectly show indirect nodes
+	// (including text nodes like VOIP clients) as direct connections.
+	//
+	// Text nodes (callsigns like KF8S) that are direct connections would ideally
+	// appear in Conn: lines. parseConnLine now handles text nodes properly
+	// (hashes them to stable negative IDs), so if AllStarLink outputs them in
+	// Conn: lines, they will be captured as direct connections.
 
 	return combined
 }
