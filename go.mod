@@ -2,7 +2,7 @@ module github.com/dbehnke/allstar-nexus
 
 go 1.26.2
 
-require modernc.org/sqlite v1.49.1
+require modernc.org/sqlite v1.50.0
 
 require (
 	github.com/coder/websocket v1.8.14
