@@ -310,30 +310,17 @@ func CombineXStatSawStat(xstat *XStatResult, sawstat *SawStatResult) *CombinedNo
 		combined.Connections = append(combined.Connections, cwh)
 	}
 
-	// Add LinkedNodes that don't have a corresponding Connection entry
-	// This handles text nodes (callsigns) that couldn't be parsed in Conn: lines
-	for _, ln := range xstat.LinkedNodes {
-		if !seenNodes[ln.Node] {
-			// Create synthetic connection for this linked node
-			cwh := ConnectionWithHistory{
-				Connection: Connection{
-					Node:      ln.Node,
-					Timestamp: time.Now(),
-				},
-				Mode: ln.Mode,
-			}
-
-			// Add keying info if available
-			if sawstat != nil {
-				if ki, ok := sawstat.Nodes[ln.Node]; ok {
-					cwh.KeyingInfo = ki
-					cwh.LastHeard = FormatLastHeard(ki)
-				}
-			}
-
-			combined.Connections = append(combined.Connections, cwh)
-		}
-	}
+	// NOTE: We intentionally do NOT create synthetic connections for LinkedNodes
+	// entries that don't have a corresponding Connection entry. LinkedNodes shows
+	// the full network topology (including indirect connections through the
+	// spanning tree), while Conn: lines show only direct connections. Adding
+	// LinkedNodes entries as connections would incorrectly show indirect nodes
+	// (including text nodes like VOIP clients) as direct connections.
+	//
+	// Text nodes (callsigns like KF8S) that are direct connections would ideally
+	// appear in Conn: lines, but parseConnLine currently skips them. If needed,
+	// that should be fixed in parseConnLine rather than creating synthetic
+	// connections here.
 
 	return combined
 }
