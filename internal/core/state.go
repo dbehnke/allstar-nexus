@@ -1097,7 +1097,6 @@ func (sm *StateManager) ApplyCombinedStatus(combined *ami.CombinedNodeStatus) {
 
 		// Update fields from XStat
 		li.IP = conn.IP
-		li.IsKeyed = conn.IsKeyed
 		li.Direction = conn.Direction
 		li.Elapsed = conn.Elapsed
 		li.LinkType = conn.LinkType
@@ -1121,6 +1120,8 @@ func (sm *StateManager) ApplyCombinedStatus(combined *ami.CombinedNodeStatus) {
 			isCurrentlyKeyed = conn.KeyingInfo.IsKeyed
 		}
 		li.UpdateTx(isCurrentlyKeyed, now)
+		// Keep IsKeyed in sync with CurrentTx so the UI shows consistent state
+		li.IsKeyed = li.CurrentTx
 
 		// Enrich with node lookup data (callsign, description, location)
 		if sm.nodeLookup != nil {

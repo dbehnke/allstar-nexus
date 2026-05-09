@@ -158,6 +158,12 @@ func (kt *KeyingTracker) SyncAdjacentNodes(adjacentNodeIDs []int, keyedMap map[i
 		if keyed, ok := keyedMap[nodeID]; ok {
 			nodeStatus.IsKeyed = keyed
 			nodeStatus.IsTransmitting = keyed
+			// If the node is keyed (actively transmitting), clear any pending unkey state
+			// to prevent getting stuck in an inconsistent PendingUnkey=true state
+			if keyed {
+				nodeStatus.PendingUnkey = false
+				kt.removeFromQueue(nodeID)
+			}
 		}
 		newMap[nodeID] = nodeStatus
 	}
