@@ -926,14 +926,14 @@ function formatSeconds(seconds) {
 
 function getStatusClass(node) {
   // Show keyed if transmitting, regardless of PendingUnkey state
-  if (node.PendingUnkey) return 'ending'
   if (node.IsTransmitting) return 'keyed'
+  if (node.PendingUnkey) return 'ending'
   return 'idle'
 }
 
 function getStatusText(node) {
-  if (node.PendingUnkey) return 'Ending...'
   if (node.IsTransmitting) return 'Keyed'
+  if (node.PendingUnkey) return 'Ending...'
   return 'Idle'
 }
 
